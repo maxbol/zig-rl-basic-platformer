@@ -88,6 +88,7 @@ pub fn Tilemap(size: usize) type {
                         std.log.err("Error: failed to format debug label\n", .{});
                         return;
                     };
+                    rl.drawRectangleLines(@intFromFloat(d.x), @intFromFloat(d.y), @intFromFloat(r.width), @intFromFloat(r.height), rl.Color.red);
                     rl.drawText(debug_label, @intFromFloat(d.x), @intFromFloat(d.y), @intFromFloat(@floor(r.width / 2)), rl.Color.red);
                 }
             } else {
@@ -161,25 +162,41 @@ pub const Viewport = struct {
     }
 };
 
+pub const LayerFlag = enum(u8) {
+    NoFlag = 0x00,
+    Collidable = 0b00000001,
+    InvertXScroll = 0b00000010,
+    InvertYScroll = 0b00000100,
+
+    pub fn compose(flags: []const LayerFlag) u8 {
+        var result: u8 = 0;
+        for (flags) |flag| {
+            result |= @intFromEnum(flag);
+        }
+        return result;
+    }
+};
+
 pub const TileLayer = struct {
     size: PixelVec2, // Size in tiles
+    row_size: usize,
     tilemap: Level.LevelTilemap,
-    repeat_behavior: RepeatBehavior,
-    tiles: [][]u8,
+    tiles: []u8,
+    flags: u8,
+    collision_map: ?[]bool = null,
 
-    const RepeatBehavior = enum {
-        DoNotRepeat,
-        RepeatSequence,
-        RepeatFirstTile,
-        RepeatLastTile,
-    };
+    pub fn init(size: PixelVec2, row_size: usize, tilemap: Level.LevelTilemap, tiles: []u8, collision_map: ?[]bool, flags: u8) TileLayer {
+        std.debug.assert(tiles.len > 0);
+        std.debug.assert(size.x > 0);
+        std.debug.assert(size.y > 0);
 
-    pub fn init(size: PixelVec2, tilemap: Level.LevelTilemap, tiles: [][]u8, repeat_behavior: RepeatBehavior) TileLayer {
         return .{
             .size = size,
+            .row_size = row_size,
             .tilemap = tilemap,
             .tiles = tiles,
-            .repeat_behavior = repeat_behavior,
+            .flags = flags,
+            .collision_map = collision_map,
         };
     }
 
@@ -190,57 +207,71 @@ pub const TileLayer = struct {
         const tile_size = self.tilemap.getTileSize();
         const viewport_pixel_rect = viewport.pixel_rect;
 
-        // const pixel_size_x = self.size.x * tile_size.x;
-        // _ = pixel_size_x; // autofix
-        // const pixel_size_y = self.size.y * tile_size.y;
-        // _ = pixel_size_y; // autofix
+        const pixel_size_x = self.size.x * tile_size.x;
+        const pixel_size_y = self.size.y * tile_size.y;
 
-        const max_x_scroll: f32 = @floatFromInt(self.size.x - viewport_pixel_rect.width);
-        const max_y_scroll: f32 = @floatFromInt(self.size.y - viewport_pixel_rect.height);
+        const max_x_scroll: f32 = @floatFromInt(@max(pixel_size_x - viewport_pixel_rect.width, 0));
+        const max_y_scroll: f32 = @floatFromInt(@max(pixel_size_y - viewport_pixel_rect.height, 0));
 
-        const scroll_x_pixels: i32 = @intFromFloat(scroll_state.x * max_x_scroll);
-        const scroll_y_pixels: i32 = @intFromFloat(scroll_state.y * max_y_scroll);
+        const scroll_state_x = blk: {
+            if ((self.flags & @intFromEnum(LayerFlag.InvertXScroll)) > 0) {
+                break :blk 1 - scroll_state.x;
+            }
+            break :blk scroll_state.x;
+        };
 
-        const scroll_x_tiles = @divFloor(scroll_x_pixels, tile_size.x);
-        const scroll_y_tiles = @divFloor(scroll_y_pixels, tile_size.y);
-        //
+        const scroll_state_y = blk: {
+            if ((self.flags & @intFromEnum(LayerFlag.InvertYScroll)) > 0) {
+                break :blk 1 - scroll_state.y;
+            }
+            break :blk scroll_state.y;
+        };
+
+        const scroll_x_pixels: i32 = @intFromFloat(@round(scroll_state_x * max_x_scroll));
+        const scroll_y_pixels: i32 = @intFromFloat(@round(scroll_state_y * max_y_scroll));
+
+        const scroll_x_tiles: usize = @intCast(@divFloor(scroll_x_pixels, tile_size.x));
+        const scroll_y_tiles: usize = @intCast(@divFloor(scroll_y_pixels, tile_size.y));
+
         const sub_tile_scroll_x: i32 = @mod(scroll_x_pixels, tile_size.x);
         const sub_tile_scroll_y: i32 = @mod(scroll_y_pixels, tile_size.y);
-        //
-        const include_x_tiles = @divFloor(viewport_pixel_rect.width, tile_size.x);
-        const include_y_tiles = @divFloor(viewport_pixel_rect.height, tile_size.y);
 
-        const viewport_x_adjust: i32 = @intFromFloat(@round(viewport.rectangle.x));
-        const viewport_y_adjust: i32 = @intFromFloat(@round(viewport.rectangle.y));
+        const viewport_tile_size_x: usize = @intCast(@divFloor(viewport_pixel_rect.width, tile_size.x));
+        const viewport_tile_size_y: usize = @intCast(@divFloor(viewport_pixel_rect.height, tile_size.y));
+
+        const include_x_tiles: usize = scroll_x_tiles + viewport_tile_size_x;
+        const include_y_tiles: usize = scroll_y_tiles + viewport_tile_size_y;
+
+        const viewport_x_adjust: i32 = viewport_pixel_rect.x;
+        const viewport_y_adjust: i32 = viewport_pixel_rect.y;
 
         // Draw level tiles
-        for (self.tiles, 0..) |row, row_idx| {
-            if (row_idx < scroll_y_tiles or row_idx > scroll_y_tiles + include_y_tiles) {
-                continue;
-            }
-            const row_idx_int: i32 = @intCast(row_idx);
-            const row_offset = row_idx_int - scroll_y_tiles;
 
-            for (row, 0..) |tile, col_idx| {
-                if (col_idx < scroll_x_tiles or col_idx > scroll_x_tiles + include_x_tiles) {
+        for (scroll_y_tiles..include_y_tiles + 1) |row_idx| {
+            for (scroll_x_tiles..include_x_tiles + 1) |col_idx| {
+                const tile_idx = row_idx * self.row_size + (col_idx % self.row_size);
+
+                const tile = self.tiles[tile_idx % self.tiles.len];
+
+                if (tile == 0) {
                     continue;
                 }
 
-                const col_idx_int: i32 = @intCast(col_idx);
-                const col_offset = col_idx_int - scroll_x_tiles;
+                const row_offset: i32 = @intCast(row_idx - scroll_y_tiles);
+                const col_offset: i32 = @intCast(col_idx - scroll_x_tiles);
 
                 var cull_x: i32 = 0;
                 var cull_y: i32 = 0;
 
                 if (col_idx == scroll_x_tiles) {
                     cull_x = sub_tile_scroll_x;
-                } else if (col_idx + 1 > scroll_x_tiles + include_x_tiles) {
+                } else if (col_idx == include_x_tiles) {
                     cull_x = -(tile_size.x - sub_tile_scroll_x);
                 }
 
                 if (row_idx == scroll_y_tiles) {
                     cull_y = sub_tile_scroll_y;
-                } else if (row_idx + 1 > scroll_y_tiles + include_y_tiles) {
+                } else if (row_idx == include_y_tiles) {
                     cull_y = -(tile_size.y - sub_tile_scroll_y);
                 }
 
@@ -248,7 +279,7 @@ pub const TileLayer = struct {
                 const dest_y: f32 = @floatFromInt(viewport_y_adjust + row_offset * tile_size.y - sub_tile_scroll_y);
                 const dest = rl.Vector2.init(dest_x, dest_y);
 
-                self.tilemap.drawRect(tile, dest, cull_x, cull_y, rl.Color.white, true);
+                self.tilemap.drawRect(tile, dest, cull_x, cull_y, rl.Color.white, false);
             }
         }
     }
@@ -299,7 +330,7 @@ pub const Level = struct {
         }
 
         const dir_vec = movement_vectors[dir_mask];
-        const scroll_speed = 0.06;
+        const scroll_speed = 0.46;
 
         if (dir_vec.length() > 0) {
             self.scroll_state = self.scroll_state.add(dir_vec.scale(scroll_speed * delta_time)).clamp(rl.Vector2.init(0, 0), rl.Vector2.init(1, 1));
@@ -315,7 +346,7 @@ pub const Level = struct {
 };
 
 pub fn getMovementVectors() [16]rl.Vector2 {
-    // This constant can't be run in comptime because it uses extern calls to raylib.
+    // This constant can't be constructed in comptime because it uses extern calls to raylib.
     // I'm not sure if there is a better way of solving this.
     return .{
         // 0 - None

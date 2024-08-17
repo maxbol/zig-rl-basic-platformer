@@ -5,29 +5,46 @@ const GameLib = @import("gamelib.zig");
 // Clouds - 145
 // Clouds and sky - 161
 // Sky - 177
-fn generateBgTileData(allocator: std.mem.Allocator) ![][]u8 {
-    var level_data_list = std.ArrayList([]u8).init(allocator);
+fn generateBgTileData() [1 * 35]u8 {
+    var bg_tile_data: [1 * 35]u8 = undefined;
 
-    for (0..300) |y| {
-        var row_list = std.ArrayList(u8).init(allocator);
-        for (0..300) |x| {
-            _ = x; // autofix
-            // const tile: u8 = @intCast((1 + y + x) % 256);
-            // try row_list.append(tile);
-            if (y < 40) {
-                try row_list.append(145);
-            } else if (y == 40) {
-                try row_list.append(161);
-            } else if (y > 40 and y < 80) {
-                try row_list.append(177);
-            } else {
-                try row_list.append(1);
-            }
+    for (0..35) |y| {
+        for (0..1) |x| {
+            bg_tile_data[y * 1 + x] = blk: {
+                if (y < 3) {
+                    break :blk 145;
+                } else if (y == 3) {
+                    break :blk 161;
+                } else if (y > 3) {
+                    break :blk 177;
+                }
+                break :blk 0;
+            };
         }
-        try level_data_list.append(try row_list.toOwnedSlice());
     }
 
-    return level_data_list.toOwnedSlice();
+    return bg_tile_data;
+}
+
+fn generateFgTileData() [100 * 40]u8 {
+    var fg_tile_data: [100 * 40]u8 = undefined;
+
+    for (0..40) |y| {
+        for (0..100) |x| {
+            fg_tile_data[y * 100 + x] = blk: {
+                if (y < 25) {
+                    break :blk 0;
+                } else if (y == 25) {
+                    break :blk 1;
+                } else if (y > 15) {
+                    break :blk 17;
+                }
+                break :blk 0;
+            };
+        }
+    }
+
+    return fg_tile_data;
 }
 
 pub fn main() anyerror!void {
@@ -55,18 +72,21 @@ pub fn main() anyerror!void {
     const viewport_padding_x = 20;
     const viewport_padding_y = 22;
 
-    const tile_data = try generateBgTileData(allocator);
-    defer allocator.free(tile_data);
-
     var viewport = GameLib.Viewport.init(rl.Rectangle.init(viewport_padding_x, viewport_padding_y, screen_width_float - (viewport_padding_x * 2), screen_height_float - (viewport_padding_y * 2)));
 
     const tilemap = try GameLib.Tilemap(512).init("assets/sprites/world_tileset.png", .{ .x = 16, .y = 16 }, allocator);
 
-    const foreground_layer = GameLib.TileLayer.init(.{ .x = 300 * 16, .y = 300 * 16 }, tilemap, tile_data, .DoNotRepeat);
+    var bg_tile_data = generateBgTileData();
+    const bg_layer = GameLib.TileLayer.init(.{ .x = 70, .y = 35 }, 1, tilemap, &bg_tile_data, &.{}, GameLib.LayerFlag.compose(&.{}));
 
-    var layers = [_]GameLib.TileLayer{foreground_layer};
+    var fg_tile_data = generateFgTileData();
+    const fg_layer = GameLib.TileLayer.init(.{ .x = 100, .y = 40 }, 100, tilemap, &fg_tile_data, &.{}, GameLib.LayerFlag.compose(&.{.Collidable}));
+
+    var layers = [_]GameLib.TileLayer{ bg_layer, fg_layer };
 
     var level = try GameLib.Level.create(&layers, &viewport, allocator);
+    level.scroll_state = .{ .x = 0, .y = 1 };
+
     defer level.destroy();
 
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
