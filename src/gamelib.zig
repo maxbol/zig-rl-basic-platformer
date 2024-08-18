@@ -30,7 +30,7 @@ pub const PixelRect = struct {
     }
 };
 
-pub fn Tilemap(size: usize) type {
+pub fn Tileset(size: usize) type {
     return struct {
         allocator: std.mem.Allocator,
         texture: rl.Texture2D,
@@ -41,7 +41,7 @@ pub fn Tilemap(size: usize) type {
 
         pub fn init(tilemap_texture_file: [*:0]const u8, tile_size: PixelVec2, allocator: std.mem.Allocator) !@This() {
             const texture = rl.loadTexture(tilemap_texture_file);
-            const rect_map = try buildRectMap(texture, tile_size);
+            const rect_map = buildRectMap(size, texture.width, texture.height, tile_size.x, tile_size.y);
             std.log.debug("Tilemap texture loaded, includes {d} tiles", .{rect_map.len});
             return .{ .texture = texture, .tile_size = tile_size, .rect_map = rect_map, .allocator = allocator };
         }
@@ -58,29 +58,9 @@ pub fn Tilemap(size: usize) type {
             const src = self.getRect(tile_index);
 
             if (src) |rect| {
-                const cull_x_float: f32 = @floatFromInt(cull_x);
-                const cull_y_float: f32 = @floatFromInt(cull_y);
-
-                var r = rect;
-                var d = dest;
-
-                if (cull_x > 0) {
-                    r.x += cull_x_float;
-                    r.width -= cull_x_float;
-                    d.x += cull_x_float;
-                } else if (cull_x < 0) {
-                    r.width += cull_x_float;
-                }
-
-                if (cull_y > 0) {
-                    r.y += cull_y_float;
-                    r.height -= cull_y_float;
-                    d.y += cull_y_float;
-                } else if (cull_y < 0) {
-                    r.height += cull_y_float;
-                }
-
-                self.texture.drawRec(r, d, tint);
+                const drawn = culledRectDraw(self.texture, rect, dest, tint, cull_x, cull_y);
+                const r = drawn[0];
+                const d = drawn[1];
 
                 if (debug_mode) {
                     var debug_label_buf: [8]u8 = undefined;
@@ -94,43 +74,6 @@ pub fn Tilemap(size: usize) type {
             } else {
                 std.log.warn("Warning: tile index {d} not found in tilemap\n", .{tile_index});
             }
-        }
-
-        fn buildRectMap(texture: rl.Texture2D, tile_size: PixelVec2) !RectMap {
-            const x_inc: f32 = @floatFromInt(tile_size.x);
-            const y_inc: f32 = @floatFromInt(tile_size.y);
-
-            const texture_read_max_x: f32 = @floatFromInt(@divFloor(texture.width, tile_size.x));
-            const texture_read_max_y: f32 = @floatFromInt(@divFloor(texture.height, tile_size.y));
-
-            const texture_width: f32 = @floatFromInt(texture.width);
-            const texture_height: f32 = @floatFromInt(texture.height);
-
-            if (texture_read_max_x * x_inc != texture_width) {
-                std.log.warn("Warning: texture width is not a multiple of tile width\n", .{});
-            }
-
-            if (texture_read_max_y * y_inc != texture_height) {
-                std.log.warn("Warning: texture height is not a multiple of tile height\n", .{});
-            }
-
-            var x_cursor: f32 = 0;
-            var y_cursor: f32 = 0;
-            var tile_index: usize = 1;
-
-            var map: RectMap = .{null} ** size;
-
-            while (y_cursor <= texture_read_max_y - 1) : (y_cursor += 1) {
-                x_cursor = 0;
-                while (x_cursor <= texture_read_max_x - 1) : ({
-                    x_cursor += 1;
-                    tile_index += 1;
-                }) {
-                    map[tile_index] = rl.Rectangle.init(x_cursor * x_inc, y_cursor * y_inc, x_inc, y_inc);
-                }
-            }
-
-            return map;
         }
     };
 }
@@ -179,36 +122,47 @@ pub const LayerFlag = enum(u8) {
 
 pub const TileLayer = struct {
     size: PixelVec2, // Size in tiles
+    pixel_size: PixelVec2 = undefined, // Size in pixels
     row_size: usize,
-    tilemap: Level.LevelTilemap,
+    tileset: LayerTileset,
     tiles: []u8,
     flags: u8,
     collision_map: ?[]bool = null,
 
-    pub fn init(size: PixelVec2, row_size: usize, tilemap: Level.LevelTilemap, tiles: []u8, collision_map: ?[]bool, flags: u8) TileLayer {
+    pub const LayerTileset = Tileset(512);
+
+    pub fn init(size: PixelVec2, row_size: usize, tileset: LayerTileset, tiles: []u8, collision_map: ?[]bool, flags: u8) TileLayer {
         std.debug.assert(tiles.len > 0);
         std.debug.assert(size.x > 0);
         std.debug.assert(size.y > 0);
 
-        return .{
+        var layer = TileLayer{
             .size = size,
             .row_size = row_size,
-            .tilemap = tilemap,
+            .tileset = tileset,
             .tiles = tiles,
             .flags = flags,
             .collision_map = collision_map,
         };
+
+        layer.updateLayerPixelSize();
+
+        return layer;
     }
 
-    pub fn drawLayer(self: *const TileLayer, level: *const Level) void {
-        const viewport = level.viewport;
-        const scroll_state = level.scroll_state;
+    inline fn updateLayerPixelSize(self: *TileLayer) void {
+        self.pixel_size = .{ .x = self.size.x * self.tileset.tile_size.x, .y = self.size.y * self.tileset.tile_size.y };
+    }
 
-        const tile_size = self.tilemap.getTileSize();
+    pub fn drawLayer(self: *const TileLayer, scene: *const Scene) void {
+        const viewport = scene.viewport;
+        const scroll_state = scene.scroll_state;
+
+        const tile_size = self.tileset.getTileSize();
         const viewport_pixel_rect = viewport.pixel_rect;
 
-        const pixel_size_x = self.size.x * tile_size.x;
-        const pixel_size_y = self.size.y * tile_size.y;
+        const pixel_size_x = self.pixel_size.x;
+        const pixel_size_y = self.pixel_size.y;
 
         const max_x_scroll: f32 = @floatFromInt(@max(pixel_size_x - viewport_pixel_rect.width, 0));
         const max_y_scroll: f32 = @floatFromInt(@max(pixel_size_y - viewport_pixel_rect.height, 0));
@@ -245,8 +199,6 @@ pub const TileLayer = struct {
         const viewport_x_adjust: i32 = viewport_pixel_rect.x;
         const viewport_y_adjust: i32 = viewport_pixel_rect.y;
 
-        // Draw level tiles
-
         for (scroll_y_tiles..include_y_tiles + 1) |row_idx| {
             for (scroll_x_tiles..include_x_tiles + 1) |col_idx| {
                 const tile_idx = row_idx * self.row_size + (col_idx % self.row_size);
@@ -279,26 +231,25 @@ pub const TileLayer = struct {
                 const dest_y: f32 = @floatFromInt(viewport_y_adjust + row_offset * tile_size.y - sub_tile_scroll_y);
                 const dest = rl.Vector2.init(dest_x, dest_y);
 
-                self.tilemap.drawRect(tile, dest, cull_x, cull_y, rl.Color.white, false);
+                self.tileset.drawRect(tile, dest, cull_x, cull_y, rl.Color.white, false);
             }
         }
     }
 };
 
-pub const Level = struct {
+pub const Scene = struct {
     // Initial state
     scroll_state: rl.Vector2,
     viewport: *Viewport,
     layers: []TileLayer,
     allocator: std.mem.Allocator,
+    size: PixelVec2 = undefined,
 
-    const LevelTilemap = Tilemap(512);
-
-    pub fn create(layers: []TileLayer, viewport: *Viewport, allocator: std.mem.Allocator) !*Level {
+    pub fn create(layers: []TileLayer, viewport: *Viewport, allocator: std.mem.Allocator) !*Scene {
         // This does not belong here, temporary solution
         movement_vectors = getMovementVectors();
 
-        const level = try allocator.create(Level);
+        const level = try allocator.create(Scene);
 
         level.* = .{
             .layers = layers,
@@ -307,14 +258,33 @@ pub const Level = struct {
             .allocator = allocator,
         };
 
+        level.updateSceneSize();
+
         return level;
     }
 
-    pub fn destroy(self: *Level) void {
+    inline fn updateSceneSize(self: *Scene) void {
+        var scene_size: PixelVec2 = .{ .x = 0, .y = 0 };
+        for (self.layers) |layer| {
+            if (layer.pixel_size.x > scene_size.x) {
+                scene_size.x = layer.pixel_size.x;
+            }
+            if (layer.pixel_size.y > scene_size.y) {
+                scene_size.y = layer.pixel_size.y;
+            }
+        }
+        self.size = scene_size;
+    }
+
+    pub fn destroy(self: *Scene) void {
         self.allocator.destroy(self);
     }
 
-    pub fn update(self: *Level, delta_time: f32) void {
+    pub fn update(self: *Scene, delta_time: f32) void {
+        // Do we need to run this every frame? Only if the layers
+        // ever get updated, which they don't atm.
+        // self.updateSceneSize();
+
         var dir_mask: u4 = @intFromEnum(MovementKeyBitmask.None);
 
         if (rl.isKeyDown(rl.KeyboardKey.key_w)) {
@@ -337,12 +307,205 @@ pub const Level = struct {
         }
     }
 
-    pub fn draw(self: *const Level) void {
+    pub fn draw(self: *const Scene) void {
         for (self.layers, 0..) |layer, i| {
             _ = i; // autofix
             layer.drawLayer(self);
         }
     }
+};
+
+pub const AnimationBufferReader = struct {
+    ptr: *anyopaque,
+    impl: *const Interface,
+
+    pub const Interface = struct {
+        decodeAnimationData: fn (ctx: *anyopaque, animation_type: AnimationType) AnimationData,
+    };
+
+    pub fn decodeAnimationData(self: AnimationBufferReader, animation_type: AnimationType) AnimationData {
+        return self.impl.decodeAnimationData(self.ptr, animation_type);
+    }
+};
+
+pub fn AnimationBuffer(max_no_of_animations: usize, max_no_of_frames: usize) type {
+    return struct {
+        data: [max_no_of_animations * (max_no_of_frames + 2)]u8 = std.mem.zeroes(u8),
+
+        pub fn reader(self: *@This()) AnimationBufferReader {
+            return .{
+                .ptr = self,
+                .impl = .{
+                    .decodeAnimationData = decodeAnimationData,
+                },
+            };
+        }
+
+        pub fn encodeAnimationData(
+            self: *@This(),
+            animation_type: AnimationType,
+            duration: f32,
+            frames: [max_no_of_frames]u8,
+        ) void {
+            const start_idx: usize = @as(usize, @intCast(animation_type)) * (max_no_of_frames + 2);
+            const end_idx: usize = start_idx + (max_no_of_frames + 2);
+
+            const duration_bytes: [2]u8 = std.mem.toBytes(duration);
+
+            self.data[start_idx] = duration_bytes[0];
+            self.data[start_idx + 1] = duration_bytes[1];
+
+            for (frames, 0..) |frame, i| {
+                const idx = start_idx + 2 + i;
+
+                if (frame == 0 or idx > end_idx) {
+                    break;
+                }
+                self.data[idx] = frame;
+            }
+        }
+
+        pub fn decodeAnimationData(
+            ctx: *anyopaque,
+            animation_type: AnimationType,
+        ) AnimationData {
+            const self: *@This() = @ptrCast(@alignCast(ctx));
+            const start_idx: usize = @as(usize, @intCast(animation_type)) * (max_no_of_frames + 2);
+            const end_idx: usize = start_idx + (max_no_of_frames + 2);
+
+            const anim_end_idx = blk: {
+                for (start_idx + 2..end_idx) |i| {
+                    if (self.data[i] == 0) {
+                        break :blk i;
+                    }
+                }
+                break :blk end_idx;
+            };
+
+            const frames = self.data[start_idx + 2 .. anim_end_idx];
+            const duration_bytes = self.data[start_idx .. start_idx + 1];
+
+            const duration: f16 = std.mem.fromBytes(f16, duration_bytes);
+
+            return .{ .duration = duration, .frames = frames };
+        }
+    };
+}
+
+pub const AnimationData = struct {
+    duration: f16,
+    frames: []u8,
+};
+
+pub const AnimationType = enum(usize) {
+    Idle,
+    Walk,
+    Roll,
+    Hit,
+    Death,
+    Attack,
+};
+
+pub const Sprite = struct {
+    texture: rl.Texture2D,
+    hitbox: rl.Rectangle,
+    size: PixelVec2,
+    pos: rl.Vector2,
+    sprite_direction: Direction = .Right,
+    current_animation: AnimationType = .Idle,
+    sprite_texture_map: SpriteTextureMap,
+    animation_buffer: AnimationBufferReader,
+    animation_clock: f32 = 0,
+    current_display_frame: u8 = 0,
+
+    pub const SpriteTextureMap = [128]?rl.Rectangle;
+
+    pub const Direction = enum(u1) {
+        Left,
+        Right,
+    };
+
+    pub fn init(texture: rl.Texture2D, size: PixelVec2, hitbox: rl.Rectangle, pos: rl.Vector2, rotation: f32, animation_buffer: AnimationBufferReader) Sprite {
+        const sprite_texture_map = buildRectMap(128, texture.width, texture.height, size.x, size.y);
+
+        return .{
+            .animation_buffer = animation_buffer,
+            .hitbox = hitbox,
+            .pos = pos,
+            .rotation = rotation,
+            .sprite_texture_map = sprite_texture_map,
+            .texture = texture,
+        };
+    }
+
+    pub fn update(self: *Sprite, delta_time: f32) void {
+        self.animation_clock += delta_time;
+
+        const current_animation = self.animation_buffer.decodeAnimationData(self.current_animation);
+        const anim_length = current_animation.frames.len;
+
+        if (self.animation_clock > current_animation.duration) {
+            self.animation_clock = 0;
+        }
+
+        const frame_duration = current_animation.duration / anim_length;
+        const frame_idx: usize = @intCast(@divFloor(self.animation_clock, frame_duration));
+
+        self.current_display_frame = current_animation.frames[frame_idx];
+    }
+
+    pub fn draw(self: *const Sprite, scene: *const Scene) void {
+        if (self.current_display_frame == 0) {
+            return;
+        }
+
+        const frame_rect = self.sprite_texture_map[self.current_display_frame];
+
+        if (frame_rect) |rect| blk: {
+            const viewport = scene.viewport;
+            const scroll_state = scene.scroll_state;
+            const viewport_pixel_rect = viewport.pixel_rect;
+            const scene_size = scene.size;
+
+            const max_x_scroll: f32 = @floatFromInt(@max(scene_size.x - viewport_pixel_rect.width, 0));
+            const max_y_scroll: f32 = @floatFromInt(@max(scene_size.y - viewport_pixel_rect.height, 0));
+
+            const viewport_x_offset: i32 = @intFromFloat(@round(scroll_state.x * max_x_scroll));
+            const viewport_y_offset: i32 = @intFromFloat(@round(scroll_state.y * max_y_scroll));
+
+            const viewport_x_limit: i32 = viewport_x_offset + viewport_pixel_rect.width;
+            const viewport_y_limit: i32 = viewport_y_offset + viewport_pixel_rect.height;
+
+            const sprite_pos_x: i32 = @intFromFloat(self.pos.x);
+            const sprite_pos_y: i32 = @intFromFloat(self.pos.y);
+
+            const sprite_scene_pos_x = sprite_pos_x * scene_size.x;
+            const sprite_scene_pos_y = sprite_pos_y * scene_size.y;
+
+            if (sprite_scene_pos_x + self.size.x < viewport_x_offset or sprite_scene_pos_x > viewport_x_limit) {
+                break :blk;
+            }
+
+            if (sprite_scene_pos_y + self.size.y < viewport_y_offset or sprite_scene_pos_y > viewport_y_limit) {
+                break :blk;
+            }
+
+            const cull_x: i32 = 0;
+            const cull_y: i32 = 0;
+
+            const dest = rl.Vector2.init(
+                viewport.rectangle.x + @as(f32, @floatFromInt(sprite_pos_x)),
+                viewport.rectangle.y + @as(f32, @floatFromInt(sprite_pos_y)),
+            );
+
+            _ = culledRectDraw(self.texture, rect, dest, rl.Color.white, cull_x, cull_y);
+        }
+    }
+};
+
+pub const Player = struct {
+    level_pos: rl.Vector2,
+    hitbox: rl.Rectangle,
 };
 
 pub fn getMovementVectors() [16]rl.Vector2 {
@@ -382,4 +545,69 @@ pub fn getMovementVectors() [16]rl.Vector2 {
         // 15 - Up + Left + Down + Right (invalid)
         rl.Vector2.init(0, 0),
     };
+}
+
+pub fn buildRectMap(comptime size: usize, source_width: i32, source_height: i32, rec_width: i32, rec_height: i32) [size]?rl.Rectangle {
+    const x_inc: f32 = @floatFromInt(rec_width);
+    const y_inc: f32 = @floatFromInt(rec_height);
+
+    const source_read_max_x: f32 = @floatFromInt(@divFloor(source_width, rec_width));
+    const source_read_max_y: f32 = @floatFromInt(@divFloor(source_height, rec_height));
+
+    const source_width_f: f32 = @floatFromInt(source_width);
+    const source_height_f: f32 = @floatFromInt(source_height);
+
+    if (source_read_max_x * x_inc != source_width_f) {
+        std.log.warn("Warning: source width is not a multiple of rec width\n", .{});
+    }
+
+    if (source_read_max_y * y_inc != source_height_f) {
+        std.log.warn("Warning: source height is not a multiple of rec height\n", .{});
+    }
+
+    var x_cursor: f32 = 0;
+    var y_cursor: f32 = 0;
+    var tile_index: usize = 1;
+
+    var map: [size]?rl.Rectangle = .{null} ** size;
+
+    while (y_cursor <= source_read_max_y - 1) : (y_cursor += 1) {
+        x_cursor = 0;
+        while (x_cursor <= source_read_max_x - 1) : ({
+            x_cursor += 1;
+            tile_index += 1;
+        }) {
+            map[tile_index] = rl.Rectangle.init(x_cursor * x_inc, y_cursor * y_inc, x_inc, y_inc);
+        }
+    }
+
+    return map;
+}
+
+pub fn culledRectDraw(texture: rl.Texture2D, rect: rl.Rectangle, dest: rl.Vector2, tint: rl.Color, cull_x: i32, cull_y: i32) struct { rl.Rectangle, rl.Vector2 } {
+    const cull_x_float: f32 = @floatFromInt(cull_x);
+    const cull_y_float: f32 = @floatFromInt(cull_y);
+
+    var r = rect;
+    var d = dest;
+
+    if (cull_x > 0) {
+        r.x += cull_x_float;
+        r.width -= cull_x_float;
+        d.x += cull_x_float;
+    } else if (cull_x < 0) {
+        r.width += cull_x_float;
+    }
+
+    if (cull_y > 0) {
+        r.y += cull_y_float;
+        r.height -= cull_y_float;
+        d.y += cull_y_float;
+    } else if (cull_y < 0) {
+        r.height += cull_y_float;
+    }
+
+    texture.drawRec(r, d, tint);
+
+    return .{ r, d };
 }
