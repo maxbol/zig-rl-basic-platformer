@@ -36,7 +36,7 @@ fn generateFgTileData() [100 * 40]u8 {
                     break :blk 0;
                 } else if (y == 25) {
                     break :blk 1;
-                } else if (y > 15) {
+                } else if (y > 25) {
                     break :blk 17;
                 }
                 break :blk 0;
@@ -47,27 +47,55 @@ fn generateFgTileData() [100 * 40]u8 {
     return fg_tile_data;
 }
 
-const PlayerAnimationBuffer = GameLib.AnimationBuffer(5, 16);
-const MobAnimationBuffer = GameLib.AnimationBuffer(3, 6);
+const PlayerAnimationBuffer = GameLib.AnimationBuffer(&.{ .Idle, .Hit, .Walk, .Death, .Roll }, 16);
+const MobAnimationBuffer = GameLib.AnimationBuffer(&.{ .Walk, .Attack, .Hit }, 6);
 
 fn getPlayerAnimations() PlayerAnimationBuffer {
     var buffer = PlayerAnimationBuffer{};
 
-    buffer.encodeAnimationData(.Idle, 0.5, for (1..4) |i| i);
-    buffer.encodeAnimationData(.Walk, 1, for (17..32) |i| i);
-    buffer.encodeAnimationData(.Roll, 0.8, for (49..56) |i| i);
-    buffer.encodeAnimationData(.Hit, 0.5, for (57..60) |i| i);
-    buffer.encodeAnimationData(.Death, 1, for (65..68) |i| i);
+    buffer.writeAnimation(.Idle, 0.5, &.{ 1, 2, 3, 4 });
+    buffer.writeAnimation(.Walk, 1, blk: {
+        var data: [16]u8 = undefined;
+        for (17..33, 0..) |i, idx| {
+            data[idx] = @intCast(i);
+        }
+        break :blk &data;
+    });
+    buffer.writeAnimation(.Roll, 0.8, blk: {
+        var data: [8]u8 = undefined;
+        for (41..49, 0..) |i, idx| {
+            data[idx] = @intCast(i);
+        }
+        break :blk &data;
+    });
+    buffer.writeAnimation(.Hit, 0.5, blk: {
+        var data: [4]u8 = undefined;
+        for (49..53, 0..) |i, idx| {
+            data[idx] = @intCast(i);
+        }
+        break :blk &data;
+    });
+    buffer.writeAnimation(.Death, 1, blk: {
+        var data: [4]u8 = undefined;
+        for (57..61, 0..) |i, idx| {
+            data[idx] = @intCast(i);
+        }
+        break :blk &data;
+    });
+
+    std.log.debug("PlayerAnimationBuffer: {any}\n", .{buffer.data});
 
     return buffer;
 }
 
-fn getMobAnimations() MobAnimationBuffer {
+fn getSlimeAnimations() MobAnimationBuffer {
     var buffer = MobAnimationBuffer{};
 
-    buffer.encodeAnimationData(.Walk, 1, .{ 1, 2, 3, 4, 3, 2 });
-    buffer.encodeAnimationData(.Attack, 0.5, for (5..8) |i| i);
-    buffer.encodeAnimationData(.Hit, 0.5, for (9..12) |i| i);
+    buffer.writeAnimation(.Walk, 1, &.{ 1, 2, 3, 4, 3, 2 });
+    buffer.writeAnimation(.Attack, 0.5, &.{ 5, 6, 7, 8 });
+    buffer.writeAnimation(.Hit, 0.5, &.{ 9, 10, 11, 12 });
+
+    std.log.debug("SlimeAnimationBuffer: {any}\n", .{buffer.data});
 
     return buffer;
 }
@@ -109,25 +137,32 @@ pub fn main() anyerror!void {
 
     var layers = [_]GameLib.TileLayer{ bg_layer, fg_layer };
 
-    const player_animations = getPlayerAnimations();
-    const mob_animations = getMobAnimations();
+    var player_animations = getPlayerAnimations();
+    var slime_animations = getSlimeAnimations();
 
-    const player_sprite = try GameLib.Sprite.init(
+    const player_sprite = GameLib.Sprite.init(
         "assets/sprites/knight.png",
         .{ .x = 32, .y = 32 },
         rl.Rectangle.init(8, 8, 16, 16),
-        rl.Vector2.init(0, 1),
-        0,
+        rl.Vector2.init(0, 0.55),
         player_animations.reader(),
     );
 
-    var scene = try GameLib.Scene.create(&layers, &viewport, allocator);
+    var slime_sprite = GameLib.Sprite.init(
+        "assets/sprites/slime_green.png",
+        .{ .x = 24, .y = 24 },
+        rl.Rectangle.init(6, 6, 12, 12),
+        rl.Vector2.init(0.2, 0.55),
+        slime_animations.reader(),
+    );
+    slime_sprite.current_animation = .Walk;
+
+    var sprites = [_]GameLib.Sprite{ player_sprite, slime_sprite };
+
+    var scene = try GameLib.Scene.create(&layers, &viewport, &sprites, allocator);
     scene.scroll_state = .{ .x = 0, .y = 1 };
 
     defer scene.destroy();
-
-    var player_animations = getPlayerAnimations();
-    _ = player_animations; // autofix
 
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
         // Update
@@ -136,8 +171,28 @@ pub fn main() anyerror!void {
         //----------------------------------------------------------------------------------
         const delta_time = rl.getFrameTime();
 
+        if (rl.isKeyPressed(rl.KeyboardKey.key_one)) {
+            sprites[0].setAnimation(.Idle, null, false);
+        } else if (rl.isKeyPressed(rl.KeyboardKey.key_two)) {
+            sprites[0].setAnimation(.Walk, null, false);
+        } else if (rl.isKeyPressed(rl.KeyboardKey.key_three)) {
+            sprites[0].setAnimation(.Roll, .Idle, false);
+        } else if (rl.isKeyPressed(rl.KeyboardKey.key_four)) {
+            sprites[0].setAnimation(.Hit, .Idle, false);
+        } else if (rl.isKeyPressed(rl.KeyboardKey.key_five)) {
+            sprites[0].setAnimation(.Death, null, true);
+        }
+
+        if (rl.isKeyPressed(rl.KeyboardKey.key_six)) {
+            sprites[1].setAnimation(.Walk, null, false);
+        } else if (rl.isKeyPressed(rl.KeyboardKey.key_seven)) {
+            sprites[1].setAnimation(.Attack, null, false);
+        } else if (rl.isKeyPressed(rl.KeyboardKey.key_eight)) {
+            sprites[1].setAnimation(.Hit, .Attack, false);
+        }
+
         viewport.update(delta_time);
-        scene.update(delta_time);
+        try scene.update(delta_time);
 
         // Draw
         //----------------------------------------------------------------------------------

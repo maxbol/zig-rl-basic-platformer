@@ -244,8 +244,9 @@ pub const Scene = struct {
     layers: []TileLayer,
     allocator: std.mem.Allocator,
     size: PixelVec2 = undefined,
+    sprites: []Sprite = undefined,
 
-    pub fn create(layers: []TileLayer, viewport: *Viewport, allocator: std.mem.Allocator) !*Scene {
+    pub fn create(layers: []TileLayer, viewport: *Viewport, sprites: []Sprite, allocator: std.mem.Allocator) !*Scene {
         // This does not belong here, temporary solution
         movement_vectors = getMovementVectors();
 
@@ -256,6 +257,7 @@ pub const Scene = struct {
             .scroll_state = rl.Vector2.init(0, 0),
             .viewport = viewport,
             .allocator = allocator,
+            .sprites = sprites,
         };
 
         level.updateSceneSize();
@@ -280,7 +282,7 @@ pub const Scene = struct {
         self.allocator.destroy(self);
     }
 
-    pub fn update(self: *Scene, delta_time: f32) void {
+    pub fn update(self: *Scene, delta_time: f32) !void {
         // Do we need to run this every frame? Only if the layers
         // ever get updated, which they don't atm.
         // self.updateSceneSize();
@@ -305,12 +307,20 @@ pub const Scene = struct {
         if (dir_vec.length() > 0) {
             self.scroll_state = self.scroll_state.add(dir_vec.scale(scroll_speed * delta_time)).clamp(rl.Vector2.init(0, 0), rl.Vector2.init(1, 1));
         }
+
+        for (0..self.sprites.len) |i| {
+            try self.sprites[i].update(delta_time);
+        }
     }
 
     pub fn draw(self: *const Scene) void {
         for (self.layers, 0..) |layer, i| {
             _ = i; // autofix
             layer.drawLayer(self);
+        }
+
+        for (self.sprites) |sprite| {
+            sprite.draw(self);
         }
     }
 };
@@ -320,34 +330,50 @@ pub const AnimationBufferReader = struct {
     impl: *const Interface,
 
     pub const Interface = struct {
-        decodeAnimationData: fn (ctx: *anyopaque, animation_type: AnimationType) AnimationData,
+        readAnimation: *const fn (ctx: *anyopaque, animation_type: AnimationType) AnimationBufferError!AnimationData,
     };
 
-    pub fn decodeAnimationData(self: AnimationBufferReader, animation_type: AnimationType) AnimationData {
-        return self.impl.decodeAnimationData(self.ptr, animation_type);
+    pub fn readAnimation(self: AnimationBufferReader, animation_type: AnimationType) AnimationBufferError!AnimationData {
+        return self.impl.readAnimation(self.ptr, animation_type);
     }
 };
 
-pub fn AnimationBuffer(max_no_of_animations: usize, max_no_of_frames: usize) type {
+pub const AnimationBufferError = error{
+    InvalidAnimation,
+};
+
+pub fn AnimationBuffer(animation_index: []const AnimationType, max_no_of_frames: usize) type {
+    const max_no_of_animations = animation_index.len;
+
+    const BufferData = [max_no_of_animations * (max_no_of_frames + 2)]u8;
+
     return struct {
-        data: [max_no_of_animations * (max_no_of_frames + 2)]u8 = std.mem.zeroes(u8),
+        data: BufferData = std.mem.zeroes(BufferData),
 
         pub fn reader(self: *@This()) AnimationBufferReader {
             return .{
                 .ptr = self,
-                .impl = .{
-                    .decodeAnimationData = decodeAnimationData,
+                .impl = &.{
+                    .readAnimation = readAnimation,
                 },
             };
         }
 
-        pub fn encodeAnimationData(
+        pub fn writeAnimation(
             self: *@This(),
-            animation_type: AnimationType,
-            duration: f32,
-            frames: [max_no_of_frames]u8,
+            comptime animation_type: AnimationType,
+            duration: f16,
+            frames: []const u8,
         ) void {
-            const start_idx: usize = @as(usize, @intCast(animation_type)) * (max_no_of_frames + 2);
+            const animation_idx = comptime blk: {
+                for (animation_index, 0..) |anim, i| {
+                    if (anim == animation_type) {
+                        break :blk i;
+                    }
+                }
+                @compileError("Invalid animation type referenced in encodeAnimationData(), make sure the animation type is allowed by the buffer");
+            };
+            const start_idx: usize = animation_idx * (max_no_of_frames + 2);
             const end_idx: usize = start_idx + (max_no_of_frames + 2);
 
             const duration_bytes: [2]u8 = std.mem.toBytes(duration);
@@ -365,12 +391,20 @@ pub fn AnimationBuffer(max_no_of_animations: usize, max_no_of_frames: usize) typ
             }
         }
 
-        pub fn decodeAnimationData(
+        pub fn readAnimation(
             ctx: *anyopaque,
             animation_type: AnimationType,
-        ) AnimationData {
+        ) !AnimationData {
             const self: *@This() = @ptrCast(@alignCast(ctx));
-            const start_idx: usize = @as(usize, @intCast(animation_type)) * (max_no_of_frames + 2);
+            const animation_idx = blk: {
+                for (animation_index, 0..) |anim, i| {
+                    if (anim == animation_type) {
+                        break :blk i;
+                    }
+                }
+                return AnimationBufferError.InvalidAnimation;
+            };
+            const start_idx: usize = animation_idx * (max_no_of_frames + 2);
             const end_idx: usize = start_idx + (max_no_of_frames + 2);
 
             const anim_end_idx = blk: {
@@ -385,7 +419,7 @@ pub fn AnimationBuffer(max_no_of_animations: usize, max_no_of_frames: usize) typ
             const frames = self.data[start_idx + 2 .. anim_end_idx];
             const duration_bytes = self.data[start_idx .. start_idx + 1];
 
-            const duration: f16 = std.mem.fromBytes(f16, duration_bytes);
+            const duration: f16 = std.mem.bytesToValue(f16, duration_bytes);
 
             return .{ .duration = duration, .frames = frames };
         }
@@ -413,10 +447,13 @@ pub const Sprite = struct {
     pos: rl.Vector2,
     sprite_direction: Direction = .Right,
     current_animation: AnimationType = .Idle,
+    queued_animation: ?AnimationType = null,
+    freeze_animation_on_last_frame: bool = false,
     sprite_texture_map: SpriteTextureMap,
     animation_buffer: AnimationBufferReader,
     animation_clock: f32 = 0,
     current_display_frame: u8 = 0,
+    texture_filename: [*:0]const u8 = "",
 
     pub const SpriteTextureMap = [128]?rl.Rectangle;
 
@@ -425,31 +462,50 @@ pub const Sprite = struct {
         Right,
     };
 
-    pub fn init(texture: rl.Texture2D, size: PixelVec2, hitbox: rl.Rectangle, pos: rl.Vector2, rotation: f32, animation_buffer: AnimationBufferReader) Sprite {
+    pub fn init(sprite_texture_file: [*:0]const u8, size: PixelVec2, hitbox: rl.Rectangle, pos: rl.Vector2, animation_buffer: AnimationBufferReader) Sprite {
+        const texture = rl.loadTexture(sprite_texture_file);
         const sprite_texture_map = buildRectMap(128, texture.width, texture.height, size.x, size.y);
 
         return .{
+            .texture_filename = sprite_texture_file,
             .animation_buffer = animation_buffer,
             .hitbox = hitbox,
+            .size = size,
             .pos = pos,
-            .rotation = rotation,
             .sprite_texture_map = sprite_texture_map,
             .texture = texture,
         };
     }
 
-    pub fn update(self: *Sprite, delta_time: f32) void {
+    pub fn setAnimation(self: *Sprite, animation: AnimationType, queued: ?AnimationType, freeze_animation_on_last_frame: bool) void {
+        self.current_animation = animation;
+        self.queued_animation = queued;
+        self.freeze_animation_on_last_frame = freeze_animation_on_last_frame;
+        self.animation_clock = 0;
+    }
+
+    pub fn update(self: *Sprite, delta_time: f32) !void {
+        const current_animation = try self.animation_buffer.readAnimation(self.current_animation);
+        const current_animation_duration: f32 = @floatCast(current_animation.duration);
+        const anim_length: f32 = @floatFromInt(current_animation.frames.len);
+
+        const frame_duration: f32 = current_animation_duration / anim_length;
+        const frame_idx: usize = @min(
+            @as(usize, @intFromFloat(@floor(self.animation_clock / frame_duration))),
+            current_animation.frames.len - 1,
+        );
+
         self.animation_clock += delta_time;
 
-        const current_animation = self.animation_buffer.decodeAnimationData(self.current_animation);
-        const anim_length = current_animation.frames.len;
-
         if (self.animation_clock > current_animation.duration) {
-            self.animation_clock = 0;
+            if (self.queued_animation) |queued_animation| {
+                self.setAnimation(queued_animation, null, false);
+            } else if (self.freeze_animation_on_last_frame) {
+                self.animation_clock = current_animation.duration;
+            } else {
+                self.animation_clock = @mod(self.animation_clock, current_animation.duration);
+            }
         }
-
-        const frame_duration = current_animation.duration / anim_length;
-        const frame_idx: usize = @intCast(@divFloor(self.animation_clock, frame_duration));
 
         self.current_display_frame = current_animation.frames[frame_idx];
     }
@@ -476,11 +532,8 @@ pub const Sprite = struct {
             const viewport_x_limit: i32 = viewport_x_offset + viewport_pixel_rect.width;
             const viewport_y_limit: i32 = viewport_y_offset + viewport_pixel_rect.height;
 
-            const sprite_pos_x: i32 = @intFromFloat(self.pos.x);
-            const sprite_pos_y: i32 = @intFromFloat(self.pos.y);
-
-            const sprite_scene_pos_x = sprite_pos_x * scene_size.x;
-            const sprite_scene_pos_y = sprite_pos_y * scene_size.y;
+            const sprite_scene_pos_x: i32 = @intFromFloat(@floor(self.pos.x * @as(f32, @floatFromInt(scene_size.x))));
+            const sprite_scene_pos_y: i32 = @intFromFloat(@floor(self.pos.y * @as(f32, @floatFromInt(scene_size.y))));
 
             if (sprite_scene_pos_x + self.size.x < viewport_x_offset or sprite_scene_pos_x > viewport_x_limit) {
                 break :blk;
@@ -490,12 +543,26 @@ pub const Sprite = struct {
                 break :blk;
             }
 
-            const cull_x: i32 = 0;
-            const cull_y: i32 = 0;
+            const cull_x: i32 = cull: {
+                if (sprite_scene_pos_x < viewport_x_offset) {
+                    break :cull viewport_x_offset - sprite_scene_pos_x;
+                } else if (sprite_scene_pos_x + self.size.x > viewport_x_limit) {
+                    break :cull viewport_x_limit - (sprite_scene_pos_x + self.size.x);
+                }
+                break :cull 0;
+            };
+            const cull_y = cull: {
+                if (sprite_scene_pos_y < viewport_y_offset) {
+                    break :cull viewport_y_offset - sprite_scene_pos_y;
+                } else if (sprite_scene_pos_y + self.size.y > viewport_y_limit) {
+                    break :cull viewport_y_limit - (sprite_scene_pos_y + self.size.y);
+                }
+                break :cull 0;
+            };
 
             const dest = rl.Vector2.init(
-                viewport.rectangle.x + @as(f32, @floatFromInt(sprite_pos_x)),
-                viewport.rectangle.y + @as(f32, @floatFromInt(sprite_pos_y)),
+                viewport.rectangle.x + @as(f32, @floatFromInt(sprite_scene_pos_x)) - @as(f32, @floatFromInt(viewport_x_offset)),
+                viewport.rectangle.y + @as(f32, @floatFromInt(sprite_scene_pos_y)) - @as(f32, @floatFromInt(viewport_y_offset)),
             );
 
             _ = culledRectDraw(self.texture, rect, dest, rl.Color.white, cull_x, cull_y);
@@ -504,8 +571,9 @@ pub const Sprite = struct {
 };
 
 pub const Player = struct {
-    level_pos: rl.Vector2,
-    hitbox: rl.Rectangle,
+    sprite: Sprite,
+    movement_speed: f32,
+    movement_vector: rl.Vector2 = rl.Vector2.init(0, 0),
 };
 
 pub fn getMovementVectors() [16]rl.Vector2 {
