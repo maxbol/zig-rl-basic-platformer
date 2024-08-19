@@ -152,7 +152,7 @@ pub fn main() anyerror!void {
         "assets/sprites/slime_green.png",
         .{ .x = 24, .y = 24 },
         rl.Rectangle.init(6, 6, 12, 12),
-        rl.Vector2.init(0.2, 0.55),
+        rl.Vector2.init(0.7, 0.55),
         slime_animations.reader(),
     );
     slime_sprite.current_animation = .Walk;
@@ -189,6 +189,14 @@ pub fn main() anyerror!void {
             sprites[1].setAnimation(.Attack, null, false);
         } else if (rl.isKeyPressed(rl.KeyboardKey.key_eight)) {
             sprites[1].setAnimation(.Hit, .Attack, false);
+        }
+
+        if (rl.isKeyPressed(rl.KeyboardKey.key_q)) {
+            sprites[0].setDirection(if (sprites[0].sprite_direction == .Right) .Left else .Right);
+        }
+
+        if (rl.isKeyPressed(rl.KeyboardKey.key_e)) {
+            sprites[1].setDirection(if (sprites[1].sprite_direction == .Right) .Left else .Right);
         }
 
         viewport.update(delta_time);

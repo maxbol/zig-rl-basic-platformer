@@ -484,6 +484,10 @@ pub const Sprite = struct {
         self.animation_clock = 0;
     }
 
+    pub fn setDirection(self: *Sprite, direction: Direction) void {
+        self.sprite_direction = direction;
+    }
+
     pub fn update(self: *Sprite, delta_time: f32) !void {
         const current_animation = try self.animation_buffer.readAnimation(self.current_animation);
         const current_animation_duration: f32 = @floatCast(current_animation.duration);
@@ -517,7 +521,7 @@ pub const Sprite = struct {
 
         const frame_rect = self.sprite_texture_map[self.current_display_frame];
 
-        if (frame_rect) |rect| blk: {
+        if (frame_rect) |r| blk: {
             const viewport = scene.viewport;
             const scroll_state = scene.scroll_state;
             const viewport_pixel_rect = viewport.pixel_rect;
@@ -542,6 +546,13 @@ pub const Sprite = struct {
             if (sprite_scene_pos_y + self.size.y < viewport_y_offset or sprite_scene_pos_y > viewport_y_limit) {
                 break :blk;
             }
+
+            const rect = rect: {
+                if (self.sprite_direction == .Left) {
+                    break :rect rl.Rectangle.init(r.x, r.y, -r.width, r.height);
+                }
+                break :rect r;
+            };
 
             const cull_x: i32 = cull: {
                 if (sprite_scene_pos_x < viewport_x_offset) {
@@ -659,20 +670,40 @@ pub fn culledRectDraw(texture: rl.Texture2D, rect: rl.Rectangle, dest: rl.Vector
     var r = rect;
     var d = dest;
 
-    if (cull_x > 0) {
-        r.x += cull_x_float;
+    const width_dir: i32 = std.math.sign(@as(i32, @intFromFloat(r.width)));
+    const height_dir: i32 = std.math.sign(@as(i32, @intFromFloat(r.height)));
+
+    std.debug.assert(rect.width != 0);
+
+    // Some of this logic is somewhat convoluted and hard to understand.
+    // Basically we swap some parts of the logic around based on whether the source
+    // rect has a negative width or height, which indicates that is should be drawn
+    // flipped. A flipped sprite needs to be culled somewhat differently.
+
+    if (width_dir * cull_x > 0) {
+        r.x += @as(f32, @floatFromInt(width_dir)) * cull_x_float;
         r.width -= cull_x_float;
-        d.x += cull_x_float;
-    } else if (cull_x < 0) {
+        if (r.width >= 0) {
+            d.x += cull_x_float;
+        }
+    } else if (width_dir * cull_x < 0) {
         r.width += cull_x_float;
+        if (r.width < 0) {
+            d.x += cull_x_float;
+        }
     }
 
-    if (cull_y > 0) {
-        r.y += cull_y_float;
+    if (height_dir * cull_y > 0) {
+        r.y += @as(f32, @floatFromInt(height_dir)) * cull_y_float;
         r.height -= cull_y_float;
-        d.y += cull_y_float;
-    } else if (cull_y < 0) {
+        if (r.height >= 0) {
+            d.y += cull_y_float;
+        }
+    } else if (height_dir * cull_y < 0) {
         r.height += cull_y_float;
+        if (r.height < 0) {
+            d.y += cull_y_float;
+        }
     }
 
     texture.drawRec(r, d, tint);
