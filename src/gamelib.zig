@@ -41,7 +41,7 @@ pub fn Tileset(size: usize) type {
 
         pub fn init(tilemap_texture_file: [*:0]const u8, tile_size: PixelVec2, allocator: std.mem.Allocator) !@This() {
             const texture = rl.loadTexture(tilemap_texture_file);
-            const rect_map = buildRectMap(size, texture.width, texture.height, tile_size.x, tile_size.y);
+            const rect_map = buildRectMap(size, texture.width, texture.height, tile_size.x, tile_size.y, 1, 1);
             std.log.debug("Tilemap texture loaded, includes {d} tiles", .{rect_map.len});
             return .{ .texture = texture, .tile_size = tile_size, .rect_map = rect_map, .allocator = allocator };
         }
@@ -449,7 +449,8 @@ pub const Sprite = struct {
     current_animation: AnimationType = .Idle,
     queued_animation: ?AnimationType = null,
     freeze_animation_on_last_frame: bool = false,
-    sprite_texture_map: SpriteTextureMap,
+    sprite_texture_map_r: SpriteTextureMap,
+    sprite_texture_map_l: SpriteTextureMap,
     animation_buffer: AnimationBufferReader,
     animation_clock: f32 = 0,
     current_display_frame: u8 = 0,
@@ -464,7 +465,8 @@ pub const Sprite = struct {
 
     pub fn init(sprite_texture_file: [*:0]const u8, size: PixelVec2, hitbox: rl.Rectangle, pos: rl.Vector2, animation_buffer: AnimationBufferReader) Sprite {
         const texture = rl.loadTexture(sprite_texture_file);
-        const sprite_texture_map = buildRectMap(128, texture.width, texture.height, size.x, size.y);
+        const sprite_texture_map_r = buildRectMap(128, texture.width, texture.height, size.x, size.y, 1, 1);
+        const sprite_texture_map_l = buildRectMap(128, texture.width, texture.height, size.x, size.y, -1, 1);
 
         return .{
             .texture_filename = sprite_texture_file,
@@ -472,7 +474,8 @@ pub const Sprite = struct {
             .hitbox = hitbox,
             .size = size,
             .pos = pos,
-            .sprite_texture_map = sprite_texture_map,
+            .sprite_texture_map_r = sprite_texture_map_r,
+            .sprite_texture_map_l = sprite_texture_map_l,
             .texture = texture,
         };
     }
@@ -519,9 +522,15 @@ pub const Sprite = struct {
             return;
         }
 
-        const frame_rect = self.sprite_texture_map[self.current_display_frame];
+        const frame_rect = blk: {
+            if (self.sprite_direction == .Right) {
+                break :blk self.sprite_texture_map_r[self.current_display_frame];
+            } else {
+                break :blk self.sprite_texture_map_l[self.current_display_frame];
+            }
+        };
 
-        if (frame_rect) |r| blk: {
+        if (frame_rect) |rect| blk: {
             const viewport = scene.viewport;
             const scroll_state = scene.scroll_state;
             const viewport_pixel_rect = viewport.pixel_rect;
@@ -546,13 +555,6 @@ pub const Sprite = struct {
             if (sprite_scene_pos_y + self.size.y < viewport_y_offset or sprite_scene_pos_y > viewport_y_limit) {
                 break :blk;
             }
-
-            const rect = rect: {
-                if (self.sprite_direction == .Left) {
-                    break :rect rl.Rectangle.init(r.x, r.y, -r.width, r.height);
-                }
-                break :rect r;
-            };
 
             const cull_x: i32 = cull: {
                 if (sprite_scene_pos_x < viewport_x_offset) {
@@ -626,7 +628,7 @@ pub fn getMovementVectors() [16]rl.Vector2 {
     };
 }
 
-pub fn buildRectMap(comptime size: usize, source_width: i32, source_height: i32, rec_width: i32, rec_height: i32) [size]?rl.Rectangle {
+pub fn buildRectMap(comptime size: usize, source_width: i32, source_height: i32, rec_width: i32, rec_height: i32, x_dir: i2, y_dir: i2) [size]?rl.Rectangle {
     const x_inc: f32 = @floatFromInt(rec_width);
     const y_inc: f32 = @floatFromInt(rec_height);
 
@@ -656,7 +658,7 @@ pub fn buildRectMap(comptime size: usize, source_width: i32, source_height: i32,
             x_cursor += 1;
             tile_index += 1;
         }) {
-            map[tile_index] = rl.Rectangle.init(x_cursor * x_inc, y_cursor * y_inc, x_inc, y_inc);
+            map[tile_index] = rl.Rectangle.init(x_cursor * x_inc, y_cursor * y_inc, x_inc * @as(f32, @floatFromInt(x_dir)), y_inc * @as(f32, @floatFromInt(y_dir)));
         }
     }
 
