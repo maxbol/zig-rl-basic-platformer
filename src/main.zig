@@ -1,6 +1,13 @@
 const rl = @import("raylib");
 const std = @import("std");
-const GameLib = @import("gamelib.zig");
+const an = @import("animation.zig");
+const debug = @import("debug.zig");
+const Viewport = @import("viewport.zig");
+const Scene = @import("scene.zig");
+const Sprite = @import("sprite.zig");
+const tl = @import("tiles.zig");
+
+const Tileset512 = tl.Tileset(512);
 
 // Clouds - 145
 // Clouds and sky - 161
@@ -55,8 +62,8 @@ fn generateTilesetCollisionData() [512]bool {
     return fg_collision_data;
 }
 
-const PlayerAnimationBuffer = GameLib.AnimationBuffer(&.{ .Idle, .Hit, .Walk, .Death, .Roll }, 16);
-const MobAnimationBuffer = GameLib.AnimationBuffer(&.{ .Walk, .Attack, .Hit }, 6);
+const PlayerAnimationBuffer = an.AnimationBuffer(&.{ .Idle, .Hit, .Walk, .Death, .Roll }, 16);
+const MobAnimationBuffer = an.AnimationBuffer(&.{ .Walk, .Attack, .Hit }, 6);
 
 fn getPlayerAnimations() PlayerAnimationBuffer {
     var buffer = PlayerAnimationBuffer{};
@@ -127,7 +134,7 @@ pub fn main() anyerror!void {
     std.debug.print("Current monitor: {s}\n", .{rl.getMonitorName(display)});
     std.debug.print("screen width: {}, screen height: {}\n", .{ screen_width, screen_height });
 
-    GameLib.setDebugFlags(&.{ .ShowHitboxes, .ShowScrollState });
+    debug.setDebugFlags(&.{ .ShowHitboxes, .ShowScrollState });
 
     const screen_width_float: f32 = @floatFromInt(screen_width);
     const screen_height_float: f32 = @floatFromInt(screen_height);
@@ -135,23 +142,22 @@ pub fn main() anyerror!void {
     const viewport_padding_x = 20;
     const viewport_padding_y = 22;
 
-    var viewport = GameLib.Viewport.init(rl.Rectangle.init(viewport_padding_x, viewport_padding_y, screen_width_float - (viewport_padding_x * 2), screen_height_float - (viewport_padding_y * 2)));
+    var viewport = Viewport.init(rl.Rectangle.init(viewport_padding_x, viewport_padding_y, screen_width_float - (viewport_padding_x * 2), screen_height_float - (viewport_padding_y * 2)));
 
-    const Tileset512 = GameLib.Tileset(512);
     const tilemap = try Tileset512.init("assets/sprites/world_tileset.png", .{ .x = 16, .y = 16 }, generateTilesetCollisionData(), allocator);
 
     var bg_tile_data = generateBgTileData();
-    const bg_layer = GameLib.TileLayer.init(.{ .x = 70, .y = 35 }, 1, tilemap, &bg_tile_data, GameLib.LayerFlag.mask(&.{}));
+    const bg_layer = tl.TileLayer.init(.{ .x = 70, .y = 35 }, 1, tilemap, &bg_tile_data, tl.LayerFlag.mask(&.{}));
 
     var fg_tile_data = generateFgTileData();
-    const fg_layer = GameLib.TileLayer.init(.{ .x = 100, .y = 40 }, 100, tilemap, &fg_tile_data, GameLib.LayerFlag.mask(&.{.Collidable}));
+    const fg_layer = tl.TileLayer.init(.{ .x = 100, .y = 40 }, 100, tilemap, &fg_tile_data, tl.LayerFlag.mask(&.{.Collidable}));
 
-    var layers = [_]GameLib.TileLayer{ bg_layer, fg_layer };
+    var layers = [_]tl.TileLayer{ bg_layer, fg_layer };
 
     var player_animations = getPlayerAnimations();
     var slime_animations = getSlimeAnimations();
 
-    const player_sprite = GameLib.Sprite.init(
+    const player_sprite = Sprite.init(
         "assets/sprites/knight.png",
         .{ .x = 32, .y = 32 },
         rl.Rectangle.init(8, 8, 16, 22),
@@ -159,7 +165,7 @@ pub fn main() anyerror!void {
         player_animations.reader(),
     );
 
-    var slime_sprite = GameLib.Sprite.init(
+    var slime_sprite = Sprite.init(
         "assets/sprites/slime_green.png",
         .{ .x = 24, .y = 24 },
         rl.Rectangle.init(6, 12, 12, 12),
@@ -168,9 +174,9 @@ pub fn main() anyerror!void {
     );
     slime_sprite.current_animation = .Walk;
 
-    var sprites = [_]GameLib.Sprite{ player_sprite, slime_sprite };
+    var sprites = [_]Sprite{ player_sprite, slime_sprite };
 
-    var scene = try GameLib.Scene.create(&layers, &viewport, &sprites, allocator);
+    var scene = try Scene.create(&layers, &viewport, &sprites, allocator);
     scene.scroll_state = .{ .x = 0, .y = 1 };
 
     defer scene.destroy();
