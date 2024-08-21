@@ -3,6 +3,10 @@ const std = @import("std");
 
 pub var movement_vectors: [16]rl.Vector2 = undefined;
 
+pub inline fn initKeyboardControls() void {
+    movement_vectors = getMovementVectors();
+}
+
 pub const MovementKeyBitmask = enum(u4) {
     None = 0,
     Up = 1,

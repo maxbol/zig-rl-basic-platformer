@@ -80,41 +80,35 @@ pub fn culledRectDraw(texture: rl.Texture2D, rect: rl.Rectangle, dest: rl.Vector
     return .{ r, d };
 }
 
-pub fn getMovementVectors() [16]rl.Vector2 {
-    // This constant can't be constructed in comptime because it uses extern calls to raylib.
-    // I'm not sure if there is a better way of solving this.
-    return .{
-        // 0 - None
-        rl.Vector2.init(0, 0),
-        // 1 - Up
-        rl.Vector2.init(0, -1),
-        // 2 - Left
-        rl.Vector2.init(-1, 0),
-        // 3 - Up + Left
-        rl.Vector2.init(-1, -1).scale(std.math.sqrt2).normalize(),
-        // 4 - Down
-        rl.Vector2.init(0, 1),
-        // 5 - Up + Down (invalid)
-        rl.Vector2.init(0, 0),
-        // 6 - Left + Down
-        rl.Vector2.init(-1, 1).scale(std.math.sqrt2).normalize(),
-        // 7 - Up + Left + Down (invalid)
-        rl.Vector2.init(0, 0),
-        // 8 - Right
-        rl.Vector2.init(1, 0),
-        // 9 - Up + Right
-        rl.Vector2.init(1, -1).scale(std.math.sqrt2).normalize(),
-        // 10 - Left + Right (invalid)
-        rl.Vector2.init(0, 0),
-        // 11 - Up + Left + Right (invalid)
-        rl.Vector2.init(0, 0),
-        // 12 - Down + Right
-        rl.Vector2.init(1, 1).scale(std.math.sqrt2).normalize(),
-        // 13 - Up + Down + Right (invalid)
-        rl.Vector2.init(0, 0),
-        // 14 - Left + Down + Right (invalid)
-        rl.Vector2.init(0, 0),
-        // 15 - Up + Left + Down + Right (invalid)
-        rl.Vector2.init(0, 0),
-    };
+// Creates the smallest possible rectangle that contains both rect_a and rect_b
+pub fn combineRects(rect_a: rl.Rectangle, rect_b: rl.Rectangle) rl.Rectangle {
+    const min_x = @min(rect_a.x, rect_b.x);
+    const min_y = @min(rect_a.y, rect_b.y);
+    const max_x = @max(rect_a.x + rect_a.width, rect_b.x + rect_b.width);
+    const max_y = @max(rect_a.y + rect_a.height, rect_b.y + rect_b.height);
+
+    return rl.Rectangle.init(min_x, min_y, max_x - min_x, max_y - min_y);
+}
+
+pub fn drawVec2AsArrow(origin: rl.Vector2, vec: rl.Vector2, color: rl.Color) void {
+    const arrow_head = origin.add(vec);
+    // const arrow_head_left = origin.add(vec.add(vec.rotate(-45).normalize().scale(5)));
+    // const arrow_head_right = origin.add(vec.add(vec.rotate(45).normalize().scale(5)));
+
+    rl.drawLineV(origin, arrow_head, color);
+    // rl.drawTriangle(arrow_head, arrow_head_left, arrow_head_right, color);
+}
+
+pub fn getAbsolutePos(origin: anytype, pos: anytype) @TypeOf(pos) {
+    var new = pos;
+    new.x += origin.x;
+    new.y += origin.y;
+    return new;
+}
+
+pub fn getRelativePos(origin: anytype, pos: anytype) @TypeOf(pos) {
+    var new = pos;
+    new.x -= origin.x;
+    new.y -= origin.y;
+    return new;
 }

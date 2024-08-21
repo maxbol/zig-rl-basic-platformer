@@ -1,4 +1,5 @@
 const rl = @import("raylib");
+const constants = @import("constants.zig");
 const an = @import("animation.zig");
 const std = @import("std");
 const Sprite = @This();
@@ -11,9 +12,14 @@ const tl = @import("tiles.zig");
 texture: rl.Texture2D,
 hitbox: rl.Rectangle,
 hitbox_scene: rl.Rectangle = undefined,
+hitbox_scene_next: rl.Rectangle = undefined,
+hitbox_in_viewport: bool = false,
+hitbox_anchor_nodes: [HITBOX_ANCHOR_NODES]rl.Rectangle = std.mem.zeroes([HITBOX_ANCHOR_NODES]rl.Rectangle),
+hitbox_anchor_collisions: [HITBOX_ANCHOR_NODES]?rl.Rectangle = .{null} ** HITBOX_ANCHOR_NODES,
+hitbox_node_vectors: [HITBOX_ANCHOR_NODES]rl.Vector2 = .{rl.Vector2.init(0, 0)} ** HITBOX_ANCHOR_NODES,
 size: rl.Vector2,
 pos: rl.Vector2,
-scene_pos: rl.Vector2 = undefined,
+movement_vec: rl.Vector2 = rl.Vector2.init(0, 0),
 sprite_direction: Direction = .Right,
 current_animation: an.AnimationType = .Idle,
 queued_animation: ?an.AnimationType = null,
@@ -25,9 +31,8 @@ animation_clock: f32 = 0,
 current_display_frame: u8 = 0,
 texture_filename: [*:0]const u8 = "",
 world_collision_mask: u4 = 0,
-hitbox_in_viewport: bool = false,
-hitbox_anchor_nodes: [HITBOX_ANCHOR_NODES]rl.Rectangle = std.mem.zeroes([HITBOX_ANCHOR_NODES]rl.Rectangle),
-hitbox_anchor_collision_mask: u16 = 0,
+total_collision_rect: ?rl.Rectangle = null,
+collision_vec: rl.Vector2 = rl.Vector2.init(0, 0),
 
 pub const HITBOX_ANCHOR_ROWS = 3;
 pub const HITBOX_ANCHOR_COLS = 3;
@@ -46,7 +51,7 @@ pub fn init(sprite_texture_file: [*:0]const u8, size: rl.Vector2, hitbox: rl.Rec
     const sprite_texture_map_r = helpers.buildRectMap(128, texture.width, texture.height, size.x, size.y, 1, 1);
     const sprite_texture_map_l = helpers.buildRectMap(128, texture.width, texture.height, size.x, size.y, -1, 1);
 
-    return .{
+    var sprite = Sprite{
         .texture_filename = sprite_texture_file,
         .animation_buffer = animation_buffer,
         .hitbox = hitbox,
@@ -56,13 +61,33 @@ pub fn init(sprite_texture_file: [*:0]const u8, size: rl.Vector2, hitbox: rl.Rec
         .sprite_texture_map_l = sprite_texture_map_l,
         .texture = texture,
     };
-}
 
-pub fn clearWorldCollisions(self: *Sprite) void {
-    if (self.hitbox_in_viewport) {
-        self.world_collision_mask = 0;
-        self.hitbox_anchor_collision_mask = 0;
+    const max_anchor_x = sprite.hitbox.width - HITBOX_SIZE;
+    const max_anchor_y = sprite.hitbox.height - HITBOX_SIZE;
+    const anchor_spacing_x: f32 = @round(max_anchor_x / (HITBOX_ANCHOR_COLS - 1));
+    const anchor_spacing_y: f32 = @round(max_anchor_y / (HITBOX_ANCHOR_ROWS - 1));
+
+    for (0..HITBOX_ANCHOR_NODES) |node_idx| {
+        const row_idx = @divFloor(node_idx, HITBOX_ANCHOR_COLS);
+        const col_idx = @mod(node_idx, HITBOX_ANCHOR_COLS);
+
+        const anchor_x: f32 = anchor_spacing_x * @as(f32, @floatFromInt(col_idx));
+        const anchor_y: f32 = anchor_spacing_y * @as(f32, @floatFromInt(row_idx));
+
+        sprite.hitbox_anchor_nodes[node_idx] = rl.Rectangle.init(
+            anchor_x,
+            anchor_y,
+            HITBOX_SIZE,
+            HITBOX_SIZE,
+        );
+
+        sprite.hitbox_node_vectors[node_idx] = rl.Vector2
+            .init(sprite.hitbox.x + (sprite.hitbox.width / 2), sprite.hitbox.y + (sprite.hitbox.height / 2))
+            .subtract(rl.Vector2.init(anchor_x + HITBOX_SIZE / 2, anchor_y + HITBOX_SIZE / 2))
+            .normalize();
     }
+
+    return sprite;
 }
 
 pub fn setAnimation(self: *Sprite, animation: an.AnimationType, queued: ?an.AnimationType, freeze_animation_on_last_frame: bool) void {
@@ -76,42 +101,11 @@ pub fn setDirection(self: *Sprite, direction: Direction) void {
     self.sprite_direction = direction;
 }
 
-pub fn setScenePosition(self: *Sprite, scene: *const Scene, pos: rl.Vector2) void {
-    self.pos = rl.Vector2.init(@as(f32, @floatFromInt(pos.x)) / @as(f32, @floatFromInt(scene.size.x)), @as(f32, @floatFromInt(pos.y)) / @as(f32, @floatFromInt(scene.size.y)));
+pub fn getHitboxAbsolutePos(self: *Sprite, origin: rl.Vector2) rl.Rectangle {
+    return helpers.getAbsolutePos(origin, self.hitbox);
 }
 
-pub fn updatePixelPos(self: *Sprite, scene: *const Scene) void {
-    self.scene_pos = scene.getSceneAdjustedPos(rl.Vector2, self.pos);
-
-    self.hitbox_scene = rl.Rectangle.init(
-        self.scene_pos.x + self.hitbox.x,
-        self.scene_pos.y + self.hitbox.y,
-        self.hitbox.width,
-        self.hitbox.height,
-    );
-
-    const max_anchor_x = self.hitbox_scene.width - HITBOX_SIZE;
-    const max_anchor_y = self.hitbox_scene.height - HITBOX_SIZE;
-    const anchor_spacing_x: f32 = @round(max_anchor_x / (HITBOX_ANCHOR_COLS - 1));
-    const anchor_spacing_y: f32 = @round(max_anchor_y / (HITBOX_ANCHOR_ROWS - 1));
-
-    for (0..HITBOX_ANCHOR_NODES) |node_idx| {
-        const row_idx = @divFloor(node_idx, HITBOX_ANCHOR_COLS);
-        const col_idx = @mod(node_idx, HITBOX_ANCHOR_COLS);
-
-        const anchor_x: f32 = self.hitbox_scene.x + (anchor_spacing_x * @as(f32, @floatFromInt(col_idx)));
-        const anchor_y: f32 = self.hitbox_scene.y + (anchor_spacing_y * @as(f32, @floatFromInt(row_idx)));
-
-        self.hitbox_anchor_nodes[node_idx] = rl.Rectangle.init(
-            anchor_x,
-            anchor_y,
-            HITBOX_SIZE,
-            HITBOX_SIZE,
-        );
-    }
-}
-
-pub fn checkTileCollision(self: *Sprite, layer: tl.TileLayer, row_idx: usize, col_idx: usize) void {
+pub fn checkTileCollision(self: *Sprite, nodes: [HITBOX_ANCHOR_NODES]rl.Rectangle, layer: tl.TileLayer, row_idx: usize, col_idx: usize) void {
     const tile = layer.getTileFromRowAndCol(row_idx, col_idx) orelse return;
 
     if (!layer.tileset.isCollidable(tile)) {
@@ -123,98 +117,39 @@ pub fn checkTileCollision(self: *Sprite, layer: tl.TileLayer, row_idx: usize, co
 
     const tile_scene_rect = rl.Rectangle.init(tile_scene_pos_x, tile_scene_pos_y, layer.tileset.tile_size.x, layer.tileset.tile_size.y);
 
-    for (self.hitbox_anchor_nodes, 0..) |anchor, anchor_idx| {
-        if (anchor.checkCollision(tile_scene_rect)) {
-            self.hitbox_anchor_collision_mask |= @as(u16, 1) << @as(u4, @intCast(anchor_idx));
+    for (nodes, 0..) |anchor, anchor_idx| {
+        if (!anchor.checkCollision(tile_scene_rect)) {
+            continue;
         }
-    }
 
-    // if (!self.hitbox_scene.checkCollision(tile_scene_rect)) {
-    //     return;
-    // }
-    //
-    // const collision = self.hitbox_scene.getCollision(tile_scene_rect);
-    //
-    // std.debug.print("Collision detected between {s} ({d},{d}) and tile {d} ({d},{d}): {d} {d} {d} {d}\n", .{
-    //     self.texture_filename,
-    //     self.scene_pos.y,
-    //     self.scene_pos.x,
-    //     tile,
-    //     tile_scene_rect.x,
-    //     tile_scene_rect.y,
-    //     collision.x,
-    //     collision.y,
-    //     collision.width,
-    //     collision.height,
-    // });
-    //
-    // var new_sprite_pos = self.scene_pos;
-    //
-    // const top_side_m = collision.y == tile_scene_rect.y;
-    // const bottom_side_m = collision.y + collision.height == tile_scene_rect.y + tile_scene_rect.height;
-    // const left_side_m = collision.x == tile_scene_rect.x;
-    // const right_side_m = collision.x + collision.width == tile_scene_rect.x + tile_scene_rect.width;
-    //
-    // if (top_side_m) {
-    //     std.debug.print("Top side collision: {d},{d},{d},{d}\n", .{
-    //         collision.x,
-    //         collision.y,
-    //         collision.width,
-    //         collision.height,
-    //     });
-    //     self.world_collision_mask |= @intFromEnum(co.CollisionDirection.Down);
-    //     new_sprite_pos.y -= collision.height;
-    // } else if (bottom_side_m) {
-    //     std.debug.print("Bottom side collision: {d},{d},{d},{d}\n", .{
-    //         collision.x,
-    //         collision.y,
-    //         collision.width,
-    //         collision.height,
-    //     });
-    //     self.world_collision_mask |= @intFromEnum(co.CollisionDirection.Up);
-    //     new_sprite_pos.y += collision.height;
-    // }
-    //
-    // if (left_side_m) {
-    //     std.debug.print("Left side collision: {d},{d},{d},{d}\n", .{
-    //         collision.x,
-    //         collision.y,
-    //         collision.width,
-    //         collision.height,
-    //     });
-    //     self.world_collision_mask |= @intFromEnum(co.CollisionDirection.Right);
-    //     new_sprite_pos.x -= collision.width;
-    // } else if (right_side_m) {
-    //     std.debug.print("Right side collision: {d},{d},{d},{d}\n", .{
-    //         collision.x,
-    //         collision.y,
-    //         collision.width,
-    //         collision.height,
-    //     });
-    //     self.world_collision_mask |= @intFromEnum(co.CollisionDirection.Left);
-    //     new_sprite_pos.x += collision.width;
-    // }
+        const prev_collision = self.hitbox_anchor_collisions[anchor_idx];
+        var next_collision = anchor.getCollision(tile_scene_rect);
+
+        if (prev_collision) |prev| {
+            next_collision = helpers.combineRects(prev, next_collision);
+        }
+
+        self.hitbox_anchor_collisions[anchor_idx] = next_collision;
+    }
 }
 
-pub fn checkCollisions(self: *Sprite, layer: tl.TileLayer) void {
+pub fn checkCollisions(self: *Sprite, nodes: [HITBOX_ANCHOR_NODES]rl.Rectangle, layer: tl.TileLayer) void {
     if (layer.flags & @intFromEnum(tl.LayerFlag.Collidable) == 0) {
         return;
     }
     for (layer.scroll_y_tiles..layer.include_y_tiles + 1) |row_idx| {
         for (layer.scroll_x_tiles..layer.include_x_tiles + 1) |col_idx| {
-            self.checkTileCollision(layer, row_idx, col_idx);
+            self.checkTileCollision(nodes, layer, row_idx, col_idx);
         }
     }
 }
 
 pub fn update(self: *Sprite, scene: *Scene, delta_time: f32) !void {
-    // Don't perform calculations on sprite if its hitbox is out of bounds of the viewport
-    if (self.hitbox_scene.x + self.hitbox_scene.width < scene.viewport_x_offset or self.hitbox_scene.x > scene.viewport_x_limit) {
-        self.hitbox_in_viewport = false;
-        return;
-    }
+    // Update hitbox position
+    self.hitbox_scene = self.getHitboxAbsolutePos(self.pos);
 
-    if (self.hitbox_scene.y + self.hitbox_scene.height < scene.viewport_y_offset or self.hitbox_scene.y > scene.viewport_y_limit) {
+    // Don't perform calculations on sprite if its hitbox is out of bounds of the viewport
+    if (!scene.isRectInViewport(self.hitbox_scene)) {
         self.hitbox_in_viewport = false;
         return;
     }
@@ -246,42 +181,92 @@ pub fn update(self: *Sprite, scene: *Scene, delta_time: f32) !void {
 
     self.current_display_frame = current_animation.frames[frame_idx];
 
-    var world_collision_mask: u4 = 0b1111;
-
-    for (self.hitbox_anchor_nodes, 0..) |_, anchor_idx| {
-        const collided = self.hitbox_anchor_collision_mask & (@as(u16, 1) << @as(u4, @intCast(anchor_idx))) != 0;
-        if (collided) {
-            continue;
-        }
-        const anchor_row_idx = @divFloor(anchor_idx, HITBOX_ANCHOR_COLS);
-        const anchor_col_idx = @mod(anchor_idx, HITBOX_ANCHOR_COLS);
-
-        if (anchor_row_idx == 0) {
-            world_collision_mask &= (0b1111 ^ @intFromEnum(co.CollisionDirection.Up));
-        }
-
-        if (anchor_row_idx == HITBOX_ANCHOR_ROWS - 1) {
-            world_collision_mask &= (0b1111 ^ @intFromEnum(co.CollisionDirection.Down));
-        }
-
-        if (anchor_col_idx == 0) {
-            world_collision_mask &= (0b1111 ^ @intFromEnum(co.CollisionDirection.Left));
-        }
-
-        if (anchor_col_idx == HITBOX_ANCHOR_COLS - 1) {
-            world_collision_mask &= (0b1111 ^ @intFromEnum(co.CollisionDirection.Right));
-        }
-    }
-
-    self.world_collision_mask = world_collision_mask;
-
     // Apply gravity (if not colliding with world below)
     if (self.world_collision_mask & @intFromEnum(co.CollisionDirection.Down) == 0) {
-        self.pos = self.pos.add(scene.gravity_vector.scale(scene.gravity_force * delta_time));
+        self.movement_vec = self.movement_vec.add(scene.gravity_vector.scale(scene.gravity_force * delta_time));
     }
 
-    // Relative positioning
-    self.updatePixelPos(scene);
+    // Get next hypothetical position of sprite
+    var next_pos = self.pos.add(self.movement_vec);
+
+    // Calculate next hitbox position
+    self.hitbox_scene_next = self.getHitboxAbsolutePos(next_pos);
+
+    // Collision detection
+    self.hitbox_anchor_collisions = .{null} ** HITBOX_ANCHOR_NODES;
+    self.total_collision_rect = null;
+    self.collision_vec = rl.Vector2.init(0, 0);
+    self.world_collision_mask = 0;
+
+    // Scene positions of hitbox anchor nodes
+    var hitbox_anchor_scene_nodes: [HITBOX_ANCHOR_NODES]rl.Rectangle = undefined;
+    for (self.hitbox_anchor_nodes, 0..) |anchor, anchor_idx| {
+        const anchor_scene_pos = helpers.getAbsolutePos(next_pos, anchor);
+        hitbox_anchor_scene_nodes[anchor_idx] = anchor_scene_pos;
+    }
+
+    for (scene.layers) |layer| {
+        self.checkCollisions(hitbox_anchor_scene_nodes, layer);
+    }
+
+    for (hitbox_anchor_scene_nodes, 0..) |anchor, anchor_idx| {
+        if (!scene.isRectInViewport(anchor)) {
+            continue;
+        }
+
+        const collision_rect = self.hitbox_anchor_collisions[anchor_idx];
+
+        if (collision_rect) |rect| {
+            self.total_collision_rect = if (self.total_collision_rect) |prev| helpers.combineRects(prev, rect) else rect;
+            self.collision_vec = self.collision_vec.add(self.hitbox_node_vectors[anchor_idx]);
+        }
+    }
+
+    if (self.collision_vec.x > 0) {
+        self.world_collision_mask |= @intFromEnum(co.CollisionDirection.Left);
+    } else if (self.collision_vec.x < 0) {
+        self.world_collision_mask |= @intFromEnum(co.CollisionDirection.Right);
+    }
+
+    if (self.collision_vec.y > 0) {
+        self.world_collision_mask |= @intFromEnum(co.CollisionDirection.Up);
+    } else if (self.collision_vec.y < 0) {
+        self.world_collision_mask |= @intFromEnum(co.CollisionDirection.Down);
+    }
+
+    self.collision_vec = self.collision_vec.normalize();
+
+    if (self.total_collision_rect) |col_rect| {
+        self.collision_vec.x *= col_rect.width;
+        self.collision_vec.y *= col_rect.height;
+        next_pos = next_pos.add(self.collision_vec);
+        const collision_vec_angle = rl.Vector2.init(1, 0).angle(self.collision_vec) * constants.RAD2DEG;
+        std.debug.print("collision_vec: {d},{d}, collision_vec_angle={d}, col_rect={d},{d},{d},{d}\n", .{ self.collision_vec.x, self.collision_vec.y, collision_vec_angle, col_rect.x, col_rect.y, col_rect.width, col_rect.height });
+    }
+
+    //
+    // if (self.total_collision_rect) |col_rect| {
+    //     self.collision_vec.x *= col_rect.width;
+    //     self.collision_vec.y *= col_rect.height;
+    //
+    //     // const escape_vec = rl.Vector2.init(if (self.collision_vec.x >= 1) self.collision_vec.x else 0, if (self.collision_vec.y >= 1) self.collision_vec.y else 0);
+    //     // self.pos = self.pos.add(escape_vec);
+    //
+    //     if ((collision_vec_angle >= -45 and collision_vec_angle < 45) or (collision_vec_angle >= 135 or collision_vec_angle < -135)) {
+    //         std.debug.print("adjusting horizontal position by {d}\n", .{self.collision_vec.x});
+    //         self.pos = self.pos.add(rl.Vector2.init(self.collision_vec.x, 0));
+    //     }
+    //     if ((collision_vec_angle >= 45 and collision_vec_angle < 135) or (collision_vec_angle >= -135 and collision_vec_angle < -45)) {
+    //         std.debug.print("adjusting vertical position by {d}\n", .{self.collision_vec.y});
+    //         self.pos = self.pos.add(rl.Vector2.init(0, self.collision_vec.y));
+    //     }
+    // }
+
+    // Adjust position by accumulated movement vector
+    self.pos = next_pos;
+
+    // Clear movement vector
+    self.movement_vec = rl.Vector2.init(0, 0);
 }
 
 pub fn draw(self: *const Sprite, scene: *const Scene) void {
@@ -299,32 +284,33 @@ pub fn draw(self: *const Sprite, scene: *const Scene) void {
         return;
     };
 
-    if (self.scene_pos.x + self.size.x < scene.viewport_x_offset or self.scene_pos.x > scene.viewport_x_limit) {
+    if (self.pos.x + self.size.x < scene.viewport_x_offset or self.pos.x > scene.viewport_x_limit) {
         return;
     }
 
-    if (self.scene_pos.y + self.size.y < scene.viewport_y_offset or self.scene_pos.y > scene.viewport_y_limit) {
+    if (self.pos.y + self.size.y < scene.viewport_y_offset or self.pos.y > scene.viewport_y_limit) {
         return;
     }
 
     const cull_x: f32 = cull: {
-        if (self.scene_pos.x < scene.viewport_x_offset) {
-            break :cull scene.viewport_x_offset - self.scene_pos.x;
-        } else if (self.scene_pos.x + self.size.x > scene.viewport_x_limit) {
-            break :cull scene.viewport_x_limit - (self.scene_pos.x + self.size.x);
-        }
-        break :cull 0;
-    };
-    const cull_y = cull: {
-        if (self.scene_pos.y < scene.viewport_y_offset) {
-            break :cull scene.viewport_y_offset - self.scene_pos.y;
-        } else if (self.scene_pos.y + self.size.y > scene.viewport_y_limit) {
-            break :cull scene.viewport_y_limit - (self.scene_pos.y + self.size.y);
+        if (self.pos.x < scene.viewport_x_offset) {
+            break :cull scene.viewport_x_offset - self.pos.x;
+        } else if (self.pos.x + self.size.x > scene.viewport_x_limit) {
+            break :cull scene.viewport_x_limit - (self.pos.x + self.size.x);
         }
         break :cull 0;
     };
 
-    const dest = scene.getViewportAdjustedPos(rl.Vector2, self.scene_pos);
+    const cull_y = cull: {
+        if (self.pos.y < scene.viewport_y_offset) {
+            break :cull scene.viewport_y_offset - self.pos.y;
+        } else if (self.pos.y + self.size.y > scene.viewport_y_limit) {
+            break :cull scene.viewport_y_limit - (self.pos.y + self.size.y);
+        }
+        break :cull 0;
+    };
+
+    const dest = scene.getViewportAdjustedPos(rl.Vector2, self.pos);
 
     _ = helpers.culledRectDraw(self.texture, rect, dest, rl.Color.white, cull_x, cull_y);
 }
@@ -346,21 +332,31 @@ pub fn drawDebug(self: *const Sprite, scene: *const Scene) void {
         return;
     }
 
-    const hitbox_viewport = scene.getViewportAdjustedPos(rl.Rectangle, self.hitbox_scene);
+    const hitbox_viewport = scene.getViewportAdjustedPos(rl.Rectangle, self.hitbox_scene_next);
 
     const dest = rl.Vector2.init(
-        viewport.rectangle.x + self.scene_pos.x - scene.viewport_x_offset,
-        viewport.rectangle.y + self.scene_pos.y - scene.viewport_y_offset,
+        viewport.rectangle.x + self.pos.x - scene.viewport_x_offset,
+        viewport.rectangle.y + self.pos.y - scene.viewport_y_offset,
     );
 
     rl.drawRectangleLines(@intFromFloat(dest.x), @intFromFloat(dest.y), @intFromFloat(@abs(rect.width)), @intFromFloat(@abs(rect.height)), rl.Color.green);
     rl.drawRectangleLines(@intFromFloat(hitbox_viewport.x), @intFromFloat(hitbox_viewport.y), @intFromFloat(hitbox_viewport.width), @intFromFloat(hitbox_viewport.height), rl.Color.red);
 
-    std.debug.print("Collision mask: {b}\n", .{self.hitbox_anchor_collision_mask});
+    if (self.total_collision_rect) |t| {
+        const t_viewport = scene.getViewportAdjustedPos(rl.Rectangle, t);
+        rl.drawRectangle(@intFromFloat(t_viewport.x), @intFromFloat(t_viewport.y), @intFromFloat(t_viewport.width), @intFromFloat(t_viewport.height), rl.Color.red.alpha(0.5));
+    }
+
+    if (self.collision_vec.x != 0 and self.collision_vec.y != 0) {
+        const origo = scene.getViewportAdjustedPos(rl.Vector2, rl.Vector2.init(self.hitbox_scene_next.x, self.hitbox_scene_next.y));
+        std.debug.print("drawing collision vec: {d}, {d}\n", .{ self.collision_vec.x, self.collision_vec.y });
+        helpers.drawVec2AsArrow(origo, self.collision_vec, rl.Color.white);
+    }
 
     for (self.hitbox_anchor_nodes, 0..) |anchor, anchor_idx| {
-        const anchor_viewport = scene.getViewportAdjustedPos(rl.Rectangle, anchor);
-        const anchor_color = if (self.hitbox_anchor_collision_mask & (@as(u16, 1) << @as(u4, @intCast(anchor_idx))) != 0) rl.Color.yellow else rl.Color.red;
+        const anchor_scene = helpers.getAbsolutePos(self.hitbox_scene_next, anchor);
+        const anchor_viewport = scene.getViewportAdjustedPos(rl.Rectangle, anchor_scene);
+        const anchor_color = if (self.hitbox_anchor_collisions[anchor_idx] != null) rl.Color.yellow else rl.Color.red;
         rl.drawRectangle(@intFromFloat(anchor_viewport.x), @intFromFloat(anchor_viewport.y), @intFromFloat(anchor_viewport.width), @intFromFloat(anchor_viewport.height), anchor_color);
     }
 
