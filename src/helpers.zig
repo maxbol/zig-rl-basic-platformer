@@ -112,3 +112,27 @@ pub fn getRelativePos(origin: anytype, pos: anytype) @TypeOf(pos) {
     new.y -= origin.y;
     return new;
 }
+
+pub fn getGridRect(grid_size: anytype, pos: anytype) @TypeOf(pos) {
+    var new = pos;
+    new.x = @divFloor(new.x, grid_size.x);
+    new.y = @divFloor(new.y, grid_size.y);
+    new.width = @divFloor(new.width, grid_size.x);
+    new.height = @divFloor(new.height, grid_size.y);
+    return new;
+}
+
+pub fn getPixelPos(grid_size: anytype, pos: anytype) @TypeOf(pos) {
+    var new = pos;
+    new.x *= grid_size.x;
+    new.y *= grid_size.y;
+    return new;
+}
+
+pub fn approach(current: f32, target: f32, increase: f32) f32 {
+    if (current < target) {
+        return @min(current + increase, target);
+    } else {
+        return @max(current - increase, target);
+    }
+}

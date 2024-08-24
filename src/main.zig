@@ -1,57 +1,17 @@
-const rl = @import("raylib");
-const std = @import("std");
-const an = @import("animation.zig");
-const debug = @import("debug.zig");
-const Viewport = @import("viewport.zig");
+const Entity = @import("entity.zig");
+const Player = @import("actor_player.zig");
 const Scene = @import("scene.zig");
 const Sprite = @import("sprite.zig");
-const tl = @import("tiles.zig");
-const controls = @import("controls.zig");
+const Viewport = @import("viewport.zig");
+const an = @import("animation.zig");
 const co = @import("collisions.zig");
+const controls = @import("controls.zig");
+const debug = @import("debug.zig");
+const rl = @import("raylib");
+const std = @import("std");
+const tl = @import("tiles.zig");
 
-const Tileset512 = tl.Tileset(512);
-
-const JUMP_HEIGHT = 100;
-const JUMP_PARABOLA = [_]u8{
-    0,
-    4,
-    8,
-    11,
-    15,
-    18,
-    20,
-    23,
-    25,
-    28,
-    29,
-    31,
-    32,
-    34,
-    35,
-    35,
-    36,
-    36,
-    // 36,
-    // 36,
-    // 35,
-    // 35,
-    // 34,
-    // 32,
-    // 31,
-    // 29,
-    // 28,
-    // 25,
-    // 23,
-    // 20,
-    // 18,
-    // 15,
-    // 11,
-    // 8,
-    // 4,
-    // 0,
-};
-
-var is_paused = false;
+const Tileset512 = tl.FixedSizeTileset(512);
 
 // Clouds - 145
 // Clouds and sky - 161
@@ -77,23 +37,33 @@ fn generateBgTileData() [1 * 35]u8 {
     return bg_tile_data;
 }
 
-fn generateFgTileData() [100 * 40]u8 {
+fn generateMainTileData() [100 * 40]u8 {
     var fg_tile_data: [100 * 40]u8 = undefined;
 
     for (0..40) |y| {
         for (0..100) |x| {
             fg_tile_data[y * 100 + x] = blk: {
+                if (y < 20) {
+                    break :blk 0;
+                } else if (y == 20) {
+                    if (x == 6 or x == 15) {
+                        break :blk 1;
+                    }
+                    break :blk 0;
+                }
                 if (y < 24) {
+                    if (x == 15) {
+                        break :blk 1;
+                    }
                     break :blk 0;
                 } else if (y == 24) {
-                    if (x == 1) {
+                    if (x == 1 or x == 15 or x == 16) {
                         break :blk 1;
-                    } else if (x == 3) {
-                        break :blk 0;
                     }
+                    break :blk 0;
                 } else if (y == 25) {
                     break :blk 1;
-                } else if (y > 25) {
+                } else {
                     break :blk 17;
                 }
                 break :blk 0;
@@ -113,13 +83,14 @@ fn generateTilesetCollisionData() [512]bool {
     return fg_collision_data;
 }
 
-const PlayerAnimationBuffer = an.AnimationBuffer(&.{ .Idle, .Hit, .Walk, .Death, .Roll }, 16);
+const PlayerAnimationBuffer = an.AnimationBuffer(&.{ .Idle, .Hit, .Walk, .Death, .Roll, .Jump }, 16);
 const MobAnimationBuffer = an.AnimationBuffer(&.{ .Walk, .Attack, .Hit }, 6);
 
 fn getPlayerAnimations() PlayerAnimationBuffer {
     var buffer = PlayerAnimationBuffer{};
 
     buffer.writeAnimation(.Idle, 0.5, &.{ 1, 2, 3, 4 });
+    buffer.writeAnimation(.Jump, 0.1, &.{4});
     buffer.writeAnimation(.Walk, 1, blk: {
         var data: [16]u8 = undefined;
         for (17..33, 0..) |i, idx| {
@@ -149,8 +120,6 @@ fn getPlayerAnimations() PlayerAnimationBuffer {
         break :blk &data;
     });
 
-    std.log.debug("PlayerAnimationBuffer: {any}\n", .{buffer.data});
-
     return buffer;
 }
 
@@ -160,8 +129,6 @@ fn getSlimeAnimations() MobAnimationBuffer {
     buffer.writeAnimation(.Walk, 1, &.{ 1, 2, 3, 4, 3, 2 });
     buffer.writeAnimation(.Attack, 0.5, &.{ 5, 6, 7, 8 });
     buffer.writeAnimation(.Hit, 0.5, &.{ 9, 10, 11, 12 });
-
-    std.log.debug("SlimeAnimationBuffer: {any}\n", .{buffer.data});
 
     return buffer;
 }
@@ -176,16 +143,16 @@ pub fn main() anyerror!void {
     const WINDOW_SIZE_Y = 900;
 
     const GAME_SIZE_X = 640;
-    const GAME_SIZE_Y = 480;
+    const GAME_SIZE_Y = 360;
 
     rl.setConfigFlags(.{
         // .fullscreen_mode = true,
         .vsync_hint = true,
-        .window_resizable = false,
+        .window_resizable = true,
     });
     rl.initWindow(WINDOW_SIZE_X, WINDOW_SIZE_Y, "raylib-zig [core] example - basic window");
     rl.setWindowMinSize(GAME_SIZE_X, GAME_SIZE_Y);
-    rl.setTargetFPS(120); // Set our game to run at 60 frames-per-second
+    rl.setTargetFPS(60); // Set our game to run at 60 frames-per-second
 
     const target = rl.loadRenderTexture(GAME_SIZE_X, GAME_SIZE_Y);
     rl.setTextureFilter(target.texture, .texture_filter_bilinear);
@@ -193,7 +160,7 @@ pub fn main() anyerror!void {
 
     //--------------------------------------------------------------------------------------
 
-    const debug_flags = &.{ .ShowHitboxes, .ShowScrollState };
+    const debug_flags = &.{ .ShowHitboxes, .ShowScrollState, .ShowFps, .ShowSpriteOutlines };
     debug.setDebugFlags(debug_flags);
 
     const viewport_padding_x = 16 + (GAME_SIZE_X % 16);
@@ -201,43 +168,50 @@ pub fn main() anyerror!void {
 
     var viewport = Viewport.init(rl.Rectangle.init(viewport_padding_x, viewport_padding_y, GAME_SIZE_X - (viewport_padding_x * 2), GAME_SIZE_Y - (viewport_padding_y * 2)));
 
-    const tilemap = try Tileset512.init("assets/sprites/world_tileset.png", .{ .x = 16, .y = 16 }, generateTilesetCollisionData(), allocator);
+    const tilemap = try Tileset512.init("assets/sprites/world_tileset.png", .{ .x = 16, .y = 16 }, generateTilesetCollisionData());
 
-    var bg_tile_data = generateBgTileData();
-    const bg_layer = tl.TileLayer.init(.{ .x = 70, .y = 35 }, 1, tilemap, &bg_tile_data, tl.LayerFlag.mask(&.{}));
+    const BgTileLayer = tl.FixedSizeTileLayer(1, 35, Tileset512);
+    const bg_tile_data = generateBgTileData();
+    var bg_layer = BgTileLayer.init(.{ .x = 70, .y = 35 }, 35, tilemap, bg_tile_data, tl.LayerFlag.mask(&.{}));
+    var bg_layers: [1]tl.TileLayer = .{bg_layer.tileLayer()};
 
-    var fg_tile_data = generateFgTileData();
-    const fg_layer = tl.TileLayer.init(.{ .x = 100, .y = 40 }, 100, tilemap, &fg_tile_data, tl.LayerFlag.mask(&.{.Collidable}));
+    const MainLayer = tl.FixedSizeTileLayer(100, 40, Tileset512);
+    const main_tile_data = generateMainTileData();
+    var main_layer = MainLayer.init(.{ .x = 100, .y = 40 }, 100, tilemap, main_tile_data, tl.LayerFlag.mask(&.{.Collidable}));
 
-    var layers = [_]tl.TileLayer{ bg_layer, fg_layer };
+    const fg_layers: [0]tl.TileLayer = .{};
 
     var player_animations = getPlayerAnimations();
-    var slime_animations = getSlimeAnimations();
+    // var slime_animations = getSlimeAnimations();
 
     const player_sprite = Sprite.init(
         "assets/sprites/knight.png",
-
         .{ .x = 32, .y = 32 },
-        rl.Rectangle.init(8, 8, 16, 20),
-        rl.Vector2.init(0, 16 * 16),
+        // rl.Rectangle.init(8, 8, 16, 20),
+        // rl.Vector2.init(0, 16 * 16),
         player_animations.reader(),
     );
 
-    var slime_sprite = Sprite.init(
-        "assets/sprites/slime_green.png",
-        .{ .x = 24, .y = 24 },
-        rl.Rectangle.init(6, 12, 12, 12),
-        rl.Vector2.init(50 * 16, 16 * 16),
-        slime_animations.reader(),
+    var player = Player.init(
+        rl.Rectangle.init(0, 16 * 16, 16, 20),
+        player_sprite,
+        .{ .x = 8, .y = 8 },
     );
-    slime_sprite.current_animation = .Walk;
+    const actor = player.entity();
 
-    var sprites = [_]Sprite{ player_sprite, slime_sprite };
+    // var slime_sprite = Sprite.init(
+    //     "assets/sprites/slime_green.png",
+    //     .{ .x = 24, .y = 24 },
+    //     // rl.Rectangle.init(6, 12, 12, 12),
+    //     // rl.Vector2.init(50 * 16, 16 * 16),
+    //     slime_animations.reader(),
+    // );
+    // slime_sprite.current_animation = .Walk;
+    //
+    var actors: [1]Entity = .{actor};
 
-    var scene = try Scene.create(&layers, &viewport, &sprites, allocator);
+    var scene = try Scene.create(main_layer.tileLayer(), &bg_layers, &fg_layers, &viewport, &actors, allocator);
     scene.scroll_state = .{ .x = 0, .y = 1 };
-
-    var jump_frame: f32 = -1;
 
     defer scene.destroy();
 
@@ -273,83 +247,78 @@ pub fn main() anyerror!void {
             }
         }
 
-        if (rl.isKeyPressed(rl.KeyboardKey.key_one)) {
-            sprites[0].setAnimation(.Idle, null, false);
-        } else if (rl.isKeyPressed(rl.KeyboardKey.key_two)) {
-            sprites[0].setAnimation(.Walk, null, false);
-        } else if (rl.isKeyPressed(rl.KeyboardKey.key_three)) {
-            sprites[0].setAnimation(.Roll, .Idle, false);
-        } else if (rl.isKeyPressed(rl.KeyboardKey.key_four)) {
-            sprites[0].setAnimation(.Hit, .Idle, false);
-        } else if (rl.isKeyPressed(rl.KeyboardKey.key_five)) {
-            sprites[0].setAnimation(.Death, null, true);
-        }
+        // if (rl.isKeyPressed(rl.KeyboardKey.key_one)) {
+        //     sprites[0].setAnimation(.Idle, null, false);
+        // } else if (rl.isKeyPressed(rl.KeyboardKey.key_two)) {
+        //     sprites[0].setAnimation(.Walk, null, false);
+        // } else if (rl.isKeyPressed(rl.KeyboardKey.key_three)) {
+        //     sprites[0].setAnimation(.Roll, .Idle, false);
+        // } else if (rl.isKeyPressed(rl.KeyboardKey.key_four)) {
+        //     sprites[0].setAnimation(.Hit, .Idle, false);
+        // } else if (rl.isKeyPressed(rl.KeyboardKey.key_five)) {
+        //     sprites[0].setAnimation(.Death, null, true);
+        // }
 
-        if (rl.isKeyPressed(rl.KeyboardKey.key_six)) {
-            sprites[1].setAnimation(.Walk, null, false);
-        } else if (rl.isKeyPressed(rl.KeyboardKey.key_seven)) {
-            sprites[1].setAnimation(.Attack, null, false);
-        } else if (rl.isKeyPressed(rl.KeyboardKey.key_eight)) {
-            sprites[1].setAnimation(.Hit, .Attack, false);
-        }
+        // if (rl.isKeyPressed(rl.KeyboardKey.key_six)) {
+        //     sprites[1].setAnimation(.Walk, null, false);
+        // } else if (rl.isKeyPressed(rl.KeyboardKey.key_seven)) {
+        //     sprites[1].setAnimation(.Attack, null, false);
+        // } else if (rl.isKeyPressed(rl.KeyboardKey.key_eight)) {
+        //     sprites[1].setAnimation(.Hit, .Attack, false);
+        // }
 
-        if (rl.isKeyPressed(rl.KeyboardKey.key_q)) {
-            sprites[0].setDirection(if (sprites[0].sprite_direction == .Right) .Left else .Right);
-        }
+        // if (rl.isKeyPressed(rl.KeyboardKey.key_q)) {
+        //     sprites[0].setFlip(if (sprites[0].flip_mask == .Right) .Left else .Right);
+        // }
 
-        if (rl.isKeyPressed(rl.KeyboardKey.key_e)) {
-            sprites[1].setDirection(if (sprites[1].sprite_direction == .Right) .Left else .Right);
-        }
+        // if (rl.isKeyPressed(rl.KeyboardKey.key_e)) {
+        //     sprites[1].setFlip(if (sprites[1].flip_mask == .Right) .Left else .Right);
+        // }
 
-        if (!debug.isPaused()) {
-            // Manual camera panning with WASD
-            if (jump_frame >= 0) {
-                const next_jump_frame = jump_frame - (JUMP_PARABOLA.len * delta_time);
-                const jump_frame_idx: usize = @intFromFloat(@floor(jump_frame));
-                const jmp_adj = @as(f32, @floatFromInt(JUMP_PARABOLA[jump_frame_idx])) * 0.1;
-                sprites[0].movement_vec.y -= jmp_adj;
-                jump_frame = next_jump_frame;
-            } else {
-                jump_frame = -1;
-            }
-
-            var dir_mask: u4 = @intFromEnum(controls.MovementKeyBitmask.None);
-
-            if (rl.isKeyDown(rl.KeyboardKey.key_w) and jump_frame == -1 and (sprites[0].world_collision_mask & @intFromEnum(co.CollisionDirection.Up)) == 0 and (sprites[0].world_collision_mask & @intFromEnum(co.CollisionDirection.Down)) != 0) {
-                jump_frame = @as(f32, JUMP_PARABOLA.len - 1);
-                // dir_mask |= @intFromEnum(controls.MovementKeyBitmask.Up);
-            }
-
-            if (rl.isKeyDown(rl.KeyboardKey.key_a) and (sprites[0].world_collision_mask & @intFromEnum(co.CollisionDirection.Left)) == 0) {
-                sprites[0].setDirection(.Left);
-                dir_mask |= @intFromEnum(controls.MovementKeyBitmask.Left);
-            } else if (rl.isKeyDown(rl.KeyboardKey.key_d) and (sprites[0].world_collision_mask & @intFromEnum(co.CollisionDirection.Right)) == 0) {
-                sprites[0].setDirection(.Right);
-                dir_mask |= @intFromEnum(controls.MovementKeyBitmask.Right);
-            }
-
-            const dir_vec = controls.movement_vectors[dir_mask];
-            const movement_speed = 40;
-
-            if (dir_vec.length() > 0) {
-                if (sprites[0].current_animation != .Walk) {
-                    sprites[0].setAnimation(.Walk, null, false);
-                }
-                sprites[0].movement_vec = sprites[0].movement_vec.add(dir_vec.scale(movement_speed * delta_time));
-
-                // scene.scroll_state = scene.scroll_state.add(dir_vec.scale(scroll_speed * delta_time)).clamp(rl.Vector2.init(0, 0), rl.Vector2.init(1, 1));
-            } else if (sprites[0].current_animation == .Walk) {
-                sprites[0].setAnimation(.Idle, null, false);
-            }
-        }
+        // if (!debug.isPaused()) {
+        //     // Manual camera panning with WASD
+        //     if (jump_frame >= 0) {
+        //         const next_jump_frame = jump_frame - (JUMP_PARABOLA.len * delta_time);
+        //         const jump_frame_idx: usize = @intFromFloat(@floor(jump_frame));
+        //         const jmp_adj = @as(f32, @floatFromInt(JUMP_PARABOLA[jump_frame_idx])) * 10 * delta_time;
+        //         sprites[0].direction.y -= jmp_adj;
+        //         jump_frame = next_jump_frame;
+        //     } else {
+        //         jump_frame = -1;
+        //     }
+        //
+        //     var dir_mask: u4 = @intFromEnum(controls.MovementKeyBitmask.None);
+        //
+        //     if (rl.isKeyDown(rl.KeyboardKey.key_w) and jump_frame == -1 and (sprites[0].world_collision_mask & @intFromEnum(co.CollisionDirection.Up)) == 0 and (sprites[0].world_collision_mask & @intFromEnum(co.CollisionDirection.Down)) != 0) {
+        //         jump_frame = @as(f32, JUMP_PARABOLA.len - 1);
+        //         // dir_mask |= @intFromEnum(controls.MovementKeyBitmask.Up);
+        //     }
+        //
+        //     if (rl.isKeyDown(rl.KeyboardKey.key_a)) {
+        //         sprites[0].setFlip(.Left);
+        //         dir_mask |= @intFromEnum(controls.MovementKeyBitmask.Left);
+        //     } else if (rl.isKeyDown(rl.KeyboardKey.key_d)) {
+        //         sprites[0].setFlip(.Right);
+        //         dir_mask |= @intFromEnum(controls.MovementKeyBitmask.Right);
+        //     }
+        //
+        //     const dir_vec = controls.movement_vectors[dir_mask];
+        //     const movement_speed = 90;
+        //
+        //     if (dir_vec.length() > 0) {
+        //         if (sprites[0].current_animation != .Walk) {
+        //             sprites[0].setAnimation(.Walk, null, false);
+        //         }
+        //         sprites[0].direction = sprites[0].direction.add(dir_vec.scale(movement_speed * delta_time));
+        //
+        //         // scene.scroll_state = scene.scroll_state.add(dir_vec.scale(scroll_speed * delta_time)).clamp(rl.Vector2.init(0, 0), rl.Vector2.init(1, 1));
+        //     } else if (sprites[0].current_animation == .Walk) {
+        //         sprites[0].setAnimation(.Idle, null, false);
+        //     }
+        // }
 
         viewport.update(delta_time);
         try scene.update(delta_time);
-
-        if (!debug.isPaused()) {
-            scene.scroll_state.x = @min(@max(sprites[0].pos.x - (viewport.rectangle.width / 2), 0) / scene.max_x_scroll, scene.max_x_scroll);
-            scene.scroll_state.y = @min(@max(sprites[0].pos.y - (viewport.rectangle.height / 2), 0) / scene.max_y_scroll, scene.max_y_scroll);
-        }
 
         // Draw to render texture
         //----------------------------------------------------------------------------------
@@ -359,6 +328,11 @@ pub fn main() anyerror!void {
 
         viewport.draw();
         scene.draw();
+        scene.drawDebug();
+
+        if (debug.isDebugFlagSet(.ShowFps)) {
+            rl.drawFPS(GAME_SIZE_X - 150, GAME_SIZE_Y - 20);
+        }
 
         rl.endTextureMode();
 
@@ -367,7 +341,7 @@ pub fn main() anyerror!void {
         rl.beginDrawing();
         defer rl.endDrawing();
 
-        rl.clearBackground(rl.Color.red);
+        rl.clearBackground(rl.Color.black);
         rl.drawTexturePro(
             target.texture,
             rl.Rectangle.init(0, 0, @as(f32, @floatFromInt(target.texture.width)), @as(f32, @floatFromInt(-target.texture.height))),

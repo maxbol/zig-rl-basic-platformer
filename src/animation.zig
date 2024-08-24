@@ -113,4 +113,5 @@ pub const AnimationType = enum(usize) {
     Hit,
     Death,
     Attack,
+    Jump,
 };
