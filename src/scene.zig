@@ -16,7 +16,7 @@ bg_layers: []tl.TileLayer,
 fg_layers: []tl.TileLayer,
 allocator: std.mem.Allocator,
 actors: []Entity = undefined,
-gravity: f32 = 13,
+gravity: f32 = 13 * 60,
 
 max_x_scroll: f32 = 0,
 max_y_scroll: f32 = 0,

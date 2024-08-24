@@ -22,11 +22,11 @@ fn generateBgTileData() [1 * 35]u8 {
     for (0..35) |y| {
         for (0..1) |x| {
             bg_tile_data[y * 1 + x] = blk: {
-                if (y < 3) {
+                if (y < 12) {
                     break :blk 145;
-                } else if (y == 3) {
+                } else if (y == 12) {
                     break :blk 161;
-                } else if (y > 3) {
+                } else if (y > 12) {
                     break :blk 177;
                 }
                 break :blk 0;
@@ -150,9 +150,9 @@ pub fn main() anyerror!void {
         .vsync_hint = true,
         .window_resizable = true,
     });
-    rl.initWindow(WINDOW_SIZE_X, WINDOW_SIZE_Y, "raylib-zig [core] example - basic window");
+    rl.initWindow(WINDOW_SIZE_X, WINDOW_SIZE_Y, "knight jumper");
     rl.setWindowMinSize(GAME_SIZE_X, GAME_SIZE_Y);
-    rl.setTargetFPS(60); // Set our game to run at 60 frames-per-second
+    rl.setTargetFPS(120); // Set our game to run at 60 frames-per-second
 
     const target = rl.loadRenderTexture(GAME_SIZE_X, GAME_SIZE_Y);
     rl.setTextureFilter(target.texture, .texture_filter_bilinear);
@@ -160,7 +160,7 @@ pub fn main() anyerror!void {
 
     //--------------------------------------------------------------------------------------
 
-    const debug_flags = &.{ .ShowHitboxes, .ShowScrollState, .ShowFps, .ShowSpriteOutlines };
+    const debug_flags = &.{ .ShowHitboxes, .ShowScrollState, .ShowFps, .ShowSpriteOutlines, .ShowTestedTiles, .ShowCollidedTiles };
     debug.setDebugFlags(debug_flags);
 
     const viewport_padding_x = 16 + (GAME_SIZE_X % 16);
@@ -170,12 +170,12 @@ pub fn main() anyerror!void {
 
     const tilemap = try Tileset512.init("assets/sprites/world_tileset.png", .{ .x = 16, .y = 16 }, generateTilesetCollisionData());
 
-    const BgTileLayer = tl.FixedSizeTileLayer(1, 35, Tileset512);
+    const BgTileLayer = tl.FixedSizeTileLayer(1 * 35, Tileset512);
     const bg_tile_data = generateBgTileData();
-    var bg_layer = BgTileLayer.init(.{ .x = 70, .y = 35 }, 35, tilemap, bg_tile_data, tl.LayerFlag.mask(&.{}));
+    var bg_layer = BgTileLayer.init(.{ .x = 70, .y = 35 }, 1, tilemap, bg_tile_data, tl.LayerFlag.mask(&.{}));
     var bg_layers: [1]tl.TileLayer = .{bg_layer.tileLayer()};
 
-    const MainLayer = tl.FixedSizeTileLayer(100, 40, Tileset512);
+    const MainLayer = tl.FixedSizeTileLayer(100 * 40, Tileset512);
     const main_tile_data = generateMainTileData();
     var main_layer = MainLayer.init(.{ .x = 100, .y = 40 }, 100, tilemap, main_tile_data, tl.LayerFlag.mask(&.{.Collidable}));
 
@@ -187,15 +187,13 @@ pub fn main() anyerror!void {
     const player_sprite = Sprite.init(
         "assets/sprites/knight.png",
         .{ .x = 32, .y = 32 },
-        // rl.Rectangle.init(8, 8, 16, 20),
-        // rl.Vector2.init(0, 16 * 16),
         player_animations.reader(),
     );
 
     var player = Player.init(
-        rl.Rectangle.init(0, 16 * 16, 16, 20),
+        rl.Rectangle.init(0, 16 * 16, 16, 16),
         player_sprite,
-        .{ .x = 8, .y = 8 },
+        .{ .x = 8, .y = 12 },
     );
     const actor = player.entity();
 
@@ -246,76 +244,6 @@ pub fn main() anyerror!void {
                 debug.setDebugFlags(debug_flags);
             }
         }
-
-        // if (rl.isKeyPressed(rl.KeyboardKey.key_one)) {
-        //     sprites[0].setAnimation(.Idle, null, false);
-        // } else if (rl.isKeyPressed(rl.KeyboardKey.key_two)) {
-        //     sprites[0].setAnimation(.Walk, null, false);
-        // } else if (rl.isKeyPressed(rl.KeyboardKey.key_three)) {
-        //     sprites[0].setAnimation(.Roll, .Idle, false);
-        // } else if (rl.isKeyPressed(rl.KeyboardKey.key_four)) {
-        //     sprites[0].setAnimation(.Hit, .Idle, false);
-        // } else if (rl.isKeyPressed(rl.KeyboardKey.key_five)) {
-        //     sprites[0].setAnimation(.Death, null, true);
-        // }
-
-        // if (rl.isKeyPressed(rl.KeyboardKey.key_six)) {
-        //     sprites[1].setAnimation(.Walk, null, false);
-        // } else if (rl.isKeyPressed(rl.KeyboardKey.key_seven)) {
-        //     sprites[1].setAnimation(.Attack, null, false);
-        // } else if (rl.isKeyPressed(rl.KeyboardKey.key_eight)) {
-        //     sprites[1].setAnimation(.Hit, .Attack, false);
-        // }
-
-        // if (rl.isKeyPressed(rl.KeyboardKey.key_q)) {
-        //     sprites[0].setFlip(if (sprites[0].flip_mask == .Right) .Left else .Right);
-        // }
-
-        // if (rl.isKeyPressed(rl.KeyboardKey.key_e)) {
-        //     sprites[1].setFlip(if (sprites[1].flip_mask == .Right) .Left else .Right);
-        // }
-
-        // if (!debug.isPaused()) {
-        //     // Manual camera panning with WASD
-        //     if (jump_frame >= 0) {
-        //         const next_jump_frame = jump_frame - (JUMP_PARABOLA.len * delta_time);
-        //         const jump_frame_idx: usize = @intFromFloat(@floor(jump_frame));
-        //         const jmp_adj = @as(f32, @floatFromInt(JUMP_PARABOLA[jump_frame_idx])) * 10 * delta_time;
-        //         sprites[0].direction.y -= jmp_adj;
-        //         jump_frame = next_jump_frame;
-        //     } else {
-        //         jump_frame = -1;
-        //     }
-        //
-        //     var dir_mask: u4 = @intFromEnum(controls.MovementKeyBitmask.None);
-        //
-        //     if (rl.isKeyDown(rl.KeyboardKey.key_w) and jump_frame == -1 and (sprites[0].world_collision_mask & @intFromEnum(co.CollisionDirection.Up)) == 0 and (sprites[0].world_collision_mask & @intFromEnum(co.CollisionDirection.Down)) != 0) {
-        //         jump_frame = @as(f32, JUMP_PARABOLA.len - 1);
-        //         // dir_mask |= @intFromEnum(controls.MovementKeyBitmask.Up);
-        //     }
-        //
-        //     if (rl.isKeyDown(rl.KeyboardKey.key_a)) {
-        //         sprites[0].setFlip(.Left);
-        //         dir_mask |= @intFromEnum(controls.MovementKeyBitmask.Left);
-        //     } else if (rl.isKeyDown(rl.KeyboardKey.key_d)) {
-        //         sprites[0].setFlip(.Right);
-        //         dir_mask |= @intFromEnum(controls.MovementKeyBitmask.Right);
-        //     }
-        //
-        //     const dir_vec = controls.movement_vectors[dir_mask];
-        //     const movement_speed = 90;
-        //
-        //     if (dir_vec.length() > 0) {
-        //         if (sprites[0].current_animation != .Walk) {
-        //             sprites[0].setAnimation(.Walk, null, false);
-        //         }
-        //         sprites[0].direction = sprites[0].direction.add(dir_vec.scale(movement_speed * delta_time));
-        //
-        //         // scene.scroll_state = scene.scroll_state.add(dir_vec.scale(scroll_speed * delta_time)).clamp(rl.Vector2.init(0, 0), rl.Vector2.init(1, 1));
-        //     } else if (sprites[0].current_animation == .Walk) {
-        //         sprites[0].setAnimation(.Idle, null, false);
-        //     }
-        // }
 
         viewport.update(delta_time);
         try scene.update(delta_time);

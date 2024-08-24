@@ -16,6 +16,15 @@ pub const IRect = struct {
         };
     }
 
+    pub fn toRect(self: IRect) rl.Rectangle {
+        return rl.Rectangle.init(
+            @floatFromInt(self.x),
+            @floatFromInt(self.y),
+            @floatFromInt(self.width),
+            @floatFromInt(self.height),
+        );
+    }
+
     pub fn isColliding(self: IRect, other: IRect) bool {
         return self.x < other.x + other.width and
             self.x + self.width > other.x and

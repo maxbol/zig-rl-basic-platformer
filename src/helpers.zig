@@ -1,5 +1,6 @@
 const rl = @import("raylib");
 const std = @import("std");
+const shapes = @import("shapes.zig");
 
 pub fn buildRectMap(comptime size: usize, source_width: i32, source_height: i32, rec_width: f32, rec_height: f32, x_dir: i2, y_dir: i2) [size]?rl.Rectangle {
     const source_read_max_x: f32 = @floor(@as(f32, @floatFromInt(source_width)) / rec_width);
@@ -113,12 +114,16 @@ pub fn getRelativePos(origin: anytype, pos: anytype) @TypeOf(pos) {
     return new;
 }
 
-pub fn getGridRect(grid_size: anytype, pos: anytype) @TypeOf(pos) {
+pub fn getGridRect(grid_size: shapes.IPos, pos: shapes.IRect) @TypeOf(pos) {
     var new = pos;
-    new.x = @divFloor(new.x, grid_size.x);
-    new.y = @divFloor(new.y, grid_size.y);
-    new.width = @divFloor(new.width, grid_size.x);
-    new.height = @divFloor(new.height, grid_size.y);
+    new.x = @intFromFloat(@round(@as(f32, @floatFromInt(new.x)) / @as(f32, @floatFromInt(grid_size.x))));
+    new.y = @intFromFloat(@round(@as(f32, @floatFromInt(new.y)) / @as(f32, @floatFromInt(grid_size.y))));
+    new.width = std.math.divCeil(@TypeOf(new.width), new.width, grid_size.x) catch {
+        @panic("Something went really wrong\n");
+    };
+    new.height = std.math.divCeil(@TypeOf(new.height), new.height, grid_size.y) catch {
+        @panic("Something went really wrong\n");
+    };
     return new;
 }
 
@@ -126,6 +131,15 @@ pub fn getPixelPos(grid_size: anytype, pos: anytype) @TypeOf(pos) {
     var new = pos;
     new.x *= grid_size.x;
     new.y *= grid_size.y;
+    return new;
+}
+
+pub fn getPixelRect(grid_size: anytype, pos: anytype) @TypeOf(pos) {
+    var new = pos;
+    new.x *= grid_size.x;
+    new.y *= grid_size.y;
+    new.width *= grid_size.x;
+    new.height *= grid_size.y;
     return new;
 }
 

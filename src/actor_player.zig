@@ -22,12 +22,12 @@ speed: rl.Vector2,
 world_collision_mask: u4 = 0,
 jump_counter: u2 = 0,
 
-const run_speed: f32 = 3;
-const run_acceleration: f32 = 10;
-const run_reduce: f32 = 22;
-const fly_reduce: f32 = 12;
-const fall_speed: f32 = 3.6;
-const jump_speed: f32 = -6;
+const run_speed: f32 = 3 * 60;
+const run_acceleration: f32 = 10 * 60;
+const run_reduce: f32 = 22 * 60;
+const fly_reduce: f32 = 12 * 60;
+const fall_speed: f32 = 3.6 * 60;
+const jump_speed: f32 = -6 * 60;
 
 pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2) Player {
     return .{
@@ -120,8 +120,8 @@ pub fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     }
 
     // Move the player hitbox
-    self.move(ActorMoveable.MoveAxis.X, scene.main_layer, self.speed.x);
-    self.move(ActorMoveable.MoveAxis.Y, scene.main_layer, self.speed.y);
+    self.move(ActorMoveable.MoveAxis.X, scene.main_layer, self.speed.x * delta_time);
+    self.move(ActorMoveable.MoveAxis.Y, scene.main_layer, self.speed.y * delta_time);
 
     scene.centerViewportOnPos(self.moveable.hitbox);
 
