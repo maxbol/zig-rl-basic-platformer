@@ -248,7 +248,7 @@ pub fn FixedSizeTileLayer(comptime width: usize, comptime height: usize, comptim
             return tile;
         }
 
-        fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) an.AnimationError!void {
+        fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) an.AnimationBufferError!void {
             const self: *@This() = @ptrCast(@alignCast(ctx));
 
             _ = delta_time; // autofix
@@ -339,7 +339,7 @@ pub fn FixedSizeTileLayer(comptime width: usize, comptime height: usize, comptim
                     const dest_y: f32 = self.viewport_y_adjust + row_offset * tile_size.y - self.sub_tile_scroll_y;
                     const dest = rl.Vector2.init(dest_x, dest_y);
 
-                    self.tileset.drawRect(tile, dest, cull_x, cull_y, rl.Color.white);
+                    self.tileset.tileset().drawRect(tile, dest, cull_x, cull_y, rl.Color.white);
                 }
             }
         }
