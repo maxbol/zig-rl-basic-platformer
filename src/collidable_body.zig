@@ -21,8 +21,8 @@ pub fn init(hitbox: rl.Rectangle) CollidableBody {
 
 pub fn move(
     self: *CollidableBody,
+    scene: *const Scene,
     comptime axis: MoveAxis,
-    layer: tiles.TileLayer,
     amount: f32,
     collider: anytype,
 ) void {
@@ -52,11 +52,11 @@ pub fn move(
         }
 
         grid_rect = helpers.getGridRect(
-            shapes.IPos.fromVec2(layer.getTileset().getTileSize()),
+            shapes.IPos.fromVec2(scene.main_layer.getTileset().getTileSize()),
             next_hitbox,
         );
 
-        if (!layer.collideAt(next_hitbox, grid_rect)) {
+        if (!scene.collideAt(next_hitbox, grid_rect)) {
             if (axis == MoveAxis.X) {
                 self.hitbox.x += @floatFromInt(sign);
             } else {

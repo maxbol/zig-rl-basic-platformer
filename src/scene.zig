@@ -6,6 +6,7 @@ const Viewport = @import("viewport.zig");
 const controls = @import("controls.zig");
 const debug = @import("debug.zig");
 const rl = @import("raylib");
+const shapes = @import("shapes.zig");
 const std = @import("std");
 const tl = @import("tiles.zig");
 
@@ -223,4 +224,8 @@ pub fn centerViewportOnPos(self: *Scene, pos: anytype) void {
         ) / self.max_y_scroll,
         self.max_y_scroll,
     );
+}
+
+pub fn collideAt(self: *const Scene, rect: shapes.IRect, grid_rect: shapes.IRect) bool {
+    return self.main_layer.collideAt(rect, grid_rect);
 }

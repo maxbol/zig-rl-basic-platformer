@@ -63,7 +63,7 @@ pub fn handleCollision(self: *Mob, axis: CollidableBody.MoveAxis, sign: i8) void
             self.speed.x = -@as(f32, @floatFromInt(sign)) * walk_speed;
         }
     } else {
-        if (sign == -1) {
+        if (sign == 1) {
             // Stop falling when hitting the ground
             self.is_jumping = false;
         }
@@ -86,8 +86,8 @@ fn entityCast(ctx: *anyopaque) Entity {
     return self.entity();
 }
 
-fn move(self: *Mob, comptime axis: CollidableBody.MoveAxis, layer: tl.TileLayer, amount: f32) void {
-    self.collidable.move(axis, layer, amount, self);
+fn move(self: *Mob, scene: *const Scene, comptime axis: CollidableBody.MoveAxis, amount: f32) void {
+    self.collidable.move(scene, axis, amount, self);
 }
 
 inline fn detectOnNextTile(lookahead: i32, sign: i8, mob_gridbox: shapes.IRect, player_gridbox: shapes.IRect) bool {
@@ -166,8 +166,8 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.EntityUpdateEr
     }
 
     // Move the mob
-    self.move(CollidableBody.MoveAxis.X, scene.main_layer, self.speed.x * delta_time);
-    self.move(CollidableBody.MoveAxis.Y, scene.main_layer, self.speed.y * delta_time);
+    self.move(scene, CollidableBody.MoveAxis.X, self.speed.x * delta_time);
+    self.move(scene, CollidableBody.MoveAxis.Y, self.speed.y * delta_time);
 
     try self.sprite.update(scene, delta_time);
 }

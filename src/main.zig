@@ -107,9 +107,10 @@ fn getPlayerAnimations() PlayerAnimationBuffer {
         }
         break :blk &data;
     });
-    buffer.writeAnimation(.Hit, 0.5, blk: {
-        var data: [4]u8 = undefined;
-        for (49..53, 0..) |i, idx| {
+    buffer.writeAnimation(.Hit, 0.15, blk: {
+        var data: [3]u8 = undefined;
+        // for (49..53, 0..) |i, idx| {
+        for (49..52, 0..) |i, idx| {
             data[idx] = @intCast(i);
         }
         break :blk &data;
@@ -130,7 +131,7 @@ fn getSlimeAnimations() MobAnimationBuffer {
 
     buffer.writeAnimation(.Walk, 1, &.{ 1, 2, 3, 4, 3, 2 });
     buffer.writeAnimation(.Attack, 0.5, &.{ 5, 6, 7, 8 });
-    buffer.writeAnimation(.Hit, 0.5, &.{ 9, 10, 11, 12 });
+    buffer.writeAnimation(.Hit, 0.1, &.{ 9, 10, 11, 12 });
 
     return buffer;
 }
