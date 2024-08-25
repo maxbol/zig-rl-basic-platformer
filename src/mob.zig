@@ -17,9 +17,16 @@ collidable: CollidableBody,
 sprite: Sprite,
 sprite_offset: rl.Vector2,
 speed: rl.Vector2,
+is_hunting: bool = false,
+is_jumping: bool = false,
+did_huntjump: bool = false,
 
 const walk_speed: f32 = 1 * 60;
 const fall_speed: f32 = 3.6 * 60;
+const hunt_speed: f32 = 2 * 60;
+const jump_speed: f32 = -4 * 60;
+const hunt_acceleration: f32 = 10 * 60;
+const line_of_sight: i32 = 10; // See 10 tiles ahead
 
 pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2) Mob {
     return .{
@@ -51,10 +58,15 @@ pub fn entity(self: *Mob) Entity {
 
 pub fn handleCollision(self: *Mob, axis: CollidableBody.MoveAxis, sign: i8) void {
     if (axis == CollidableBody.MoveAxis.X) {
-        // Reverse direction when hitting an obstacle
-        std.debug.print("reversing direction of mob sign={d}\n", .{sign});
-        self.speed.x = -@as(f32, @floatFromInt(sign)) * walk_speed;
+        // Reverse direction when hitting an obstacle (unless we are hunting the player)
+        if (!self.is_hunting) {
+            self.speed.x = -@as(f32, @floatFromInt(sign)) * walk_speed;
+        }
     } else {
+        if (sign == -1) {
+            // Stop falling when hitting the ground
+            self.is_jumping = false;
+        }
         self.speed.y = 0;
     }
 }
@@ -78,6 +90,34 @@ fn move(self: *Mob, comptime axis: CollidableBody.MoveAxis, layer: tl.TileLayer,
     self.collidable.move(axis, layer, amount, self);
 }
 
+inline fn detectOnNextTile(lookahead: i32, sign: i8, mob_gridbox: shapes.IRect, player_gridbox: shapes.IRect) bool {
+    const next_x = mob_gridbox.x + (sign * lookahead);
+    const next_y = mob_gridbox.y;
+    const next_gridbox = shapes.IRect.init(next_x, next_y, mob_gridbox.width, mob_gridbox.height);
+    return player_gridbox.isColliding(next_gridbox);
+}
+
+fn detectNearbyPlayer(self: *Mob, scene: *Scene, delta_time: f32) void {
+    const player_gridbox = scene.getPlayer().getGridRect();
+    const mob_gridbox = getGridRect(self);
+    var lookahead = line_of_sight;
+    var is_hunting = false;
+
+    while (lookahead > 0) : (lookahead -= 1) {
+        if (detectOnNextTile(lookahead, 1, mob_gridbox, player_gridbox)) {
+            is_hunting = true;
+            self.speed.x = approach(self.speed.x, hunt_speed, hunt_acceleration * delta_time);
+            break;
+        }
+        if (detectOnNextTile(lookahead, -1, mob_gridbox, player_gridbox)) {
+            is_hunting = true;
+            self.speed.x = approach(self.speed.x, -hunt_speed, hunt_acceleration * delta_time);
+            break;
+        }
+    }
+    self.is_hunting = is_hunting;
+}
+
 fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.EntityUpdateError!void {
     const self: *Mob = @ptrCast(@alignCast(ctx));
 
@@ -87,18 +127,41 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.EntityUpdateEr
     }
 
     // Try to spot the player by raycasting
-    const player_hitbox = scene.getPlayer().getHitboxRect();
-    _ = player_hitbox; // autofix
+    self.detectNearbyPlayer(scene, delta_time);
+
+    // Hunt jumping
+    if (!self.is_hunting and self.did_huntjump and !self.is_jumping) {
+        self.did_huntjump = false;
+    }
+    if (self.is_hunting and !self.did_huntjump and !self.is_jumping) {
+        const player_hitbox = scene.getPlayer().getHitboxRect();
+        const mob_hitbox = getHitboxRect(ctx);
+
+        if (@abs(player_hitbox.x - mob_hitbox.x) < 80) {
+            self.speed.y = jump_speed;
+            self.is_jumping = true;
+            self.did_huntjump = true;
+        }
+    }
+
+    // Slow down when hunt is over
+    if (!self.is_hunting) {
+        self.speed.x = std.math.sign(self.speed.x) * walk_speed;
+    }
 
     // Gravity
     self.speed.y = approach(self.speed.y, fall_speed, scene.gravity * delta_time);
 
     // Set animation and flip sprite
-    if (self.speed.x > 0) {
+    if (self.is_hunting) {
+        self.sprite.setAnimation(.Attack, null, false);
+    } else {
         self.sprite.setAnimation(.Walk, null, false);
+    }
+
+    if (self.speed.x > 0) {
         self.sprite.setFlip(Sprite.FlipState.XFlip, false);
     } else if (self.speed.x < 0) {
-        self.sprite.setAnimation(.Walk, null, false);
         self.sprite.setFlip(Sprite.FlipState.XFlip, true);
     }
 

@@ -293,19 +293,6 @@ pub fn FixedSizeTileLayer(comptime size: usize, comptime TilesetType: type) type
 
             self.viewport_x_adjust = viewport_rect.x;
             self.viewport_y_adjust = viewport_rect.y;
-
-            // if (debug.isDebugFlagSet(.ShowTestedTiles)) {
-            //     self.tested_tiles = .{false} ** size;
-            // }
-            //
-            // if (debug.isDebugFlagSet(.ShowCollidedTiles)) {
-            //     self.collided_tiles = .{false} ** size;
-            // }
-            //
-            //
-            // std.debug.print("clearing debug tiles\n", .{});
-            // self.tested_tiles = .{false} ** size;
-            // self.collided_tiles = .{false} ** size;
         }
 
         fn draw(ctx: *anyopaque, _: *const Scene) void {

@@ -7,6 +7,10 @@ pub const IRect = struct {
     width: i32,
     height: i32,
 
+    pub fn init(x: i32, y: i32, width: i32, height: i32) IRect {
+        return .{ .x = x, .y = y, .width = width, .height = height };
+    }
+
     pub fn fromRect(rect: rl.Rectangle) IRect {
         return .{
             .x = @intFromFloat(@floor(rect.x)),
