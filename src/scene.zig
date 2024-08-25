@@ -1,3 +1,4 @@
+const Actor = @import("actor.zig");
 const Entity = @import("entity.zig");
 const Scene = @This();
 const Sprite = @import("sprite.zig");
@@ -15,7 +16,8 @@ main_layer: tl.TileLayer,
 bg_layers: []tl.TileLayer,
 fg_layers: []tl.TileLayer,
 allocator: std.mem.Allocator,
-actors: []Entity = undefined,
+player: Actor = undefined,
+mobs: []Actor = undefined,
 gravity: f32 = 13 * 60,
 
 max_x_scroll: f32 = 0,
@@ -25,7 +27,7 @@ viewport_y_offset: f32 = 0,
 viewport_x_limit: f32 = 0,
 viewport_y_limit: f32 = 0,
 
-pub fn create(main_layer: tl.TileLayer, bg_layers: []tl.TileLayer, fg_layers: []tl.TileLayer, viewport: *Viewport, actors: []Entity, allocator: std.mem.Allocator) !*Scene {
+pub fn create(main_layer: tl.TileLayer, bg_layers: []tl.TileLayer, fg_layers: []tl.TileLayer, viewport: *Viewport, player: Actor, mobs: []Actor, allocator: std.mem.Allocator) !*Scene {
     const scene = try allocator.create(Scene);
 
     scene.* = .{
@@ -35,7 +37,8 @@ pub fn create(main_layer: tl.TileLayer, bg_layers: []tl.TileLayer, fg_layers: []
         .scroll_state = rl.Vector2.init(0, 0),
         .viewport = viewport,
         .allocator = allocator,
-        .actors = actors,
+        .mobs = mobs,
+        .player = player,
     };
 
     return scene;
@@ -49,8 +52,12 @@ pub fn getGridSize(self: *const Scene) rl.Vector2 {
     return self.main_layer.getSize();
 }
 
-pub fn getTileSize(self: *const Scene) rl.Vector2 {
-    return self.main_layer.getTileset().getTileSize();
+pub fn getPlayer(self: *const Scene) Actor {
+    return self.player;
+}
+
+pub fn getMobs(self: *const Scene) []Actor {
+    return self.mobs;
 }
 
 pub fn destroy(self: *Scene) void {
@@ -79,10 +86,12 @@ pub fn update(self: *Scene, delta_time: f32) !void {
     }
 
     if (!debug.isPaused()) {
-        for (0..self.actors.len) |i| {
-            try self.actors[i].update(self, delta_time);
+        for (0..self.mobs.len) |i| {
+            try self.mobs[i].entity().update(self, delta_time);
         }
     }
+
+    try self.player.entity().update(self, delta_time);
 }
 
 pub fn draw(self: *const Scene) void {
@@ -92,9 +101,11 @@ pub fn draw(self: *const Scene) void {
 
     self.main_layer.entity().draw(self);
 
-    for (self.actors) |actor| {
-        actor.draw(self);
+    for (self.mobs) |actor| {
+        actor.entity().draw(self);
     }
+
+    self.player.entity().draw(self);
 
     for (self.fg_layers) |layer| {
         layer.entity().draw(self);
@@ -108,9 +119,11 @@ pub fn drawDebug(self: *const Scene) void {
 
     self.main_layer.entity().drawDebug(self);
 
-    for (self.actors) |actor| {
-        actor.drawDebug(self);
+    for (self.mobs) |actor| {
+        actor.entity().drawDebug(self);
     }
+
+    self.player.entity().drawDebug(self);
 
     for (self.fg_layers) |layer| {
         layer.entity().drawDebug(self);

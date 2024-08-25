@@ -6,13 +6,15 @@ const rl = @import("raylib");
 ptr: *anyopaque,
 impl: *const Interface,
 
+pub const EntityUpdateError = an.AnimationBufferError;
+
 pub const Interface = struct {
-    update: *const fn (ctx: *anyopaque, scene: *Scene, delta_time: f32) an.AnimationBufferError!void,
+    update: *const fn (ctx: *anyopaque, scene: *Scene, delta_time: f32) EntityUpdateError!void,
     draw: *const fn (ctx: *anyopaque, scene: *const Scene) void,
     drawDebug: *const fn (ctx: *anyopaque, scene: *const Scene) void,
 };
 
-pub fn update(self: *const Entity, scene: *Scene, delta_time: f32) an.AnimationBufferError!void {
+pub fn update(self: *const Entity, scene: *Scene, delta_time: f32) EntityUpdateError!void {
     try self.impl.update(self.ptr, scene, delta_time);
 }
 

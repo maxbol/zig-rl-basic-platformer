@@ -55,7 +55,7 @@ pub const TileLayer = struct {
         getPixelSize: *const fn (ctx: *anyopaque) rl.Vector2,
         getSize: *const fn (ctx: *anyopaque) rl.Vector2,
         getTileset: *const fn (ctx: *anyopaque) Tileset,
-        collideAt: *const fn (ctx: *anyopaque, rect: shapes.IRect) bool,
+        collideAt: *const fn (ctx: *anyopaque, rect: shapes.IRect, grid_rect: shapes.IRect) bool,
     };
 
     pub fn entity(self: TileLayer) Entity {
@@ -74,8 +74,8 @@ pub const TileLayer = struct {
         return self.impl.getTileset(self.ptr);
     }
 
-    pub fn collideAt(self: TileLayer, rect: shapes.IRect) bool {
-        return self.impl.collideAt(self.ptr, rect);
+    pub fn collideAt(self: TileLayer, rect: shapes.IRect, grid_rect: shapes.IRect) bool {
+        return self.impl.collideAt(self.ptr, rect, grid_rect);
     }
 };
 
@@ -168,7 +168,6 @@ pub fn FixedSizeTileLayer(comptime size: usize, comptime TilesetType: type) type
         // Debug vars
         tested_tiles: [size]bool = .{false} ** size,
         collided_tiles: [size]bool = .{false} ** size,
-        grid_rect: ?shapes.IRect = null,
 
         pub fn init(layer_size: rl.Vector2, row_size: usize, tileset: TilesetType, tiles: [size]u8, flags: u8) @This() {
             std.debug.assert(layer_size.x > 0);
@@ -235,8 +234,12 @@ pub fn FixedSizeTileLayer(comptime size: usize, comptime TilesetType: type) type
             return self.tileset.tileset();
         }
 
-        pub fn getTileFromRowAndCol(self: *const @This(), row_idx: usize, col_idx: usize) ?u8 {
-            const tile_idx = row_idx * self.row_size + (col_idx % self.row_size);
+        fn getTileIdxFromRowAndCol(self: *const @This(), row_idx: usize, col_idx: usize) usize {
+            return row_idx * self.row_size + (col_idx % self.row_size);
+        }
+
+        fn getTileFromRowAndCol(self: *const @This(), row_idx: usize, col_idx: usize) ?u8 {
+            const tile_idx = self.getTileIdxFromRowAndCol(row_idx, col_idx);
             const tile = self.tiles[tile_idx % self.tiles.len];
 
             if (tile == 0) {
@@ -299,9 +302,10 @@ pub fn FixedSizeTileLayer(comptime size: usize, comptime TilesetType: type) type
             //     self.collided_tiles = .{false} ** size;
             // }
             //
-
-            self.tested_tiles = .{false} ** size;
-            self.collided_tiles = .{false} ** size;
+            //
+            // std.debug.print("clearing debug tiles\n", .{});
+            // self.tested_tiles = .{false} ** size;
+            // self.collided_tiles = .{false} ** size;
         }
 
         fn draw(ctx: *anyopaque, _: *const Scene) void {
@@ -353,27 +357,20 @@ pub fn FixedSizeTileLayer(comptime size: usize, comptime TilesetType: type) type
                 return;
             }
 
-            if (self.grid_rect) |grid_rect| {
-                const rect = helpers.getPixelRect(getTileset(ctx).getTileSize(), grid_rect.toRect());
-                const grid_rect_adjusted = scene.getViewportAdjustedPos(rl.Rectangle, rect);
-                std.debug.print("grid_rect={d} {d} {d} {d}\n", .{ grid_rect.x, grid_rect.y, grid_rect.width, grid_rect.height });
-                std.debug.print("grid_rect_adjusted = {d} {d} {d} {d}\n", .{ grid_rect_adjusted.x, grid_rect_adjusted.y, grid_rect_adjusted.width, grid_rect_adjusted.height });
-                rl.drawRectangleLinesEx(grid_rect_adjusted, 1, rl.Color.brown);
-            }
-
             for (self.scroll_y_tiles..self.include_y_tiles + 1) |row_idx| {
                 for (self.scroll_x_tiles..self.include_x_tiles + 1) |col_idx| {
                     const tile_idx = row_idx * self.row_size + (col_idx % self.row_size);
 
                     const tile_rect: rl.Rectangle = scene.getViewportAdjustedPos(
                         rl.Rectangle,
-                        helpers.getPixelPos(self.tileset.tile_size, rl.Rectangle{
+                        helpers.getPixelRect(self.tileset.tile_size, rl.Rectangle{
                             .x = @floatFromInt(col_idx),
                             .y = @floatFromInt(row_idx),
-                            .width = self.tileset.tile_size.x,
-                            .height = self.tileset.tile_size.y,
+                            .width = 1,
+                            .height = 1,
                         }),
                     );
+
                     if (debug.isDebugFlagSet(.ShowCollidedTiles) and self.collided_tiles[tile_idx] == true) {
                         rl.drawRectangleRec(tile_rect, rl.Color.green.alpha(0.5));
                     } else if (debug.isDebugFlagSet(.ShowTestedTiles) and self.tested_tiles[tile_idx] == true) {
@@ -383,19 +380,16 @@ pub fn FixedSizeTileLayer(comptime size: usize, comptime TilesetType: type) type
             }
         }
 
-        fn collideAt(ctx: *anyopaque, rect: shapes.IRect) bool {
+        fn collideAt(ctx: *anyopaque, rect: shapes.IRect, grid_rect: shapes.IRect) bool {
             const self: *@This() = @ptrCast(@alignCast(ctx));
 
             const tile_size = shapes.IPos.fromVec2(self.tileset.tile_size);
-            const grid_rect: shapes.IRect = helpers.getGridRect(tile_size, rect);
 
-            self.grid_rect = grid_rect;
-
-            for (@intCast(@max(0, grid_rect.y - 2))..@intCast(@max(0, grid_rect.y + 2))) |row_idx| {
-                for (@intCast(@max(0, grid_rect.x - 2))..@intCast(@max(0, grid_rect.x + 2))) |col_idx| {
+            for (@intCast(@max(0, grid_rect.y - 1))..@intCast(@max(0, grid_rect.y + grid_rect.height + 1))) |row_idx| {
+                for (@intCast(@max(0, grid_rect.x - 1))..@intCast(@max(0, grid_rect.x + grid_rect.width + 1))) |col_idx| {
                     const tile = self.getTileFromRowAndCol(row_idx, col_idx) orelse continue;
 
-                    if (!self.tileset.tileset().isCollidable(tile)) {
+                    if (!getTileset(ctx).isCollidable(tile)) {
                         continue;
                     }
 
@@ -409,7 +403,7 @@ pub fn FixedSizeTileLayer(comptime size: usize, comptime TilesetType: type) type
                     const is_colliding = rect.isColliding(tile_rect);
 
                     if (debug.isDebugFlagSet(.ShowTestedTiles) or debug.isDebugFlagSet(.ShowCollidedTiles)) {
-                        const tile_idx = row_idx * self.row_size + (col_idx % self.row_size);
+                        const tile_idx = self.getTileIdxFromRowAndCol(row_idx, col_idx);
 
                         if (debug.isDebugFlagSet(.ShowTestedTiles)) {
                             self.tested_tiles[tile_idx] = true;

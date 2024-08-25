@@ -1,6 +1,7 @@
+const CollidableBody = @This();
 const Entity = @import("entity.zig");
-const ActorMoveable = @This();
 const Scene = @import("scene.zig");
+const debug = @import("debug.zig");
 const helpers = @import("helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("shapes.zig");
@@ -10,15 +11,16 @@ const tiles = @import("tiles.zig");
 hitbox: rl.Rectangle,
 x_remainder: f32 = 0,
 y_remainder: f32 = 0,
+grid_rect: shapes.IRect = shapes.IRect{ .x = 0, .y = 0, .width = 0, .height = 0 },
 
-pub fn init(hitbox: rl.Rectangle) ActorMoveable {
+pub fn init(hitbox: rl.Rectangle) CollidableBody {
     return .{
         .hitbox = hitbox,
     };
 }
 
 pub fn move(
-    self: *ActorMoveable,
+    self: *CollidableBody,
     comptime axis: MoveAxis,
     layer: tiles.TileLayer,
     amount: f32,
@@ -28,7 +30,7 @@ pub fn move(
 
     remainder.* += amount;
 
-    var mov: i32 = @intFromFloat(@round(remainder.*));
+    var mov: i32 = @intFromFloat(remainder.*);
 
     if (mov == 0) {
         return;
@@ -37,6 +39,8 @@ pub fn move(
     remainder.* -= @floatFromInt(mov);
 
     const sign: i8 = @intCast(std.math.sign(mov));
+
+    var grid_rect: shapes.IRect = undefined;
 
     while (mov != 0) {
         var next_hitbox = shapes.IRect.fromRect(self.hitbox);
@@ -47,7 +51,12 @@ pub fn move(
             next_hitbox.y += sign;
         }
 
-        if (!layer.collideAt(next_hitbox)) {
+        grid_rect = helpers.getGridRect(
+            shapes.IPos.fromVec2(layer.getTileset().getTileSize()),
+            next_hitbox,
+        );
+
+        if (!layer.collideAt(next_hitbox, grid_rect)) {
             if (axis == MoveAxis.X) {
                 self.hitbox.x += @floatFromInt(sign);
             } else {
@@ -59,6 +68,24 @@ pub fn move(
             collider.handleCollision(axis, sign);
             break;
         }
+    }
+
+    self.grid_rect = grid_rect;
+}
+
+pub fn drawDebug(self: *CollidableBody, scene: *const Scene) void {
+    if (debug.isDebugFlagSet(.ShowHitboxes)) {
+        const rect = scene.getViewportAdjustedPos(rl.Rectangle, self.hitbox);
+        rl.drawRectangleLinesEx(rect, 1, rl.Color.red);
+    }
+
+    if (debug.isDebugFlagSet(.ShowGridBoxes)) {
+        const pixel_rect = helpers.getPixelRect(
+            scene.main_layer.getTileset().getTileSize(),
+            self.grid_rect.toRect(),
+        );
+        const rect = scene.getViewportAdjustedPos(rl.Rectangle, pixel_rect);
+        rl.drawRectangleLinesEx(rect, 1, rl.Color.gray);
     }
 }
 

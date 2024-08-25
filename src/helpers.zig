@@ -107,21 +107,23 @@ pub fn getAbsolutePos(origin: anytype, pos: anytype) @TypeOf(pos) {
     return new;
 }
 
-pub fn getRelativePos(origin: anytype, pos: anytype) @TypeOf(pos) {
-    var new = pos;
-    new.x -= origin.x;
-    new.y -= origin.y;
-    return new;
+pub fn getRelativePos(origin: anytype, pos: anytype) rl.Vector2 {
+    return .{
+        .x = pos.x - origin.x,
+        .y = pos.y - origin.y,
+    };
 }
 
 pub fn getGridRect(grid_size: shapes.IPos, pos: shapes.IRect) @TypeOf(pos) {
     var new = pos;
-    new.x = @intFromFloat(@round(@as(f32, @floatFromInt(new.x)) / @as(f32, @floatFromInt(grid_size.x))));
-    new.y = @intFromFloat(@round(@as(f32, @floatFromInt(new.y)) / @as(f32, @floatFromInt(grid_size.y))));
-    new.width = std.math.divCeil(@TypeOf(new.width), new.width, grid_size.x) catch {
+    new.x = @divFloor(new.x, grid_size.x);
+    new.y = @divFloor(new.y, grid_size.y);
+    // new.x = @intFromFloat(@round(@as(f32, @floatFromInt(new.x)) / @as(f32, @floatFromInt(grid_size.x))));
+    // new.y = @intFromFloat(@round(@as(f32, @floatFromInt(new.y)) / @as(f32, @floatFromInt(grid_size.y))));
+    new.width = std.math.divCeil(@TypeOf(new.width), new.width + @mod(pos.x, grid_size.x), grid_size.x) catch {
         @panic("Something went really wrong\n");
     };
-    new.height = std.math.divCeil(@TypeOf(new.height), new.height, grid_size.y) catch {
+    new.height = std.math.divCeil(@TypeOf(new.height), new.height + @mod(pos.y, grid_size.y), grid_size.y) catch {
         @panic("Something went really wrong\n");
     };
     return new;

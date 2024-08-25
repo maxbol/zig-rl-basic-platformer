@@ -1,4 +1,4 @@
-const ActorMoveable = @import("actor_moveable.zig");
+const CollidableBody = @import("collidable_body.zig");
 const Scene = @import("scene.zig");
 const Sprite = @This();
 const an = @import("animation.zig");

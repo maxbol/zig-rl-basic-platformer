@@ -1,5 +1,7 @@
+const Actor = @import("actor.zig");
 const Entity = @import("entity.zig");
-const Player = @import("actor_player.zig");
+const Mob = @import("mob.zig");
+const Player = @import("player.zig");
 const Scene = @import("scene.zig");
 const Sprite = @import("sprite.zig");
 const Viewport = @import("viewport.zig");
@@ -160,7 +162,7 @@ pub fn main() anyerror!void {
 
     //--------------------------------------------------------------------------------------
 
-    const debug_flags = &.{ .ShowHitboxes, .ShowScrollState, .ShowFps, .ShowSpriteOutlines, .ShowTestedTiles, .ShowCollidedTiles };
+    const debug_flags: []const debug.DebugFlag = &.{ .ShowHitboxes, .ShowScrollState, .ShowFps, .ShowSpriteOutlines, .ShowTestedTiles, .ShowCollidedTiles, .ShowGridBoxes };
     debug.setDebugFlags(debug_flags);
 
     const viewport_padding_x = 16 + (GAME_SIZE_X % 16);
@@ -171,8 +173,7 @@ pub fn main() anyerror!void {
     const tilemap = try Tileset512.init("assets/sprites/world_tileset.png", .{ .x = 16, .y = 16 }, generateTilesetCollisionData());
 
     const BgTileLayer = tl.FixedSizeTileLayer(1 * 35, Tileset512);
-    const bg_tile_data = generateBgTileData();
-    var bg_layer = BgTileLayer.init(.{ .x = 70, .y = 35 }, 1, tilemap, bg_tile_data, tl.LayerFlag.mask(&.{}));
+    var bg_layer = BgTileLayer.init(.{ .x = 70, .y = 35 }, 1, tilemap, generateBgTileData(), tl.LayerFlag.mask(&.{}));
     var bg_layers: [1]tl.TileLayer = .{bg_layer.tileLayer()};
 
     const MainLayer = tl.FixedSizeTileLayer(100 * 40, Tileset512);
@@ -182,7 +183,7 @@ pub fn main() anyerror!void {
     const fg_layers: [0]tl.TileLayer = .{};
 
     var player_animations = getPlayerAnimations();
-    // var slime_animations = getSlimeAnimations();
+    var slime_animations = getSlimeAnimations();
 
     const player_sprite = Sprite.init(
         "assets/sprites/knight.png",
@@ -191,24 +192,40 @@ pub fn main() anyerror!void {
     );
 
     var player = Player.init(
-        rl.Rectangle.init(0, 16 * 16, 16, 16),
+        rl.Rectangle.init(0, 16 * 16, 16, 20),
         player_sprite,
-        .{ .x = 8, .y = 12 },
+        .{ .x = 8, .y = 8 },
     );
-    const actor = player.entity();
 
-    // var slime_sprite = Sprite.init(
-    //     "assets/sprites/slime_green.png",
-    //     .{ .x = 24, .y = 24 },
-    //     // rl.Rectangle.init(6, 12, 12, 12),
-    //     // rl.Vector2.init(50 * 16, 16 * 16),
-    //     slime_animations.reader(),
-    // );
-    // slime_sprite.current_animation = .Walk;
-    //
-    var actors: [1]Entity = .{actor};
+    const mob_amount = 20;
+    const mob_spacing = 200;
+    var mobs: [mob_amount]Mob = undefined;
+    for (0..mob_amount) |i| {
+        var slime_sprite = Sprite.init(
+            "assets/sprites/slime_green.png",
+            .{ .x = 24, .y = 24 },
+            slime_animations.reader(),
+        );
+        slime_sprite.current_animation = .Walk;
 
-    var scene = try Scene.create(main_layer.tileLayer(), &bg_layers, &fg_layers, &viewport, &actors, allocator);
+        mobs[i] = Mob.init(
+            rl.Rectangle.init(
+                (1 + @as(f32, @floatFromInt(i))) * mob_spacing,
+                0,
+                12,
+                12,
+            ),
+            slime_sprite,
+            .{ .x = 6, .y = 12 },
+        );
+    }
+
+    var mob_actors: [mob_amount]Actor = undefined;
+    for (0..mob_amount) |i| {
+        mob_actors[i] = mobs[i].actor();
+    }
+
+    var scene = try Scene.create(main_layer.tileLayer(), &bg_layers, &fg_layers, &viewport, player.actor(), &mob_actors, allocator);
     scene.scroll_state = .{ .x = 0, .y = 1 };
 
     defer scene.destroy();

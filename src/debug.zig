@@ -18,6 +18,7 @@ pub const DebugFlag = enum(u8) {
     ShowSpriteOutlines = 0b00010000,
     ShowTestedTiles = 0b00100000,
     ShowCollidedTiles = 0b01000000,
+    ShowGridBoxes = 0b10000000,
 };
 
 pub fn isDebugFlagSet(flag: DebugFlag) bool {

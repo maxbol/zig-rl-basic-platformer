@@ -1,5 +1,6 @@
+const Actor = @import("actor.zig");
+const CollidableBody = @import("collidable_body.zig");
 const Entity = @import("entity.zig");
-const ActorMoveable = @import("actor_moveable.zig");
 const Player = @This();
 const Scene = @import("scene.zig");
 const Sprite = @import("sprite.zig");
@@ -14,10 +15,9 @@ const tl = @import("tiles.zig");
 
 const approach = helpers.approach;
 
-moveable: ActorMoveable,
+collidable: CollidableBody,
 sprite: Sprite,
 sprite_offset: rl.Vector2,
-is_grounded: bool = false,
 speed: rl.Vector2,
 world_collision_mask: u4 = 0,
 jump_counter: u2 = 0,
@@ -34,8 +34,16 @@ pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2) Pla
         .speed = rl.Vector2.init(0, 0),
         .sprite = sprite,
         .sprite_offset = sprite_offset,
-        .moveable = ActorMoveable.init(hitbox),
+        .collidable = CollidableBody.init(hitbox),
     };
+}
+
+pub fn actor(self: *Player) Actor {
+    return .{ .ptr = self, .impl = &.{
+        .entity = entityCast,
+        .getHitboxRect = getHitboxRect,
+        .getGridRect = getGridRect,
+    } };
 }
 
 pub fn entity(self: *Player) Entity {
@@ -49,12 +57,27 @@ pub fn entity(self: *Player) Entity {
     };
 }
 
-pub fn move(self: *Player, comptime axis: ActorMoveable.MoveAxis, layer: tl.TileLayer, amount: f32) void {
-    self.moveable.move(axis, layer, amount, self);
+fn entityCast(ctx: *anyopaque) Entity {
+    const self: *Player = @ptrCast(@alignCast(ctx));
+    return self.entity();
 }
 
-pub fn handleCollision(self: *Player, axis: ActorMoveable.MoveAxis, sign: i8) void {
-    if (axis == ActorMoveable.MoveAxis.X) {
+fn getHitboxRect(ctx: *anyopaque) rl.Rectangle {
+    const self: *Player = @ptrCast(@alignCast(ctx));
+    return self.collidable.hitbox;
+}
+
+fn getGridRect(ctx: *anyopaque) shapes.IRect {
+    const self: *Player = @ptrCast(@alignCast(ctx));
+    return self.collidable.grid_rect;
+}
+
+fn move(self: *Player, comptime axis: CollidableBody.MoveAxis, layer: tl.TileLayer, amount: f32) void {
+    self.collidable.move(axis, layer, amount, self);
+}
+
+pub fn handleCollision(self: *Player, axis: CollidableBody.MoveAxis, sign: i8) void {
+    if (axis == CollidableBody.MoveAxis.X) {
         self.speed.x = 0;
 
         switch (sign) {
@@ -75,7 +98,7 @@ pub fn handleCollision(self: *Player, axis: ActorMoveable.MoveAxis, sign: i8) vo
     }
 }
 
-pub fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
+fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     const self: *Player = @ptrCast(@alignCast(ctx));
 
     self.world_collision_mask = 0;
@@ -112,37 +135,37 @@ pub fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     } else if (self.speed.x == 0) {
         self.sprite.setAnimation(.Idle, null, false);
     } else if (self.speed.x > 0) {
-        self.sprite.setFlip(Sprite.FlipState.XFlip, false);
         self.sprite.setAnimation(.Walk, null, false);
     } else if (self.speed.x < 0) {
-        self.sprite.setFlip(Sprite.FlipState.XFlip, true);
         self.sprite.setAnimation(.Walk, null, false);
     }
 
-    // Move the player hitbox
-    self.move(ActorMoveable.MoveAxis.X, scene.main_layer, self.speed.x * delta_time);
-    self.move(ActorMoveable.MoveAxis.Y, scene.main_layer, self.speed.y * delta_time);
+    if (self.speed.x > 0) {
+        self.sprite.setFlip(Sprite.FlipState.XFlip, false);
+    } else if (self.speed.x < 0) {
+        self.sprite.setFlip(Sprite.FlipState.XFlip, true);
+    }
 
-    scene.centerViewportOnPos(self.moveable.hitbox);
+    // Move the player hitbox
+    self.move(CollidableBody.MoveAxis.X, scene.main_layer, self.speed.x * delta_time);
+    self.move(CollidableBody.MoveAxis.Y, scene.main_layer, self.speed.y * delta_time);
+
+    scene.centerViewportOnPos(self.collidable.hitbox);
 
     try self.sprite.update(scene, delta_time);
 }
 
-pub fn draw(ctx: *anyopaque, scene: *const Scene) void {
+fn draw(ctx: *anyopaque, scene: *const Scene) void {
     const self: *Player = @ptrCast(@alignCast(ctx));
-    const sprite_pos = helpers.getRelativePos(self.sprite_offset, rl.Vector2.init(self.moveable.hitbox.x, self.moveable.hitbox.y));
+    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.collidable.hitbox);
 
     self.sprite.draw(scene, sprite_pos);
 }
 
-pub fn drawDebug(ctx: *anyopaque, scene: *const Scene) void {
+fn drawDebug(ctx: *anyopaque, scene: *const Scene) void {
     const self: *Player = @ptrCast(@alignCast(ctx));
-    const sprite_pos = helpers.getRelativePos(self.sprite_offset, rl.Vector2.init(self.moveable.hitbox.x, self.moveable.hitbox.y));
+    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.collidable.hitbox);
 
     self.sprite.drawDebug(scene, sprite_pos);
-
-    if (debug.isDebugFlagSet(.ShowHitboxes)) {
-        const rect = scene.getViewportAdjustedPos(rl.Rectangle, self.moveable.hitbox);
-        rl.drawRectangleLinesEx(rect, 1, rl.Color.red);
-    }
+    self.collidable.drawDebug(scene);
 }
