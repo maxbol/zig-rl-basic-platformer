@@ -7,6 +7,7 @@ const Sprite = @import("sprite.zig");
 const Viewport = @import("viewport.zig");
 const an = @import("animation.zig");
 const co = @import("collisions.zig");
+const constants = @import("constants.zig");
 const controls = @import("controls.zig");
 const debug = @import("debug.zig");
 const rl = @import("raylib");
@@ -142,22 +143,16 @@ pub fn main() anyerror!void {
     // Initialization
     //--------------------------------------------------------------------------------------
 
-    const WINDOW_SIZE_X = 1600;
-    const WINDOW_SIZE_Y = 900;
-
-    const GAME_SIZE_X = 640;
-    const GAME_SIZE_Y = 360;
-
     rl.setConfigFlags(.{
         // .fullscreen_mode = true,
         .vsync_hint = true,
         .window_resizable = true,
     });
-    rl.initWindow(WINDOW_SIZE_X, WINDOW_SIZE_Y, "knight jumper");
-    rl.setWindowMinSize(GAME_SIZE_X, GAME_SIZE_Y);
+    rl.initWindow(constants.WINDOW_SIZE_X, constants.WINDOW_SIZE_Y, "knight jumper");
+    rl.setWindowMinSize(constants.GAME_SIZE_X, constants.GAME_SIZE_Y);
     rl.setTargetFPS(120); // Set our game to run at 60 frames-per-second
 
-    const target = rl.loadRenderTexture(GAME_SIZE_X, GAME_SIZE_Y);
+    const target = rl.loadRenderTexture(constants.GAME_SIZE_X, constants.GAME_SIZE_Y);
     rl.setTextureFilter(target.texture, .texture_filter_bilinear);
     defer rl.unloadRenderTexture(target);
 
@@ -166,20 +161,31 @@ pub fn main() anyerror!void {
     const debug_flags: []const debug.DebugFlag = &.{ .ShowHitboxes, .ShowScrollState, .ShowFps, .ShowSpriteOutlines, .ShowTestedTiles, .ShowCollidedTiles, .ShowGridBoxes };
     debug.setDebugFlags(debug_flags);
 
-    const viewport_padding_x = 16 + (GAME_SIZE_X % 16);
-    const viewport_padding_y = 16 + (GAME_SIZE_Y % 16);
+    std.debug.print("viewport_padding_y: {d}\n", .{constants.VIEWPORT_PADDING_Y});
+    std.debug.print("viewport_big_height: {d}\n", .{constants.VIEWPORT_BIG_HEIGHT});
+    const viewport_big_rect = rl.Rectangle.init(
+        constants.VIEWPORT_PADDING_X,
+        constants.VIEWPORT_PADDING_Y,
+        constants.VIEWPORT_BIG_WIDTH,
+        constants.VIEWPORT_BIG_HEIGHT,
+    );
+    const viewport_small_rect = rl.Rectangle.init(
+        constants.VIEWPORT_PADDING_X,
+        constants.VIEWPORT_PADDING_Y,
+        constants.VIEWPORT_SMALL_WIDTH,
+        constants.VIEWPORT_SMALL_HEIGHT,
+    );
+    var viewport = Viewport.init(viewport_big_rect);
 
-    var viewport = Viewport.init(rl.Rectangle.init(viewport_padding_x, viewport_padding_y, GAME_SIZE_X - (viewport_padding_x * 2), GAME_SIZE_Y - (viewport_padding_y * 2)));
-
-    const tilemap = try Tileset512.init("assets/sprites/world_tileset.png", .{ .x = 16, .y = 16 }, generateTilesetCollisionData());
+    var tileset = try Tileset512.init("assets/sprites/world_tileset.png", .{ .x = constants.TILE_SIZE, .y = constants.TILE_SIZE }, generateTilesetCollisionData());
 
     const BgTileLayer = tl.FixedSizeTileLayer(1 * 35, Tileset512);
-    var bg_layer = BgTileLayer.init(.{ .x = 70, .y = 35 }, 1, tilemap, generateBgTileData(), tl.LayerFlag.mask(&.{}));
+    var bg_layer = BgTileLayer.init(.{ .x = 70, .y = 35 }, 1, tileset, generateBgTileData(), tl.LayerFlag.mask(&.{}));
     var bg_layers: [1]tl.TileLayer = .{bg_layer.tileLayer()};
 
     const MainLayer = tl.FixedSizeTileLayer(100 * 40, Tileset512);
     const main_tile_data = generateMainTileData();
-    var main_layer = MainLayer.init(.{ .x = 100, .y = 40 }, 100, tilemap, main_tile_data, tl.LayerFlag.mask(&.{.Collidable}));
+    var main_layer = MainLayer.init(.{ .x = 100, .y = 40 }, 100, tileset, main_tile_data, tl.LayerFlag.mask(&.{.Collidable}));
 
     const fg_layers: [0]tl.TileLayer = .{};
 
@@ -193,7 +199,7 @@ pub fn main() anyerror!void {
     );
 
     var player = Player.init(
-        rl.Rectangle.init(0, 16 * 16, 16, 20),
+        rl.Rectangle.init(0, constants.TILE_SIZE * constants.TILE_SIZE, constants.TILE_SIZE, 20),
         player_sprite,
         .{ .x = 8, .y = 8 },
     );
@@ -233,6 +239,8 @@ pub fn main() anyerror!void {
 
     controls.initKeyboardControls();
 
+    var editor_mode = false;
+
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
         // Update
         //----------------------------------------------------------------------------------
@@ -242,8 +250,8 @@ pub fn main() anyerror!void {
         const screen_height: f32 = @floatFromInt(rl.getScreenHeight());
 
         const scale = @min(
-            screen_width / GAME_SIZE_X,
-            screen_height / GAME_SIZE_Y,
+            screen_width / constants.GAME_SIZE_X,
+            screen_height / constants.GAME_SIZE_Y,
         );
         const delta_time = rl.getFrameTime();
 
@@ -263,6 +271,11 @@ pub fn main() anyerror!void {
             }
         }
 
+        if (rl.isKeyDown(rl.KeyboardKey.key_left_shift) and rl.isKeyPressed(rl.KeyboardKey.key_t)) {
+            editor_mode = !editor_mode;
+            viewport.setTargetRect(if (!editor_mode) viewport_big_rect else viewport_small_rect);
+        }
+
         viewport.update(delta_time);
         try scene.update(delta_time);
 
@@ -276,8 +289,12 @@ pub fn main() anyerror!void {
         scene.draw();
         scene.drawDebug();
 
+        if (editor_mode) {
+            tileset.tileset().drawEditor();
+        }
+
         if (debug.isDebugFlagSet(.ShowFps)) {
-            rl.drawFPS(GAME_SIZE_X - 150, GAME_SIZE_Y - 20);
+            rl.drawFPS(constants.GAME_SIZE_X - 150, constants.GAME_SIZE_Y - 20);
         }
 
         rl.endTextureMode();
@@ -292,10 +309,10 @@ pub fn main() anyerror!void {
             target.texture,
             rl.Rectangle.init(0, 0, @as(f32, @floatFromInt(target.texture.width)), @as(f32, @floatFromInt(-target.texture.height))),
             rl.Rectangle.init(
-                (screen_width - (GAME_SIZE_X * scale)) * 0.5,
-                (screen_height - (GAME_SIZE_Y * scale)) * 0.5,
-                GAME_SIZE_X * scale,
-                GAME_SIZE_Y * scale,
+                (screen_width - (constants.GAME_SIZE_X * scale)) * 0.5,
+                (screen_height - (constants.GAME_SIZE_Y * scale)) * 0.5,
+                constants.GAME_SIZE_X * scale,
+                constants.GAME_SIZE_Y * scale,
             ),
             rl.Vector2.init(0, 0),
             0,

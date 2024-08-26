@@ -115,7 +115,8 @@ pub fn draw(self: *const Scene) void {
 
 pub fn drawDebug(self: *const Scene) void {
     for (self.bg_layers) |layer| {
-        layer.entity().drawDebug(self);
+        var layerx = layer;
+        layerx.entity().drawDebug(self);
     }
 
     self.main_layer.entity().drawDebug(self);

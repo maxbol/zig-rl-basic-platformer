@@ -23,7 +23,6 @@ world_collision_mask: u4 = 0,
 jump_counter: u2 = 0,
 lives: u8 = 10,
 is_stunlocked: bool = false,
-is_rolling: bool = false,
 
 const run_speed: f32 = 3 * 60;
 const run_acceleration: f32 = 10 * 60;
@@ -33,8 +32,7 @@ const fall_speed: f32 = 3.6 * 60;
 const jump_speed: f32 = -5 * 60;
 const knockback_x_speed: f32 = 6 * 60;
 const knockback_y_speed: f32 = -2 * 60;
-const roll_speed: f32 = 5 * 60;
-const roll_acceleration: f32 = 10 * 60;
+const roll_speed: f32 = 7 * 60;
 const roll_reduce: f32 = 2 * 60;
 
 pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2) Player {
@@ -97,7 +95,10 @@ pub fn handleCollision(self: *Player, axis: CollidableBody.MoveAxis, sign: i8) v
         self.speed.y = 0;
         self.jump_counter = 0;
         self.is_stunlocked = false;
-        // self.is_grounded = true;
+
+        if (self.lives == 0) {
+            self.sprite.setAnimation(.Death, null, true);
+        }
 
         switch (sign) {
             1 => self.world_collision_mask |= @intFromEnum(co.CollisionDirection.Down),
@@ -110,37 +111,40 @@ pub fn handleCollision(self: *Player, axis: CollidableBody.MoveAxis, sign: i8) v
 fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     const self: *Player = @ptrCast(@alignCast(ctx));
 
+    if (self.sprite.current_animation == .Death) {
+        try self.sprite.update(scene, delta_time);
+        return;
+    }
+
     self.world_collision_mask = 0;
 
     // Jumping
     if (!self.is_stunlocked and constants.isKeyboardControlPressed(constants.KBD_JUMP) and self.jump_counter < 2) {
         self.speed.y = jump_speed;
         self.jump_counter += 1;
-        self.is_rolling = false;
     }
     const is_grounded = self.jump_counter == 0;
 
-    if (self.speed.x == 0) {
-        self.is_rolling = false;
-    }
     // Rolling
-    if (!self.is_rolling and !self.is_stunlocked and is_grounded and constants.isKeyboardControlPressed(constants.KBD_ROLL)) {
-        self.is_rolling = true;
-        self.speed.x = approach(self.speed.x, std.math.sign(self.speed.x) * roll_speed, roll_acceleration * delta_time);
+    if (self.speed.x != 0 and self.sprite.current_animation != .Roll and !self.is_stunlocked and is_grounded and constants.isKeyboardControlPressed(constants.KBD_ROLL)) {
+        self.sprite.setAnimation(.Roll, .Idle, false);
+        self.speed.x = std.math.sign(self.speed.x) * roll_speed;
+        // self.speed.x = approach(self.speed.x, std.math.sign(self.speed.x) * roll_speed, roll_acceleration * delta_time);
     }
+    const is_rolling = self.sprite.current_animation == .Roll;
 
     // Left/right movement
     if (self.is_stunlocked) {
         self.speed.x = approach(self.speed.x, 0, fly_reduce * delta_time);
-    } else if (self.is_rolling) {
+    } else if (is_rolling) {
         self.speed.x = approach(self.speed.x, 0, roll_reduce * delta_time);
     } else {
         if (constants.isKeyboardControlDown(constants.KBD_MOVE_LEFT)) {
-            const mult: f32 = if (self.speed.x > 0) 3 else 1;
-            self.speed.x = approach(self.speed.x, -run_speed, run_acceleration * mult * delta_time);
+            const turn_multiplier: f32 = if (self.speed.x > 0) 3 else 1;
+            self.speed.x = approach(self.speed.x, -run_speed, run_acceleration * turn_multiplier * delta_time);
         } else if (constants.isKeyboardControlDown(constants.KBD_MOVE_RIGHT)) {
-            const mult: f32 = if (self.speed.x < 0) 3 else 1;
-            self.speed.x = approach(self.speed.x, run_speed, run_acceleration * mult * delta_time);
+            const turn_multiplier: f32 = if (self.speed.x < 0) 3 else 1;
+            self.speed.x = approach(self.speed.x, run_speed, run_acceleration * turn_multiplier * delta_time);
         } else {
             if (!is_grounded) {
                 self.speed.x = approach(self.speed.x, 0, fly_reduce * delta_time);
@@ -149,22 +153,23 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
             }
         }
     }
+
     // Gravity
     self.speed.y = approach(self.speed.y, fall_speed, scene.gravity * delta_time);
 
     // Set animation and direction
     if (self.is_stunlocked) {
         self.sprite.setAnimation(.Hit, null, true);
-    } else if (self.is_rolling) {
-        self.sprite.setAnimation(.Roll, null, false);
-    } else if (!is_grounded) {
-        self.sprite.setAnimation(.Jump, null, true);
-    } else if (self.speed.x == 0) {
-        self.sprite.setAnimation(.Idle, null, false);
-    } else if (self.speed.x > 0) {
-        self.sprite.setAnimation(.Walk, null, false);
-    } else if (self.speed.x < 0) {
-        self.sprite.setAnimation(.Walk, null, false);
+    } else if (!is_rolling) {
+        if (!is_grounded) {
+            self.sprite.setAnimation(.Jump, null, true);
+        } else if (self.speed.x == 0) {
+            self.sprite.setAnimation(.Idle, null, false);
+        } else if (self.speed.x > 0) {
+            self.sprite.setAnimation(.Walk, null, false);
+        } else if (self.speed.x < 0) {
+            self.sprite.setAnimation(.Walk, null, false);
+        }
     }
 
     if (self.speed.x > 0) {
@@ -176,22 +181,25 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     // Collision with mobs
     if (!self.is_stunlocked) {
         for (scene.mobs) |mob| {
-            const player_hitbox = getHitboxRect(ctx);
+            var player_hitbox = getHitboxRect(ctx);
             const mob_hitbox = mob.getHitboxRect();
+
+            if (is_rolling) {
+                player_hitbox.height /= 2;
+                player_hitbox.y += player_hitbox.height;
+            }
+
             if (player_hitbox.checkCollision(mob_hitbox)) {
                 const knockback_direction = std.math.sign((player_hitbox.x + player_hitbox.width / 2) - mob_hitbox.x);
                 self.is_stunlocked = true;
                 self.speed.x = knockback_direction * knockback_x_speed;
                 self.speed.y = knockback_y_speed;
-                self.lives -= 1;
-                std.debug.print("You were hit! Lives left={d}\n", .{self.lives});
+                if (self.lives > 0) {
+                    self.lives -= 1;
+                    std.debug.print("You were hit! Lives left={d}\n", .{self.lives});
+                }
             }
         }
-    }
-
-    if (self.lives == 0) {
-        std.debug.print("Skill issues lol\n", .{});
-        std.process.exit(0);
     }
 
     // Move the player hitbox
