@@ -1,7 +1,7 @@
 const Actor = @This();
-const Entity = @import("entity.zig");
+const Entity = @import("../entity.zig");
 const rl = @import("raylib");
-const shapes = @import("shapes.zig");
+const shapes = @import("../shapes.zig");
 
 ptr: *anyopaque,
 impl: *const Interface,
@@ -23,3 +23,6 @@ pub fn getHitboxRect(self: *const Actor) rl.Rectangle {
 pub fn getGridRect(self: *const Actor) shapes.IRect {
     return self.impl.getGridRect(self.ptr);
 }
+
+pub const Player = @import("player.zig");
+pub const Mob = @import("mob.zig");

@@ -25,7 +25,7 @@ pub fn update(self: *Viewport, delta_time: f32) void {
 }
 
 pub fn draw(self: *const Viewport) void {
-    rl.drawRectangleLines(@intFromFloat(self.rectangle.x - 1), @intFromFloat(self.rectangle.y - 1), @intFromFloat(self.rectangle.width + 2), @intFromFloat(self.rectangle.height + 2), rl.Color.white);
+    helpers.drawRectBorder(self.rectangle, 1, rl.Color.white);
 }
 
 pub fn setTargetRect(self: *Viewport, target_rect: rl.Rectangle) void {

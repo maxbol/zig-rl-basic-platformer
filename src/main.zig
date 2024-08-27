@@ -1,20 +1,36 @@
-const Actor = @import("actor.zig");
+const Actor = @import("actor/actor.zig");
+const Editor = @import("editor.zig");
 const Entity = @import("entity.zig");
-const Mob = @import("mob.zig");
-const Player = @import("player.zig");
 const Scene = @import("scene.zig");
 const Sprite = @import("sprite.zig");
 const Viewport = @import("viewport.zig");
 const an = @import("animation.zig");
-const co = @import("collisions.zig");
 const constants = @import("constants.zig");
 const controls = @import("controls.zig");
 const debug = @import("debug.zig");
+const globals = @import("globals.zig");
+const helpers = @import("helpers.zig");
 const rl = @import("raylib");
 const std = @import("std");
-const tl = @import("tiles.zig");
+const TileLayer = @import("tile_layer/tile_layer.zig");
+const Tileset = @import("tileset/tileset.zig");
 
-const Tileset512 = tl.FixedSizeTileset(512);
+const Tileset512 = Tileset.FixedSizeTileset(512);
+const MainLayer = TileLayer.FixedSizeTileLayer(100 * 40, Tileset512);
+const BgTileLayer = TileLayer.FixedSizeTileLayer(1 * 35, Tileset512);
+const PlayerAnimationBuffer = an.AnimationBuffer(&.{
+    .Idle,
+    .Hit,
+    .Walk,
+    .Death,
+    .Roll,
+    .Jump,
+}, 16);
+const MobAnimationBuffer = an.AnimationBuffer(&.{
+    .Walk,
+    .Attack,
+    .Hit,
+}, 6);
 
 // Clouds - 145
 // Clouds and sky - 161
@@ -86,9 +102,6 @@ fn generateTilesetCollisionData() [512]bool {
     return fg_collision_data;
 }
 
-const PlayerAnimationBuffer = an.AnimationBuffer(&.{ .Idle, .Hit, .Walk, .Death, .Roll, .Jump }, 16);
-const MobAnimationBuffer = an.AnimationBuffer(&.{ .Walk, .Attack, .Hit }, 6);
-
 fn getPlayerAnimations() PlayerAnimationBuffer {
     var buffer = PlayerAnimationBuffer{};
 
@@ -138,10 +151,12 @@ fn getSlimeAnimations() MobAnimationBuffer {
 }
 
 pub fn main() anyerror!void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
     // Initialization
     //--------------------------------------------------------------------------------------
+    globals.rand = helpers.createRandomizer() catch {
+        std.log.err("Error initializing randomizer, quitting...", .{});
+        std.process.exit(1);
+    };
 
     rl.setConfigFlags(.{
         // .fullscreen_mode = true,
@@ -149,6 +164,7 @@ pub fn main() anyerror!void {
         .window_resizable = true,
     });
     rl.initWindow(constants.WINDOW_SIZE_X, constants.WINDOW_SIZE_Y, "knight jumper");
+    rl.initAudioDevice();
     rl.setWindowMinSize(constants.GAME_SIZE_X, constants.GAME_SIZE_Y);
     rl.setTargetFPS(120); // Set our game to run at 60 frames-per-second
 
@@ -177,17 +193,12 @@ pub fn main() anyerror!void {
     );
     var viewport = Viewport.init(viewport_big_rect);
 
-    var tileset = try Tileset512.init("assets/sprites/world_tileset.png", .{ .x = constants.TILE_SIZE, .y = constants.TILE_SIZE }, generateTilesetCollisionData());
+    const tileset = try Tileset512.init("assets/sprites/world_tileset.png", .{ .x = constants.TILE_SIZE, .y = constants.TILE_SIZE }, generateTilesetCollisionData());
 
-    const BgTileLayer = tl.FixedSizeTileLayer(1 * 35, Tileset512);
-    var bg_layer = BgTileLayer.init(.{ .x = 70, .y = 35 }, 1, tileset, generateBgTileData(), tl.LayerFlag.mask(&.{}));
-    var bg_layers: [1]tl.TileLayer = .{bg_layer.tileLayer()};
-
-    const MainLayer = tl.FixedSizeTileLayer(100 * 40, Tileset512);
-    const main_tile_data = generateMainTileData();
-    var main_layer = MainLayer.init(.{ .x = 100, .y = 40 }, 100, tileset, main_tile_data, tl.LayerFlag.mask(&.{.Collidable}));
-
-    const fg_layers: [0]tl.TileLayer = .{};
+    var bg_layer = BgTileLayer.init(.{ .x = 70, .y = 35 }, 1, tileset, generateBgTileData(), TileLayer.LayerFlag.mask(&.{}));
+    var main_layer = MainLayer.init(.{ .x = 100, .y = 40 }, 100, tileset, generateMainTileData(), TileLayer.LayerFlag.mask(&.{.Collidable}));
+    var bg_layers: [1]TileLayer = .{bg_layer.tileLayer()};
+    const fg_layers: [0]TileLayer = .{};
 
     var player_animations = getPlayerAnimations();
     var slime_animations = getSlimeAnimations();
@@ -198,7 +209,7 @@ pub fn main() anyerror!void {
         player_animations.reader(),
     );
 
-    var player = Player.init(
+    var player = Actor.Player.init(
         rl.Rectangle.init(0, constants.TILE_SIZE * constants.TILE_SIZE, constants.TILE_SIZE, 20),
         player_sprite,
         .{ .x = 8, .y = 8 },
@@ -206,7 +217,7 @@ pub fn main() anyerror!void {
 
     const mob_amount = 20;
     const mob_spacing = 200;
-    var mobs: [mob_amount]Mob = undefined;
+    var mobs: [mob_amount]Actor.Mob = undefined;
     for (0..mob_amount) |i| {
         var slime_sprite = Sprite.init(
             "assets/sprites/slime_green.png",
@@ -215,7 +226,7 @@ pub fn main() anyerror!void {
         );
         slime_sprite.current_animation = .Walk;
 
-        mobs[i] = Mob.init(
+        mobs[i] = Actor.Mob.init(
             rl.Rectangle.init(
                 (1 + @as(f32, @floatFromInt(i))) * mob_spacing,
                 0,
@@ -232,16 +243,20 @@ pub fn main() anyerror!void {
         mob_actors[i] = mobs[i].actor();
     }
 
-    var scene = try Scene.create(main_layer.tileLayer(), &bg_layers, &fg_layers, &viewport, player.actor(), &mob_actors, allocator);
+    var scene = Scene.init(main_layer.tileLayer(), &bg_layers, &fg_layers, &viewport, player.actor(), &mob_actors);
     scene.scroll_state = .{ .x = 0, .y = 1 };
 
-    defer scene.destroy();
+    var vmouse = controls.VirtualMouse{};
 
-    controls.initKeyboardControls();
+    var editor = Editor.init(&scene, &vmouse);
+
+    const music = rl.loadMusicStream("assets/music/time_for_adventure.mp3");
+    rl.playMusicStream(music);
 
     var editor_mode = false;
 
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
+        rl.updateMusicStream(music);
         // Update
         //----------------------------------------------------------------------------------
         // TODO: Update your variables here
@@ -279,18 +294,24 @@ pub fn main() anyerror!void {
         viewport.update(delta_time);
         try scene.update(delta_time);
 
+        if (editor_mode) {
+            editor.update(delta_time);
+        }
+
         // Draw to render texture
         //----------------------------------------------------------------------------------
         rl.beginTextureMode(target);
 
         rl.clearBackground(rl.Color.black);
 
+        vmouse.update(scale);
+
         viewport.draw();
         scene.draw();
         scene.drawDebug();
 
         if (editor_mode) {
-            tileset.tileset().drawEditor();
+            editor.draw();
         }
 
         if (debug.isDebugFlagSet(.ShowFps)) {

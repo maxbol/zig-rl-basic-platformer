@@ -1,7 +1,8 @@
-const Scene = @import("scene.zig");
-const Scrollable = @import("scrollable.zig");
-const an = @import("animation.zig");
-const tl = @import("tiles.zig");
+const Scene = @import("../scene.zig");
+const Scrollable = @This();
+const an = @import("../animation.zig");
+const TileLayer = @import("tile_layer.zig");
+const LayerFlag = @import("layer_flag.zig").LayerFlag;
 
 scroll_x_tiles: usize = 0,
 scroll_y_tiles: usize = 0,
@@ -12,7 +13,7 @@ include_y_tiles: usize = 0,
 viewport_x_adjust: f32 = 0,
 viewport_y_adjust: f32 = 0,
 
-pub fn update(self: *Scrollable, scene: *Scene, layer: tl.TileLayer) an.AnimationBufferError!void {
+pub fn update(self: *Scrollable, scene: *Scene, layer: TileLayer) an.AnimationBufferError!void {
     const viewport = scene.viewport;
     const scroll_state = scene.scroll_state;
 
@@ -25,14 +26,14 @@ pub fn update(self: *Scrollable, scene: *Scene, layer: tl.TileLayer) an.Animatio
     const max_y_scroll: f32 = @max(pixel_size.y - viewport_rect.height, 0);
 
     const scroll_state_x = blk: {
-        if ((layer.getFlags() & @intFromEnum(tl.LayerFlag.InvertXScroll)) > 0) {
+        if ((layer.getFlags() & @intFromEnum(LayerFlag.InvertXScroll)) > 0) {
             break :blk 1 - scroll_state.x;
         }
         break :blk scroll_state.x;
     };
 
     const scroll_state_y = blk: {
-        if ((layer.getFlags() & @intFromEnum(tl.LayerFlag.InvertYScroll)) > 0) {
+        if ((layer.getFlags() & @intFromEnum(LayerFlag.InvertYScroll)) > 0) {
             break :blk 1 - scroll_state.y;
         }
         break :blk scroll_state.y;

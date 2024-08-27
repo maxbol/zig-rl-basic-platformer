@@ -1,15 +1,15 @@
 const Actor = @import("actor.zig");
 const CollidableBody = @import("collidable_body.zig");
-const Entity = @import("entity.zig");
+const Entity = @import("../entity.zig");
 const Mob = @This();
-const Scene = @import("scene.zig");
-const Sprite = @import("sprite.zig");
-const an = @import("animation.zig");
-const helpers = @import("helpers.zig");
+const Scene = @import("../scene.zig");
+const Sprite = @import("../sprite.zig");
+const an = @import("../animation.zig");
+const globals = @import("../globals.zig");
+const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const std = @import("std");
-const tl = @import("tiles.zig");
-const shapes = @import("shapes.zig");
+const shapes = @import("../shapes.zig");
 
 const approach = helpers.approach;
 
@@ -20,6 +20,7 @@ speed: rl.Vector2,
 is_hunting: bool = false,
 is_jumping: bool = false,
 did_huntjump: bool = false,
+next_huntjump_distance: f32 = 80,
 
 const walk_speed: f32 = 1 * 60;
 const fall_speed: f32 = 3.6 * 60;
@@ -29,12 +30,16 @@ const hunt_acceleration: f32 = 10 * 60;
 const line_of_sight: i32 = 10; // See 10 tiles ahead
 
 pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2) Mob {
-    return .{
+    var mob = Mob{
         .speed = rl.Vector2.init(0, 0),
         .sprite = sprite,
         .sprite_offset = sprite_offset,
         .collidable = CollidableBody.init(hitbox),
     };
+
+    mob.randomlyAcquireNextHuntjumpDistance();
+
+    return mob;
 }
 
 pub fn actor(self: *Mob) Actor {
@@ -118,6 +123,10 @@ fn detectNearbyPlayer(self: *Mob, scene: *Scene, delta_time: f32) void {
     self.is_hunting = is_hunting;
 }
 
+fn randomlyAcquireNextHuntjumpDistance(self: *Mob) void {
+    self.next_huntjump_distance = @floatFromInt(globals.rand.intRangeAtMostBiased(u8, 80, 160));
+}
+
 fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.UpdateError!void {
     const self: *Mob = @ptrCast(@alignCast(ctx));
 
@@ -137,10 +146,11 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.UpdateError!vo
         const player_hitbox = scene.getPlayer().getHitboxRect();
         const mob_hitbox = getHitboxRect(ctx);
 
-        if (@abs(player_hitbox.x - mob_hitbox.x) < 80) {
+        if (@abs(player_hitbox.x - mob_hitbox.x) < self.next_huntjump_distance) {
             self.speed.y = jump_speed;
             self.is_jumping = true;
             self.did_huntjump = true;
+            self.randomlyAcquireNextHuntjumpDistance();
         }
     }
 

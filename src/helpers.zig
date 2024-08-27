@@ -114,6 +114,13 @@ pub fn getRelativePos(origin: anytype, pos: anytype) rl.Vector2 {
     };
 }
 
+pub fn getGridPos(grid_size: shapes.IPos, pos: shapes.IPos) shapes.IPos {
+    var new = pos;
+    new.x = @divFloor(new.x, grid_size.x);
+    new.y = @divFloor(new.y, grid_size.y);
+    return new;
+}
+
 pub fn getGridRect(grid_size: shapes.IPos, pos: shapes.IRect) @TypeOf(pos) {
     var new = pos;
     new.x = @divFloor(new.x, grid_size.x);
@@ -151,4 +158,23 @@ pub fn approach(current: f32, target: f32, increase: f32) f32 {
     } else {
         return @max(current - increase, target);
     }
+}
+
+pub inline fn createRandomizer() !std.Random {
+    var prng = std.rand.DefaultPrng.init(blk: {
+        var seed: u64 = undefined;
+        try std.posix.getrandom(std.mem.asBytes(&seed));
+        break :blk seed;
+    });
+    return prng.random();
+}
+
+pub fn drawRectBorder(rect: rl.Rectangle, border_width: f32, color: rl.Color) void {
+    const border_rect = rl.Rectangle.init(
+        rect.x - border_width,
+        rect.y - border_width,
+        rect.width + (border_width * 2),
+        rect.height + (border_width * 2),
+    );
+    rl.drawRectangleLinesEx(border_rect, border_width, color);
 }

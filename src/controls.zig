@@ -1,55 +1,43 @@
+const constants = @import("constants.zig");
 const rl = @import("raylib");
-const std = @import("std");
 
-pub var movement_vectors: [16]rl.Vector2 = undefined;
+pub const KBD_MOVE_RIGHT: *const [1]rl.KeyboardKey = &.{rl.KeyboardKey.key_d};
+pub const KBD_MOVE_LEFT: *const [1]rl.KeyboardKey = &.{rl.KeyboardKey.key_a};
+pub const KBD_JUMP: *const [1]rl.KeyboardKey = &.{rl.KeyboardKey.key_w};
+pub const KBD_ROLL: *const [1]rl.KeyboardKey = &.{rl.KeyboardKey.key_h};
+pub const KBD_PAUSE: *const [1]rl.KeyboardKey = &.{rl.KeyboardKey.key_p};
 
-pub inline fn initKeyboardControls() void {
-    movement_vectors = getMovementVectors();
+pub fn isKeyboardControlDown(key_binding: []const rl.KeyboardKey) bool {
+    for (key_binding) |key| {
+        if (rl.isKeyDown(key)) {
+            return true;
+        }
+    }
+    return false;
 }
 
-pub const MovementKeyBitmask = enum(u4) {
-    None = 0,
-    Up = 1,
-    Left = 2,
-    Down = 4,
-    Right = 8,
+pub fn isKeyboardControlPressed(key_binding: []const rl.KeyboardKey) bool {
+    for (key_binding) |key| {
+        if (rl.isKeyPressed(key)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+pub const VirtualMouse = struct {
+    pos: rl.Vector2 = .{ .x = 0, .y = 0 },
+
+    pub fn getMousePosition(self: *VirtualMouse) rl.Vector2 {
+        return self.pos;
+    }
+
+    pub fn update(self: *VirtualMouse, scale: f32) void {
+        const mouse = rl.getMousePosition();
+        const screen_width: f32 = @floatFromInt(rl.getScreenWidth());
+        const screen_height: f32 = @floatFromInt(rl.getScreenHeight());
+        self.pos.x = (mouse.x - (screen_width - (constants.GAME_SIZE_X * scale)) * 0.5) / scale;
+        self.pos.y = (mouse.y - (screen_height - (constants.GAME_SIZE_Y * scale)) * 0.5) / scale;
+        self.pos = self.pos.clamp(rl.Vector2.init(0, 0), rl.Vector2.init(constants.GAME_SIZE_X, constants.GAME_SIZE_Y));
+    }
 };
-
-pub fn getMovementVectors() [16]rl.Vector2 {
-    // This constant can't be constructed in comptime because it uses extern calls to raylib.
-    // I'm not sure if there is a better way of solving this.
-    return .{
-        // 0 - None
-        rl.Vector2.init(0, 0),
-        // 1 - Up
-        rl.Vector2.init(0, -1),
-        // 2 - Left
-        rl.Vector2.init(-1, 0),
-        // 3 - Up + Left
-        rl.Vector2.init(-1, -1).scale(std.math.sqrt2).normalize(),
-        // 4 - Down
-        rl.Vector2.init(0, 1),
-        // 5 - Up + Down (invalid)
-        rl.Vector2.init(0, 0),
-        // 6 - Left + Down
-        rl.Vector2.init(-1, 1).scale(std.math.sqrt2).normalize(),
-        // 7 - Up + Left + Down (invalid)
-        rl.Vector2.init(0, 0),
-        // 8 - Right
-        rl.Vector2.init(1, 0),
-        // 9 - Up + Right
-        rl.Vector2.init(1, -1).scale(std.math.sqrt2).normalize(),
-        // 10 - Left + Right (invalid)
-        rl.Vector2.init(0, 0),
-        // 11 - Up + Left + Right (invalid)
-        rl.Vector2.init(0, 0),
-        // 12 - Down + Right
-        rl.Vector2.init(1, 1).scale(std.math.sqrt2).normalize(),
-        // 13 - Up + Down + Right (invalid)
-        rl.Vector2.init(0, 0),
-        // 14 - Left + Down + Right (invalid)
-        rl.Vector2.init(0, 0),
-        // 15 - Up + Left + Down + Right (invalid)
-        rl.Vector2.init(0, 0),
-    };
-}

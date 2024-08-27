@@ -1,22 +1,20 @@
-const Actor = @import("actor.zig");
+const Actor = @import("actor/actor.zig");
 const Entity = @import("entity.zig");
 const Scene = @This();
 const Sprite = @import("sprite.zig");
 const Viewport = @import("viewport.zig");
-const controls = @import("controls.zig");
 const debug = @import("debug.zig");
 const rl = @import("raylib");
 const shapes = @import("shapes.zig");
 const std = @import("std");
-const tl = @import("tiles.zig");
+const TileLayer = @import("tile_layer/tile_layer.zig");
 
 // Initial state
 scroll_state: rl.Vector2,
 viewport: *Viewport,
-main_layer: tl.TileLayer,
-bg_layers: []tl.TileLayer,
-fg_layers: []tl.TileLayer,
-allocator: std.mem.Allocator,
+main_layer: TileLayer,
+bg_layers: []TileLayer,
+fg_layers: []TileLayer,
 player: Actor = undefined,
 mobs: []Actor = undefined,
 gravity: f32 = 13 * 60,
@@ -28,21 +26,16 @@ viewport_y_offset: f32 = 0,
 viewport_x_limit: f32 = 0,
 viewport_y_limit: f32 = 0,
 
-pub fn create(main_layer: tl.TileLayer, bg_layers: []tl.TileLayer, fg_layers: []tl.TileLayer, viewport: *Viewport, player: Actor, mobs: []Actor, allocator: std.mem.Allocator) !*Scene {
-    const scene = try allocator.create(Scene);
-
-    scene.* = .{
+pub fn init(main_layer: TileLayer, bg_layers: []TileLayer, fg_layers: []TileLayer, viewport: *Viewport, player: Actor, mobs: []Actor) Scene {
+    return .{
         .main_layer = main_layer,
         .bg_layers = bg_layers,
         .fg_layers = fg_layers,
         .scroll_state = rl.Vector2.init(0, 0),
         .viewport = viewport,
-        .allocator = allocator,
         .mobs = mobs,
         .player = player,
     };
-
-    return scene;
 }
 
 pub fn getPixelSize(self: *const Scene) rl.Vector2 {
@@ -59,10 +52,6 @@ pub fn getPlayer(self: *const Scene) Actor {
 
 pub fn getMobs(self: *const Scene) []Actor {
     return self.mobs;
-}
-
-pub fn destroy(self: *Scene) void {
-    self.allocator.destroy(self);
 }
 
 pub fn update(self: *Scene, delta_time: f32) !void {
@@ -146,15 +135,6 @@ pub fn drawDebug(self: *const Scene) void {
         16,
         rl.Color.red,
     );
-}
-
-pub fn getSceneAdjustedPos(self: *const Scene, comptime T: type, pos: T) T {
-    var new_pos = pos;
-
-    new_pos.x *= self.main_layer.pixel_size.x;
-    new_pos.y *= self.main_layer.pixel_size.y;
-
-    return new_pos;
 }
 
 pub fn getViewportAdjustedPos(self: *const Scene, comptime T: type, pos: T) T {

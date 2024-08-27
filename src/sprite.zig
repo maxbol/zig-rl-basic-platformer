@@ -1,14 +1,11 @@
-const CollidableBody = @import("collidable_body.zig");
 const Scene = @import("scene.zig");
 const Sprite = @This();
 const an = @import("animation.zig");
-const co = @import("collisions.zig");
 const constants = @import("constants.zig");
 const debug = @import("debug.zig");
 const helpers = @import("helpers.zig");
 const rl = @import("raylib");
 const std = @import("std");
-const tl = @import("tiles.zig");
 
 size: rl.Vector2,
 flip_mask: u2 = 0,
@@ -81,8 +78,7 @@ pub fn setFlip(self: *Sprite, flip: FlipState, state: bool) void {
     self.flip_mask = if (state) @intFromEnum(flip) | self.flip_mask else ~@intFromEnum(flip) & self.flip_mask;
 }
 
-pub fn update(self: *Sprite, scene: *Scene, delta_time: f32) !void {
-    _ = scene; // autofix
+pub fn update(self: *Sprite, _: *Scene, delta_time: f32) !void {
     // Animation
     const current_animation = try self.animation_buffer.readAnimation(self.current_animation);
     const current_animation_duration: f32 = @floatCast(current_animation.duration);

@@ -1,12 +1,11 @@
 const CollidableBody = @This();
-const Entity = @import("entity.zig");
-const Scene = @import("scene.zig");
-const debug = @import("debug.zig");
-const helpers = @import("helpers.zig");
+const Entity = @import("../entity.zig");
+const Scene = @import("../scene.zig");
+const debug = @import("../debug.zig");
+const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
-const shapes = @import("shapes.zig");
+const shapes = @import("../shapes.zig");
 const std = @import("std");
-const tiles = @import("tiles.zig");
 
 hitbox: rl.Rectangle,
 x_remainder: f32 = 0,
