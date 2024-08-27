@@ -53,31 +53,31 @@ pub const Tileset = struct {
         return self.impl.getTileSize(self.ptr);
     }
 
-    pub fn drawEditor(self: Tileset) void {
-        const EDITOR_COLS_PER_ROW = 7;
-        const EDITOR_X = constants.GAME_SIZE_X - (constants.TILE_SIZE * 7) - constants.VIEWPORT_PADDING_X;
-        const EDITOR_Y = constants.VIEWPORT_PADDING_Y;
-        const EDITOR_WIDTH = constants.TILE_SIZE * EDITOR_COLS_PER_ROW;
-        const EDITOR_HEIGHT = constants.TILE_SIZE * 10;
+    pub fn getRect(self: Tileset, tile_idx: usize) ?rl.Rectangle {
+        return self.impl.getRect(self.ptr, tile_idx);
+    }
 
-        const editor_rect = rl.Rectangle.init(EDITOR_X, EDITOR_Y, EDITOR_WIDTH, EDITOR_HEIGHT);
+    pub fn drawEditor(self: Tileset) void {
+        const editor_cols_per_row = 7;
+        const editor_x = constants.GAME_SIZE_X - (constants.TILE_SIZE * 7) - constants.VIEWPORT_PADDING_X;
+        const editor_y = constants.VIEWPORT_PADDING_Y;
+        const editor_width = constants.TILE_SIZE * editor_cols_per_row;
+        const editor_height = constants.TILE_SIZE * 10;
+
+        const editor_rect = rl.Rectangle.init(editor_x, editor_y, editor_width, editor_height);
 
         rl.drawRectangleLinesEx(editor_rect, 2, rl.Color.white);
 
         for (self.getRectMap(), 0..) |tile_rect, idx| {
             if (tile_rect) |rect| {
-                const x: f32 = @floatFromInt(EDITOR_X + (idx % EDITOR_COLS_PER_ROW) * constants.TILE_SIZE);
-                const y: f32 = @floatFromInt(EDITOR_Y + @divFloor(idx, EDITOR_COLS_PER_ROW) * constants.TILE_SIZE);
+                const x: f32 = @floatFromInt(editor_x + (idx % editor_cols_per_row) * constants.TILE_SIZE);
+                const y: f32 = @floatFromInt(editor_y + @divFloor(idx, editor_cols_per_row) * constants.TILE_SIZE);
 
                 const dest = rl.Vector2.init(x, y);
 
                 rl.drawTextureRec(self.getTexture(), rect, dest, rl.Color.white);
             }
         }
-    }
-
-    pub fn getRect(self: Tileset, tile_idx: usize) ?rl.Rectangle {
-        return self.impl.getRect(self.ptr, tile_idx);
     }
 
     pub fn drawRect(self: Tileset, tile_index: usize, dest: rl.Vector2, cull_x: f32, cull_y: f32, tint: rl.Color) void {
@@ -117,23 +117,9 @@ pub const TileLayer = struct {
         getTileIdxFromRowAndCol: *const fn (ctx: *anyopaque, row_idx: usize, col_idx: usize) usize,
         getTileset: *const fn (ctx: *anyopaque) Tileset,
         storeCollisionData: *const fn (ctx: *anyopaque, tile_idx: usize, did_collide: bool) void,
-        update: *const fn (ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.EntityUpdateError!void,
+        update: *const fn (ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.UpdateError!void,
         wasTestedThisFrame: *const fn (ctx: *anyopaque, tile_idx: usize) bool,
     };
-
-    pub fn entity(self: TileLayer) Entity {
-        // Copy pointer data to allow mutability
-        var copy = self;
-
-        return .{
-            .ptr = &copy,
-            .impl = &.{
-                .update = update,
-                .draw = draw,
-                .drawDebug = drawDebug,
-            },
-        };
-    }
 
     pub fn getFlags(self: TileLayer) u8 {
         return self.impl.getFlags(self.ptr);
@@ -163,18 +149,15 @@ pub const TileLayer = struct {
         return self.impl.getScrollState(self.ptr);
     }
 
-    pub fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.EntityUpdateError!void {
-        const self: *TileLayer = @ptrCast(@alignCast(ctx));
+    pub fn update(self: TileLayer, scene: *Scene, delta_time: f32) Entity.UpdateError!void {
         return self.impl.update(self.ptr, scene, delta_time);
     }
 
-    pub fn draw(ctx: *anyopaque, _: *const Scene) void {
-        const self: *TileLayer = @ptrCast(@alignCast(ctx));
+    pub fn draw(self: TileLayer, _: *const Scene) void {
         return drawTileLayer(self);
     }
 
-    pub fn drawDebug(ctx: *anyopaque, scene: *const Scene) void {
-        const self: *TileLayer = @ptrCast(@alignCast(ctx));
+    pub fn drawDebug(self: TileLayer, scene: *const Scene) void {
         return drawDebugTileLayer(self, scene);
     }
 
@@ -279,7 +262,16 @@ pub fn FixedSizeTileLayer(comptime size: usize, comptime TilesetType: type) type
             const tile_size = tileset.tile_size;
             const pixel_size = .{ .x = layer_size.x * tile_size.x, .y = layer_size.y * tile_size.y };
 
-            return .{ .id = id, .size = layer_size, .pixel_size = pixel_size, .row_size = row_size, .tileset = tileset, .tiles = tiles, .flags = flags, .scrollable = Scrollable{} };
+            return .{
+                .id = id,
+                .size = layer_size,
+                .pixel_size = pixel_size,
+                .row_size = row_size,
+                .tileset = tileset,
+                .tiles = tiles,
+                .flags = flags,
+                .scrollable = Scrollable{},
+            };
         }
 
         pub fn entity(self: *@This()) Entity {
@@ -307,6 +299,10 @@ pub fn FixedSizeTileLayer(comptime size: usize, comptime TilesetType: type) type
 
         fn didCollideThisFrame(ctx: *anyopaque, tile_idx: usize) bool {
             const self: *@This() = @ptrCast(@alignCast(ctx));
+            if (tile_idx >= self.collided_tiles.len) {
+                std.log.warn("Warning: tile index {d} out of bounds\n", .{tile_idx});
+                return false;
+            }
             return self.collided_tiles[tile_idx];
         }
 
@@ -372,47 +368,51 @@ pub fn FixedSizeTileLayer(comptime size: usize, comptime TilesetType: type) type
             }
         }
 
-        fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.EntityUpdateError!void {
+        fn update(ctx: *anyopaque, scene: *Scene, _: f32) Entity.UpdateError!void {
             const self: *@This() = @ptrCast(@alignCast(ctx));
-            try self.scrollable.update(scene, self.tileLayer(), delta_time);
+            try self.scrollable.update(scene, self.tileLayer());
         }
 
         fn wasTestedThisFrame(ctx: *anyopaque, tile_idx: usize) bool {
             const self: *@This() = @ptrCast(@alignCast(ctx));
+            if (tile_idx >= self.tested_tiles.len) {
+                std.log.warn("Warning: tile index {d} out of bounds\n", .{tile_idx});
+                return false;
+            }
             return self.tested_tiles[tile_idx];
         }
     };
 }
 
-fn drawTileLayer(layer: *TileLayer) void {
+fn drawTileLayer(layer: TileLayer) void {
     const tileset = layer.getTileset();
+    const scroll = layer.getScrollState();
     const tile_size = tileset.getTileSize();
-    const scrollable = layer.getScrollState();
 
-    for (scrollable.scroll_y_tiles..scrollable.include_y_tiles + 1) |row_idx| {
-        for (scrollable.scroll_x_tiles..scrollable.include_x_tiles + 1) |col_idx| {
+    for (scroll.scroll_y_tiles..scroll.include_y_tiles + 1) |row_idx| {
+        for (scroll.scroll_x_tiles..scroll.include_x_tiles + 1) |col_idx| {
             const tile = layer.getTileFromRowAndCol(row_idx, col_idx) orelse continue;
 
-            const row_offset: f32 = @floatFromInt(row_idx - scrollable.scroll_y_tiles);
-            const col_offset: f32 = @floatFromInt(col_idx - scrollable.scroll_x_tiles);
+            const row_offset: f32 = @floatFromInt(row_idx - scroll.scroll_y_tiles);
+            const col_offset: f32 = @floatFromInt(col_idx - scroll.scroll_x_tiles);
 
             var cull_x: f32 = 0;
             var cull_y: f32 = 0;
 
-            if (col_idx == scrollable.scroll_x_tiles) {
-                cull_x = scrollable.sub_tile_scroll_x;
-            } else if (col_idx == scrollable.include_x_tiles) {
-                cull_x = -(tile_size.x - scrollable.sub_tile_scroll_x);
+            if (col_idx == scroll.scroll_x_tiles) {
+                cull_x = scroll.sub_tile_scroll_x;
+            } else if (col_idx == scroll.include_x_tiles) {
+                cull_x = -(tile_size.x - scroll.sub_tile_scroll_x);
             }
 
-            if (row_idx == scrollable.scroll_y_tiles) {
-                cull_y = scrollable.sub_tile_scroll_y;
-            } else if (row_idx == scrollable.include_y_tiles) {
-                cull_y = -(tile_size.y - scrollable.sub_tile_scroll_y);
+            if (row_idx == scroll.scroll_y_tiles) {
+                cull_y = scroll.sub_tile_scroll_y;
+            } else if (row_idx == scroll.include_y_tiles) {
+                cull_y = -(tile_size.y - scroll.sub_tile_scroll_y);
             }
 
-            const dest_x: f32 = scrollable.viewport_x_adjust + col_offset * tile_size.x - scrollable.sub_tile_scroll_x;
-            const dest_y: f32 = scrollable.viewport_y_adjust + row_offset * tile_size.y - scrollable.sub_tile_scroll_y;
+            const dest_x: f32 = scroll.viewport_x_adjust + col_offset * tile_size.x - scroll.sub_tile_scroll_x;
+            const dest_y: f32 = scroll.viewport_y_adjust + row_offset * tile_size.y - scroll.sub_tile_scroll_y;
             const dest = rl.Vector2.init(dest_x, dest_y);
 
             tileset.drawRect(tile, dest, cull_x, cull_y, rl.Color.white);
@@ -420,7 +420,7 @@ fn drawTileLayer(layer: *TileLayer) void {
     }
 }
 
-fn drawDebugTileLayer(layer: *TileLayer, scene: *const Scene) void {
+fn drawDebugTileLayer(layer: TileLayer, scene: *const Scene) void {
     if (!debug.isDebugFlagSet(.ShowCollidedTiles) and !debug.isDebugFlagSet(.ShowTestedTiles)) {
         return;
     }

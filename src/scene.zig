@@ -77,13 +77,13 @@ pub fn update(self: *Scene, delta_time: f32) !void {
     self.viewport_y_limit = self.viewport_y_offset + self.viewport.rectangle.height;
 
     for (0..self.bg_layers.len) |i| {
-        try self.bg_layers[i].entity().update(self, delta_time);
+        try self.bg_layers[i].update(self, delta_time);
     }
 
-    try self.main_layer.entity().update(self, delta_time);
+    try self.main_layer.update(self, delta_time);
 
     for (0..self.fg_layers.len) |i| {
-        try self.fg_layers[i].entity().update(self, delta_time);
+        try self.fg_layers[i].update(self, delta_time);
     }
 
     if (!debug.isPaused()) {
@@ -97,10 +97,10 @@ pub fn update(self: *Scene, delta_time: f32) !void {
 
 pub fn draw(self: *const Scene) void {
     for (self.bg_layers) |layer| {
-        layer.entity().draw(self);
+        layer.draw(self);
     }
 
-    self.main_layer.entity().draw(self);
+    self.main_layer.draw(self);
 
     for (self.mobs) |actor| {
         actor.entity().draw(self);
@@ -109,17 +109,16 @@ pub fn draw(self: *const Scene) void {
     self.player.entity().draw(self);
 
     for (self.fg_layers) |layer| {
-        layer.entity().draw(self);
+        layer.draw(self);
     }
 }
 
 pub fn drawDebug(self: *const Scene) void {
     for (self.bg_layers) |layer| {
-        var layerx = layer;
-        layerx.entity().drawDebug(self);
+        layer.drawDebug(self);
     }
 
-    self.main_layer.entity().drawDebug(self);
+    self.main_layer.drawDebug(self);
 
     for (self.mobs) |actor| {
         actor.entity().drawDebug(self);
@@ -128,7 +127,7 @@ pub fn drawDebug(self: *const Scene) void {
     self.player.entity().drawDebug(self);
 
     for (self.fg_layers) |layer| {
-        layer.entity().drawDebug(self);
+        layer.drawDebug(self);
     }
 
     if (!debug.isDebugFlagSet(.ShowScrollState)) {

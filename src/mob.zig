@@ -118,7 +118,7 @@ fn detectNearbyPlayer(self: *Mob, scene: *Scene, delta_time: f32) void {
     self.is_hunting = is_hunting;
 }
 
-fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.EntityUpdateError!void {
+fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.UpdateError!void {
     const self: *Mob = @ptrCast(@alignCast(ctx));
 
     // Start walking if standing still

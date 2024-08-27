@@ -12,8 +12,7 @@ include_y_tiles: usize = 0,
 viewport_x_adjust: f32 = 0,
 viewport_y_adjust: f32 = 0,
 
-pub fn update(self: *Scrollable, scene: *Scene, layer: tl.TileLayer, delta_time: f32) an.AnimationBufferError!void {
-    _ = delta_time; // autofix
+pub fn update(self: *Scrollable, scene: *Scene, layer: tl.TileLayer) an.AnimationBufferError!void {
     const viewport = scene.viewport;
     const scroll_state = scene.scroll_state;
 
