@@ -11,14 +11,14 @@ const rl = @import("raylib");
 const static = @import("static.zig");
 const std = @import("std");
 
-pub var bg_layers: [constants.MAX_AMOUNT_OF_BG_LAYERS]?static.BgTileLayer = .{null} ** constants.MAX_AMOUNT_OF_BG_LAYERS;
+pub var bg_layers: [constants.MAX_AMOUNT_OF_BG_LAYERS]?static.XsTileLayer = .{null} ** constants.MAX_AMOUNT_OF_BG_LAYERS;
 pub var bg_layers_count: u8 = 0;
 pub var debug_flags: []const debug.DebugFlag = undefined;
 pub var editor: Editor = undefined;
 pub var editor_mode: bool = false;
-pub var fg_layers: [constants.MAX_AMOUNT_OF_FG_LAYERS]?static.FgTileLayer = .{null} ** constants.MAX_AMOUNT_OF_FG_LAYERS;
+pub var fg_layers: [constants.MAX_AMOUNT_OF_FG_LAYERS]?static.XsTileLayer = .{null} ** constants.MAX_AMOUNT_OF_FG_LAYERS;
 pub var fg_layers_count: u8 = 0;
-pub var main_layer: static.MainLayer = undefined;
+pub var main_layer: static.MediumTileLayer = undefined;
 pub var mob_actors: [constants.MOB_AMOUNT]Actor = undefined;
 pub var mobs: [constants.MOB_AMOUNT]Actor.Mob = undefined;
 pub var player: Actor.Player = undefined;
@@ -26,8 +26,6 @@ pub var player_animations: static.PlayerAnimationBuffer = undefined;
 pub var rand: std.Random = undefined;
 pub var scene: Scene = undefined;
 pub var slime_animations: static.MobAnimationBuffer = undefined;
-pub var tileset_image: rl.Image = undefined;
-pub var tileset: static.Tileset512 = undefined;
 pub var viewport: Viewport = undefined;
 pub var vmouse = controls.VirtualMouse{};
 

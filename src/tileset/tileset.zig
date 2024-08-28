@@ -38,7 +38,7 @@ pub fn getRect(self: Tileset, tile_idx: usize) ?rl.Rectangle {
 
 pub fn drawRect(self: Tileset, tile_index: usize, dest: rl.Vector2, cull_x: f32, cull_y: f32, tint: rl.Color) void {
     const rect = self.getRect(tile_index) orelse {
-        std.log.warn("Warning: tile index {d} not found in tilemap\n", .{tile_index});
+        // std.log.warn("Warning: tile index {d} not found in tilemap\n", .{tile_index});
         return;
     };
 

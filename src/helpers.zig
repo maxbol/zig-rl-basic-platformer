@@ -178,3 +178,18 @@ pub fn drawRectBorder(rect: rl.Rectangle, border_width: f32, color: rl.Color) vo
     );
     rl.drawRectangleLinesEx(border_rect, border_width, color);
 }
+
+pub fn openFile(path: []const u8, flags: std.fs.File.OpenFlags) !std.fs.File {
+    const cwd = std.fs.cwd();
+    var exists = true;
+
+    cwd.access(path, .{}) catch {
+        exists = false;
+    };
+
+    if (exists == false) {
+        _ = try cwd.createFile(path, .{});
+    }
+
+    return cwd.openFile(path, flags);
+}

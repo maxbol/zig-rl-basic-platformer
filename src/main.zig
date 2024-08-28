@@ -19,8 +19,8 @@ const std = @import("std");
 // Clouds - 145
 // Clouds and sky - 161
 // Sky - 177
-fn generateBgTileData() [1 * 35]u8 {
-    var bg_tile_data: [1 * 35]u8 = undefined;
+fn generateBgTileData() [static.XS_TILE_LAYER_SIZE]u8 {
+    var bg_tile_data: [static.XS_TILE_LAYER_SIZE]u8 = undefined;
 
     for (0..35) |y| {
         for (0..1) |x| {
@@ -40,8 +40,8 @@ fn generateBgTileData() [1 * 35]u8 {
     return bg_tile_data;
 }
 
-fn generateMainTileData() [100 * 40]u8 {
-    var fg_tile_data: [100 * 40]u8 = undefined;
+fn generateMainTileData() [static.MEDIUM_TILE_LAYER_SIZE]u8 {
+    var fg_tile_data: [static.MEDIUM_TILE_LAYER_SIZE]u8 = undefined;
 
     for (0..40) |y| {
         for (0..100) |x| {
@@ -150,28 +150,49 @@ pub fn initGameData() void {
     // Init viewport
     globals.viewport = Viewport.init(constants.VIEWPORT_BIG_RECT);
 
-    // Init tileset
-    globals.tileset_image = rl.loadImage("assets/sprites/world_tileset.png");
-    globals.tileset = try static.Tileset512.init(
-        globals.tileset_image,
-        .{ .x = constants.TILE_SIZE, .y = constants.TILE_SIZE },
-        generateTilesetCollisionData(),
-    );
-    var byte_len: usize = undefined;
-    const tileset_bytes = globals.tileset.toBytes(&byte_len) catch {
-        @panic("Skill issues tbh");
-    };
-    if (byte_len == 0) {
-        @panic("Skill issues tbh");
-    }
-
-    std.debug.print("tileset_bytes={any}", .{tileset_bytes[0..byte_len]});
-
     // Init tile layers
-    globals.bg_layers[0] = static.BgTileLayer.init(.{ .x = 70, .y = 35 }, 1, globals.tileset, generateBgTileData(), TileLayer.LayerFlag.mask(&.{}));
+    const tileset_path = "data/tilesets/default.tileset";
+
+    globals.bg_layers[0] = static.XsTileLayer.init(.{ .x = 70, .y = 35 }, 1, tileset_path, generateBgTileData(), TileLayer.LayerFlag.mask(&.{})) catch |err| {
+        std.log.err("Error initializing bg layer, quitting... {!}", .{err});
+        std.process.exit(1);
+    };
     globals.bg_layers_count = 1;
-    globals.main_layer = static.MainLayer.init(.{ .x = 100, .y = 40 }, 100, globals.tileset, generateMainTileData(), TileLayer.LayerFlag.mask(&.{.Collidable}));
+    globals.main_layer = static.MediumTileLayer.init(.{ .x = 100, .y = 40 }, 100, tileset_path, generateMainTileData(), TileLayer.LayerFlag.mask(&.{.Collidable})) catch |err| {
+        std.log.err("Error initializing main layer, quitting... {!}", .{err});
+        std.process.exit(1);
+    };
     globals.fg_layers_count = 0;
+
+    // Attempt to print tile layer
+    var bg_layer_data_buf: [1 + 1 + 8 + 2 + 2 + (3 * 1024) + 35]u8 = undefined;
+    var bg_layer_fbs = std.io.fixedBufferStream(&bg_layer_data_buf);
+    globals.bg_layers[0].?.writeBytes(bg_layer_fbs.writer()) catch |err| {
+        std.log.err("Error writing bg layer to buffer: {!}", .{err});
+        std.process.exit(1);
+    };
+    const written_bg_layer = bg_layer_fbs.getWritten();
+    var written_fbs = std.io.fixedBufferStream(written_bg_layer);
+    globals.bg_layers[0] = static.XsTileLayer.readBytes(written_fbs.reader()) catch |err| {
+        std.log.err("Error reading bg layer from buffer: {!}", .{err});
+        std.process.exit(1);
+    };
+    std.debug.print("written_bg_layer={any}\n", .{written_bg_layer});
+
+    // Attempt to print main tile layer
+    var main_layer_data_buf: [1 + 1 + 8 + 2 + 2 + (3 * 1024) + (100 * 40)]u8 = undefined;
+    var main_layer_fbs = std.io.fixedBufferStream(&main_layer_data_buf);
+    globals.main_layer.writeBytes(main_layer_fbs.writer()) catch |err| {
+        std.log.err("Error writing main layer to buffer: {!}", .{err});
+        std.process.exit(1);
+    };
+    const written_main_layer = main_layer_fbs.getWritten();
+    var written_main_fbs = std.io.fixedBufferStream(written_main_layer);
+    globals.main_layer = static.MediumTileLayer.readBytes(written_main_fbs.reader()) catch |err| {
+        std.log.err("Error reading main layer from buffer: {!}", .{err});
+        std.process.exit(1);
+    };
+    std.debug.print("written_main_layer={any}\n", .{written_main_layer});
 
     // Init animation frames
     globals.player_animations = getPlayerAnimations();
