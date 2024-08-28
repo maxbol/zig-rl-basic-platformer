@@ -39,6 +39,10 @@ pub fn FixedSizeTileLayer(comptime size: usize, comptime TilesetType: type) type
             };
         }
 
+        pub fn serialize(self: @This()) [size]u8 {
+            return self.tiles;
+        }
+
         pub fn entity(self: *@This()) Entity {
             return self.tileLayer().entity();
         }

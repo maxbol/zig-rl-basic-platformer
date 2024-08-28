@@ -38,10 +38,6 @@ pub fn init(main_layer: TileLayer, bg_layers: []TileLayer, fg_layers: []TileLaye
     };
 }
 
-pub fn getPixelSize(self: *const Scene) rl.Vector2 {
-    return self.main_layer.getPixelSize();
-}
-
 pub fn getGridSize(self: *const Scene) rl.Vector2 {
     return self.main_layer.getSize();
 }

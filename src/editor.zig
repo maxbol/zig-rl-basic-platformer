@@ -114,12 +114,6 @@ fn drawSceneOverlay(self: *const Editor) void {
     const selected_tile = self.tile_palette_selected_tile orelse return;
     const mouse_grid_pos = self.scene_overlay_mouse_grid_pos orelse return;
 
-    std.debug.print("selected_tile={d}, mouse_grid_pos={d},{d}\n", .{
-        selected_tile,
-        mouse_grid_pos.x,
-        mouse_grid_pos.y,
-    });
-
     for (scroll.scroll_y_tiles..scroll.include_y_tiles + 1) |row_idx| {
         for (scroll.scroll_x_tiles..scroll.include_x_tiles + 1) |col_idx| {
             if (mouse_grid_pos.x != col_idx or mouse_grid_pos.y != row_idx) {

@@ -3,6 +3,8 @@ const Editor = @import("editor.zig");
 const Entity = @import("entity.zig");
 const Scene = @import("scene.zig");
 const Sprite = @import("sprite.zig");
+const TileLayer = @import("tile_layer/tile_layer.zig");
+const Tileset = @import("tileset/tileset.zig");
 const Viewport = @import("viewport.zig");
 const an = @import("animation.zig");
 const constants = @import("constants.zig");
@@ -11,26 +13,8 @@ const debug = @import("debug.zig");
 const globals = @import("globals.zig");
 const helpers = @import("helpers.zig");
 const rl = @import("raylib");
+const static = @import("static.zig");
 const std = @import("std");
-const TileLayer = @import("tile_layer/tile_layer.zig");
-const Tileset = @import("tileset/tileset.zig");
-
-const Tileset512 = Tileset.FixedSizeTileset(512);
-const MainLayer = TileLayer.FixedSizeTileLayer(100 * 40, Tileset512);
-const BgTileLayer = TileLayer.FixedSizeTileLayer(1 * 35, Tileset512);
-const PlayerAnimationBuffer = an.AnimationBuffer(&.{
-    .Idle,
-    .Hit,
-    .Walk,
-    .Death,
-    .Roll,
-    .Jump,
-}, 16);
-const MobAnimationBuffer = an.AnimationBuffer(&.{
-    .Walk,
-    .Attack,
-    .Hit,
-}, 6);
 
 // Clouds - 145
 // Clouds and sky - 161
@@ -97,13 +81,15 @@ fn generateTilesetCollisionData() [512]bool {
     var fg_collision_data: [512]bool = std.mem.zeroes([512]bool);
 
     fg_collision_data[1] = true;
+    fg_collision_data[3] = true;
+    fg_collision_data[4] = true;
     fg_collision_data[17] = true;
 
     return fg_collision_data;
 }
 
-fn getPlayerAnimations() PlayerAnimationBuffer {
-    var buffer = PlayerAnimationBuffer{};
+fn getPlayerAnimations() static.PlayerAnimationBuffer {
+    var buffer = static.PlayerAnimationBuffer{};
 
     buffer.writeAnimation(.Idle, 0.5, &.{ 1, 2, 3, 4 });
     buffer.writeAnimation(.Jump, 0.1, &.{4});
@@ -140,8 +126,8 @@ fn getPlayerAnimations() PlayerAnimationBuffer {
     return buffer;
 }
 
-fn getSlimeAnimations() MobAnimationBuffer {
-    var buffer = MobAnimationBuffer{};
+fn getSlimeAnimations() static.MobAnimationBuffer {
+    var buffer = static.MobAnimationBuffer{};
 
     buffer.writeAnimation(.Walk, 1, &.{ 1, 2, 3, 4, 3, 2 });
     buffer.writeAnimation(.Attack, 0.5, &.{ 5, 6, 7, 8 });
@@ -150,14 +136,106 @@ fn getSlimeAnimations() MobAnimationBuffer {
     return buffer;
 }
 
-pub fn main() anyerror!void {
-    // Initialization
-    //--------------------------------------------------------------------------------------
+pub fn initGameData() void {
+    // Init randomizer
     globals.rand = helpers.createRandomizer() catch {
         std.log.err("Error initializing randomizer, quitting...", .{});
         std.process.exit(1);
     };
 
+    // Init debug flags
+    globals.debug_flags = &.{ .ShowHitboxes, .ShowScrollState, .ShowFps, .ShowSpriteOutlines, .ShowTestedTiles, .ShowCollidedTiles, .ShowGridBoxes };
+    debug.setDebugFlags(globals.debug_flags);
+
+    // Init viewport
+    globals.viewport = Viewport.init(constants.VIEWPORT_BIG_RECT);
+
+    // Init tileset
+    globals.tileset_image = rl.loadImage("assets/sprites/world_tileset.png");
+    globals.tileset = try static.Tileset512.init(
+        globals.tileset_image,
+        .{ .x = constants.TILE_SIZE, .y = constants.TILE_SIZE },
+        generateTilesetCollisionData(),
+    );
+    var byte_len: usize = undefined;
+    const tileset_bytes = globals.tileset.toBytes(&byte_len) catch {
+        @panic("Skill issues tbh");
+    };
+    if (byte_len == 0) {
+        @panic("Skill issues tbh");
+    }
+
+    std.debug.print("tileset_bytes={any}", .{tileset_bytes[0..byte_len]});
+
+    // Init tile layers
+    globals.bg_layers[0] = static.BgTileLayer.init(.{ .x = 70, .y = 35 }, 1, globals.tileset, generateBgTileData(), TileLayer.LayerFlag.mask(&.{}));
+    globals.bg_layers_count = 1;
+    globals.main_layer = static.MainLayer.init(.{ .x = 100, .y = 40 }, 100, globals.tileset, generateMainTileData(), TileLayer.LayerFlag.mask(&.{.Collidable}));
+    globals.fg_layers_count = 0;
+
+    // Init animation frames
+    globals.player_animations = getPlayerAnimations();
+    globals.slime_animations = getSlimeAnimations();
+
+    // Init player actor
+    const player_sprite_texture = rl.loadTexture("assets/sprites/knight.png");
+    const player_sprite = Sprite.init(
+        player_sprite_texture,
+        .{ .x = 32, .y = 32 },
+        globals.player_animations.reader(),
+    );
+    globals.player = Actor.Player.init(
+        rl.Rectangle.init(0, constants.TILE_SIZE * constants.TILE_SIZE, constants.TILE_SIZE, 20),
+        player_sprite,
+        .{ .x = 8, .y = 8 },
+    );
+
+    // Init mobs
+    const slime_sprite_texture = rl.loadTexture("assets/sprites/slime_green.png");
+    for (0..constants.MOB_AMOUNT) |i| {
+        var slime_sprite = Sprite.init(
+            slime_sprite_texture,
+            .{ .x = 24, .y = 24 },
+            globals.slime_animations.reader(),
+        );
+        slime_sprite.current_animation = .Walk;
+
+        globals.mobs[i] = Actor.Mob.init(
+            rl.Rectangle.init(
+                (1 + @as(f32, @floatFromInt(i))) * constants.MOB_SPACING,
+                0,
+                12,
+                12,
+            ),
+            slime_sprite,
+            .{ .x = 6, .y = 12 },
+        );
+    }
+
+    for (0..constants.MOB_AMOUNT) |i| {
+        globals.mob_actors[i] = globals.mobs[i].actor();
+    }
+
+    // Init scene
+    globals.scene = Scene.init(
+        globals.main_layer.tileLayer(),
+        globals.getBgLayers(),
+        globals.getFgLayers(),
+        &globals.viewport,
+        globals.player.actor(),
+        &globals.mob_actors,
+    );
+    globals.scene.scroll_state = .{ .x = 0, .y = 1 };
+
+    // Init virtual mouse
+    globals.vmouse = controls.VirtualMouse{};
+
+    // Init editor
+    globals.editor = Editor.init(&globals.scene, &globals.vmouse);
+    globals.editor_mode = false;
+}
+
+pub fn main() anyerror!void {
     rl.setConfigFlags(.{
         // .fullscreen_mode = true,
         .vsync_hint = true,
@@ -172,88 +250,10 @@ pub fn main() anyerror!void {
     rl.setTextureFilter(target.texture, .texture_filter_bilinear);
     defer rl.unloadRenderTexture(target);
 
-    //--------------------------------------------------------------------------------------
-
-    const debug_flags: []const debug.DebugFlag = &.{ .ShowHitboxes, .ShowScrollState, .ShowFps, .ShowSpriteOutlines, .ShowTestedTiles, .ShowCollidedTiles, .ShowGridBoxes };
-    debug.setDebugFlags(debug_flags);
-
-    std.debug.print("viewport_padding_y: {d}\n", .{constants.VIEWPORT_PADDING_Y});
-    std.debug.print("viewport_big_height: {d}\n", .{constants.VIEWPORT_BIG_HEIGHT});
-    const viewport_big_rect = rl.Rectangle.init(
-        constants.VIEWPORT_PADDING_X,
-        constants.VIEWPORT_PADDING_Y,
-        constants.VIEWPORT_BIG_WIDTH,
-        constants.VIEWPORT_BIG_HEIGHT,
-    );
-    const viewport_small_rect = rl.Rectangle.init(
-        constants.VIEWPORT_PADDING_X,
-        constants.VIEWPORT_PADDING_Y,
-        constants.VIEWPORT_SMALL_WIDTH,
-        constants.VIEWPORT_SMALL_HEIGHT,
-    );
-    var viewport = Viewport.init(viewport_big_rect);
-
-    const tileset = try Tileset512.init("assets/sprites/world_tileset.png", .{ .x = constants.TILE_SIZE, .y = constants.TILE_SIZE }, generateTilesetCollisionData());
-
-    var bg_layer = BgTileLayer.init(.{ .x = 70, .y = 35 }, 1, tileset, generateBgTileData(), TileLayer.LayerFlag.mask(&.{}));
-    var main_layer = MainLayer.init(.{ .x = 100, .y = 40 }, 100, tileset, generateMainTileData(), TileLayer.LayerFlag.mask(&.{.Collidable}));
-    var bg_layers: [1]TileLayer = .{bg_layer.tileLayer()};
-    const fg_layers: [0]TileLayer = .{};
-
-    var player_animations = getPlayerAnimations();
-    var slime_animations = getSlimeAnimations();
-
-    const player_sprite = Sprite.init(
-        "assets/sprites/knight.png",
-        .{ .x = 32, .y = 32 },
-        player_animations.reader(),
-    );
-
-    var player = Actor.Player.init(
-        rl.Rectangle.init(0, constants.TILE_SIZE * constants.TILE_SIZE, constants.TILE_SIZE, 20),
-        player_sprite,
-        .{ .x = 8, .y = 8 },
-    );
-
-    const mob_amount = 20;
-    const mob_spacing = 200;
-    var mobs: [mob_amount]Actor.Mob = undefined;
-    for (0..mob_amount) |i| {
-        var slime_sprite = Sprite.init(
-            "assets/sprites/slime_green.png",
-            .{ .x = 24, .y = 24 },
-            slime_animations.reader(),
-        );
-        slime_sprite.current_animation = .Walk;
-
-        mobs[i] = Actor.Mob.init(
-            rl.Rectangle.init(
-                (1 + @as(f32, @floatFromInt(i))) * mob_spacing,
-                0,
-                12,
-                12,
-            ),
-            slime_sprite,
-            .{ .x = 6, .y = 12 },
-        );
-    }
-
-    var mob_actors: [mob_amount]Actor = undefined;
-    for (0..mob_amount) |i| {
-        mob_actors[i] = mobs[i].actor();
-    }
-
-    var scene = Scene.init(main_layer.tileLayer(), &bg_layers, &fg_layers, &viewport, player.actor(), &mob_actors);
-    scene.scroll_state = .{ .x = 0, .y = 1 };
-
-    var vmouse = controls.VirtualMouse{};
-
-    var editor = Editor.init(&scene, &vmouse);
-
     const music = rl.loadMusicStream("assets/music/time_for_adventure.mp3");
     rl.playMusicStream(music);
 
-    var editor_mode = false;
+    initGameData();
 
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
         rl.updateMusicStream(music);
@@ -279,23 +279,23 @@ pub fn main() anyerror!void {
         }
 
         if (rl.isKeyPressed(rl.KeyboardKey.key_o)) {
-            if (debug.isDebugFlagSet(debug_flags[0])) {
+            if (debug.isDebugFlagSet(globals.debug_flags[0])) {
                 debug.clearDebugFlags();
             } else {
-                debug.setDebugFlags(debug_flags);
+                debug.setDebugFlags(globals.debug_flags);
             }
         }
 
         if (rl.isKeyDown(rl.KeyboardKey.key_left_shift) and rl.isKeyPressed(rl.KeyboardKey.key_t)) {
-            editor_mode = !editor_mode;
-            viewport.setTargetRect(if (!editor_mode) viewport_big_rect else viewport_small_rect);
+            globals.editor_mode = !globals.editor_mode;
+            globals.viewport.setTargetRect(if (!globals.editor_mode) constants.VIEWPORT_BIG_RECT else constants.VIEWPORT_SMALL_RECT);
         }
 
-        viewport.update(delta_time);
-        try scene.update(delta_time);
+        globals.viewport.update(delta_time);
+        try globals.scene.update(delta_time);
 
-        if (editor_mode) {
-            editor.update(delta_time);
+        if (globals.editor_mode) {
+            globals.editor.update(delta_time);
         }
 
         // Draw to render texture
@@ -304,14 +304,14 @@ pub fn main() anyerror!void {
 
         rl.clearBackground(rl.Color.black);
 
-        vmouse.update(scale);
+        globals.vmouse.update(scale);
 
-        viewport.draw();
-        scene.draw();
-        scene.drawDebug();
+        globals.viewport.draw();
+        globals.scene.draw();
+        globals.scene.drawDebug();
 
-        if (editor_mode) {
-            editor.draw();
+        if (globals.editor_mode) {
+            globals.editor.draw();
         }
 
         if (debug.isDebugFlagSet(.ShowFps)) {

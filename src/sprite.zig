@@ -18,7 +18,6 @@ queued_animation: ?an.AnimationType = null,
 freeze_animation_on_last_frame: bool = false,
 animation_clock: f32 = 0,
 current_display_frame: u8 = 0,
-texture_filename: [*:0]const u8 = "",
 
 // pub const SpriteData = struct {
 //     size: rl.Vector2,
@@ -47,16 +46,14 @@ pub const FlipState = enum(u2) {
 };
 
 pub fn init(
-    sprite_texture_file: [*:0]const u8,
+    texture: rl.Texture2D,
     size: rl.Vector2,
     animation_buffer: an.AnimationBufferReader,
 ) Sprite {
-    const texture = rl.loadTexture(sprite_texture_file);
     const sprite_texture_map_r = helpers.buildRectMap(128, texture.width, texture.height, size.x, size.y, 1, 1);
     const sprite_texture_map_l = helpers.buildRectMap(128, texture.width, texture.height, size.x, size.y, -1, 1);
 
     return .{
-        .texture_filename = sprite_texture_file,
         .animation_buffer = animation_buffer,
         .size = size,
         .sprite_texture_map_r = sprite_texture_map_r,
