@@ -58,6 +58,7 @@ pub fn create(
     std.mem.copyForwards(Actor, &mobs_buf, mobs);
     std.mem.copyForwards(rl.Vector2, &mobs_starting_pos_buf, mobs_starting_pos);
 
+    std.debug.print("This happens\n", .{});
     var bg_layer_list = std.ArrayList(TileLayer).init(allocator);
     var fg_layer_list = std.ArrayList(TileLayer).init(allocator);
 
@@ -132,14 +133,23 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
     }
 
     // Temp solution: generate mob starting positions from hitbox locations
-    var mobs_starting_pos: [constants.MOB_AMOUNT]rl.Vector2 = undefined;
     for (0..constants.MOB_AMOUNT) |i| {
         const x = globals.mobs[i].collidable.hitbox.x;
         const y = globals.mobs[i].collidable.hitbox.y;
-        mobs_starting_pos[i] = rl.Vector2.init(x, y);
+        globals.mobs_starting_pos[i] = rl.Vector2.init(x, y);
     }
 
-    return Scene.create(allocator, main_layer, try bg_layers.toOwnedSlice(), try fg_layers.toOwnedSlice(), &globals.viewport, globals.player.actor(), rl.Vector2.init(0, 0), &globals.mob_actors, mobs_starting_pos);
+    return Scene.create(
+        allocator,
+        main_layer,
+        try bg_layers.toOwnedSlice(),
+        try fg_layers.toOwnedSlice(),
+        &globals.viewport,
+        globals.player.actor(),
+        rl.Vector2.init(0, 0),
+        &globals.mob_actors,
+        &globals.mobs_starting_pos,
+    );
 }
 
 pub fn writeBytes(self: *const Scene, writer: anytype) !void {
@@ -195,7 +205,7 @@ pub fn update(self: *Scene, delta_time: f32) !void {
     }
 
     if (!debug.isPaused()) {
-        for (0..self.mobs.len) |i| {
+        for (0..self.mobs_amount) |i| {
             try self.mobs[i].entity().update(self, delta_time);
         }
     }
@@ -210,7 +220,7 @@ pub fn draw(self: *const Scene) void {
 
     self.main_layer.draw(self);
 
-    for (self.mobs) |actor| {
+    for (self.mobs[0..self.mobs_amount]) |actor| {
         actor.entity().draw(self);
     }
 
@@ -228,7 +238,7 @@ pub fn drawDebug(self: *const Scene) void {
 
     self.main_layer.drawDebug(self);
 
-    for (self.mobs) |actor| {
+    for (self.mobs[0..self.mobs_amount]) |actor| {
         actor.entity().drawDebug(self);
     }
 
