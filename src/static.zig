@@ -10,11 +10,11 @@ pub const XL_TILE_LAYER_SIZE = 50000;
 
 pub const XsTileLayerArray = [1]XsTileLayer;
 pub const Tileset512 = Tileset.FixedSizeTileset(512);
-pub const XsTileLayer = TileLayer.FixedSizeTileLayer(XS_TILE_LAYER_SIZE, Tileset512);
-pub const SmallTileLayer = TileLayer.FixedSizeTileLayer(SMALL_TILE_LAYER_SIZE, Tileset512);
-pub const MediumTileLayer = TileLayer.FixedSizeTileLayer(MEDIUM_TILE_LAYER_SIZE, Tileset512);
-pub const LargeTileLayer = TileLayer.FixedSizeTileLayer(LARGE_TILE_LAYER_SIZE, Tileset512);
-pub const XlTileLayer = TileLayer.FixedSizeTileLayer(XL_TILE_LAYER_SIZE, Tileset512);
+pub const XsTileLayer = TileLayer.FixedSizeTileLayer(XS_TILE_LAYER_SIZE);
+pub const SmallTileLayer = TileLayer.FixedSizeTileLayer(SMALL_TILE_LAYER_SIZE);
+pub const MediumTileLayer = TileLayer.FixedSizeTileLayer(MEDIUM_TILE_LAYER_SIZE);
+pub const LargeTileLayer = TileLayer.FixedSizeTileLayer(LARGE_TILE_LAYER_SIZE);
+pub const XlTileLayer = TileLayer.FixedSizeTileLayer(XL_TILE_LAYER_SIZE);
 pub const PlayerAnimationBuffer = an.AnimationBuffer(&.{
     .Idle,
     .Hit,

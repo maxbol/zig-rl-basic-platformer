@@ -6,11 +6,13 @@ const debug = @import("../debug.zig");
 const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
+const std = @import("std");
 
 ptr: *anyopaque,
 impl: *const Interface,
 
 pub const Interface = struct {
+    destroy: *const fn (ctx: *anyopaque) void,
     didCollideThisFrame: *const fn (ctx: *anyopaque, tile_idx: usize) bool,
     getFlags: *const fn (ctx: *anyopaque) u8,
     getPixelSize: *const fn (ctx: *anyopaque) rl.Vector2,
@@ -22,8 +24,13 @@ pub const Interface = struct {
     storeCollisionData: *const fn (ctx: *anyopaque, tile_idx: usize, did_collide: bool) void,
     update: *const fn (ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.UpdateError!void,
     wasTestedThisFrame: *const fn (ctx: *anyopaque, tile_idx: usize) bool,
+    writeBytes: *const fn (ctx: *anyopaque, writer: std.io.AnyWriter) error{WriteError}!void,
     writeTile: *const fn (ctx: *anyopaque, tile_idx: usize, tile: u8) void,
 };
+
+pub fn destroy(self: TileLayer) void {
+    return self.impl.destroy(self.ptr);
+}
 
 pub fn getFlags(self: TileLayer) u8 {
     return self.impl.getFlags(self.ptr);
@@ -67,6 +74,10 @@ pub fn didCollideThisFrame(self: TileLayer, tile_idx: usize) bool {
 
 pub fn wasTestedThisFrame(self: TileLayer, tile_idx: usize) bool {
     return self.impl.wasTestedThisFrame(self.ptr, tile_idx);
+}
+
+pub fn writeBytes(self: TileLayer, writer: std.io.AnyWriter) !void {
+    return self.impl.writeBytes(self.ptr, writer);
 }
 
 pub fn writeTile(self: TileLayer, tile_idx: usize, tile: u8) void {
@@ -199,3 +210,80 @@ pub fn collideAt(layer: TileLayer, rect: shapes.IRect, grid_rect: shapes.IRect) 
 pub const FixedSizeTileLayer = @import("fixed_size_tile_layer.zig").FixedSizeTileLayer;
 pub const LayerFlag = @import("layer_flag.zig").LayerFlag;
 pub const Scrollable = @import("scrollable.zig");
+
+pub const data_format_version = 1;
+
+pub const XS_TILE_LAYER_SIZE = 50;
+pub const SMALL_TILE_LAYER_SIZE = 1000;
+pub const MEDIUM_TILE_LAYER_SIZE = 5000;
+pub const LARGE_TILE_LAYER_SIZE = 10000;
+pub const XL_TILE_LAYER_SIZE = 50000;
+
+pub const XsTileLayer = TileLayer.FixedSizeTileLayer(XS_TILE_LAYER_SIZE);
+pub const SmallTileLayer = TileLayer.FixedSizeTileLayer(SMALL_TILE_LAYER_SIZE);
+pub const MediumTileLayer = TileLayer.FixedSizeTileLayer(MEDIUM_TILE_LAYER_SIZE);
+pub const LargeTileLayer = TileLayer.FixedSizeTileLayer(LARGE_TILE_LAYER_SIZE);
+pub const XlTileLayer = TileLayer.FixedSizeTileLayer(XL_TILE_LAYER_SIZE);
+
+pub const MAX_DATA_SIZE = XL_TILE_LAYER_SIZE;
+
+pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !@This() {
+    // Version
+    const version = try reader.readByte();
+    if (version != data_format_version) {
+        std.log.err("Invalid data format version: {d}\n", .{version});
+        return error.InvalidDataFormatVersion;
+    }
+
+    // Flags
+    const flags = try reader.readByte();
+
+    // Tile data size
+    const data_size = try reader.readInt(usize, std.builtin.Endian.big);
+    std.debug.print("data_size={d}\n", .{data_size});
+    if (data_size > MAX_DATA_SIZE) {
+        return error.LayerTooBig;
+    }
+
+    // Layer size
+    const size_bytes = try reader.readBytesNoEof(8);
+    const layer_size = std.mem.bytesToValue(rl.Vector2, &size_bytes);
+
+    // Row size
+    const row_size_bytes = try reader.readBytesNoEof(2);
+    const row_size = std.mem.bytesToValue(u16, &row_size_bytes);
+
+    // Tileset file path length
+    const len_bytes = try reader.readBytesNoEof(2);
+    const tileset_path_len: usize = @intCast(std.mem.bytesToValue(u16, &len_bytes));
+
+    // Tileset file path
+    var tileset_path_buf: [3 * 1024]u8 = undefined;
+    for (0..tileset_path_len) |i| {
+        const byte = try reader.readByte();
+        tileset_path_buf[i] = byte;
+    }
+    const tileset_path = tileset_path_buf[0..tileset_path_len];
+
+    // Tiles
+    var tile_buf: [MAX_DATA_SIZE]u8 = undefined;
+    for (0..data_size) |byte_idx| {
+        const byte = reader.readByte() catch {
+            return error.FailedToReadTiles;
+        };
+        tile_buf[byte_idx] = byte;
+    }
+    const tiles = tile_buf[0..data_size];
+
+    if (data_size > LARGE_TILE_LAYER_SIZE) {
+        return (try XlTileLayer.create(allocator, layer_size, row_size, tileset_path, tiles, flags)).tileLayer();
+    } else if (data_size > MEDIUM_TILE_LAYER_SIZE) {
+        return (try LargeTileLayer.create(allocator, layer_size, row_size, tileset_path, tiles, flags)).tileLayer();
+    } else if (data_size > SMALL_TILE_LAYER_SIZE) {
+        return (try MediumTileLayer.create(allocator, layer_size, row_size, tileset_path, tiles, flags)).tileLayer();
+    } else if (data_size > XS_TILE_LAYER_SIZE) {
+        return (try SmallTileLayer.create(allocator, layer_size, row_size, tileset_path, tiles, flags)).tileLayer();
+    } else {
+        return (try XsTileLayer.create(allocator, layer_size, row_size, tileset_path, tiles, flags)).tileLayer();
+    }
+}

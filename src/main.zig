@@ -136,6 +136,21 @@ fn getSlimeAnimations() static.MobAnimationBuffer {
     return buffer;
 }
 
+pub fn cleanupGameData(scene: *Scene) void {
+    scene.destroy();
+}
+
+pub fn createDefaultScene(allocator: std.mem.Allocator) *Scene {
+    // Init scene
+    const scene = Scene.loadSceneFromFile(allocator, globals.scene_file) catch |err| {
+        std.log.err("Error loading scene from file: {!}\n", .{err});
+        std.process.exit(1);
+    };
+    scene.scroll_state = .{ .x = 0, .y = 1 };
+
+    return scene;
+}
+
 pub fn initGameData() void {
     // Init randomizer
     globals.rand = helpers.createRandomizer() catch {
@@ -147,52 +162,15 @@ pub fn initGameData() void {
     globals.debug_flags = &.{ .ShowHitboxes, .ShowScrollState, .ShowFps, .ShowSpriteOutlines, .ShowTestedTiles, .ShowCollidedTiles, .ShowGridBoxes };
     debug.setDebugFlags(globals.debug_flags);
 
+    // Init game font
+    globals.font = rl.loadFont("assets/fonts/PixelOperator8.ttf");
+
+    // Init audio
+    globals.on_save_sfx = rl.loadSound("assets/sounds/power_up.wav");
+    globals.music = rl.loadMusicStream("assets/music/time_for_adventure.mp3");
+
     // Init viewport
     globals.viewport = Viewport.init(constants.VIEWPORT_BIG_RECT);
-
-    // Init tile layers
-    const tileset_path = "data/tilesets/default.tileset";
-
-    globals.bg_layers[0] = static.XsTileLayer.init(.{ .x = 70, .y = 35 }, 1, tileset_path, generateBgTileData(), TileLayer.LayerFlag.mask(&.{})) catch |err| {
-        std.log.err("Error initializing bg layer, quitting... {!}", .{err});
-        std.process.exit(1);
-    };
-    globals.bg_layers_count = 1;
-    globals.main_layer = static.MediumTileLayer.init(.{ .x = 100, .y = 40 }, 100, tileset_path, generateMainTileData(), TileLayer.LayerFlag.mask(&.{.Collidable})) catch |err| {
-        std.log.err("Error initializing main layer, quitting... {!}", .{err});
-        std.process.exit(1);
-    };
-    globals.fg_layers_count = 0;
-
-    // Attempt to print tile layer
-    var bg_layer_data_buf: [1 + 1 + 8 + 2 + 2 + (3 * 1024) + 35]u8 = undefined;
-    var bg_layer_fbs = std.io.fixedBufferStream(&bg_layer_data_buf);
-    globals.bg_layers[0].?.writeBytes(bg_layer_fbs.writer()) catch |err| {
-        std.log.err("Error writing bg layer to buffer: {!}", .{err});
-        std.process.exit(1);
-    };
-    const written_bg_layer = bg_layer_fbs.getWritten();
-    var written_fbs = std.io.fixedBufferStream(written_bg_layer);
-    globals.bg_layers[0] = static.XsTileLayer.readBytes(written_fbs.reader()) catch |err| {
-        std.log.err("Error reading bg layer from buffer: {!}", .{err});
-        std.process.exit(1);
-    };
-    std.debug.print("written_bg_layer={any}\n", .{written_bg_layer});
-
-    // Attempt to print main tile layer
-    var main_layer_data_buf: [1 + 1 + 8 + 2 + 2 + (3 * 1024) + (100 * 40)]u8 = undefined;
-    var main_layer_fbs = std.io.fixedBufferStream(&main_layer_data_buf);
-    globals.main_layer.writeBytes(main_layer_fbs.writer()) catch |err| {
-        std.log.err("Error writing main layer to buffer: {!}", .{err});
-        std.process.exit(1);
-    };
-    const written_main_layer = main_layer_fbs.getWritten();
-    var written_main_fbs = std.io.fixedBufferStream(written_main_layer);
-    globals.main_layer = static.MediumTileLayer.readBytes(written_main_fbs.reader()) catch |err| {
-        std.log.err("Error reading main layer from buffer: {!}", .{err});
-        std.process.exit(1);
-    };
-    std.debug.print("written_main_layer={any}\n", .{written_main_layer});
 
     // Init animation frames
     globals.player_animations = getPlayerAnimations();
@@ -206,7 +184,7 @@ pub fn initGameData() void {
         globals.player_animations.reader(),
     );
     globals.player = Actor.Player.init(
-        rl.Rectangle.init(0, constants.TILE_SIZE * constants.TILE_SIZE, constants.TILE_SIZE, 20),
+        rl.Rectangle.init(0, 0, constants.TILE_SIZE, 20),
         player_sprite,
         .{ .x = 8, .y = 8 },
     );
@@ -237,26 +215,13 @@ pub fn initGameData() void {
         globals.mob_actors[i] = globals.mobs[i].actor();
     }
 
-    // Init scene
-    globals.scene = Scene.init(
-        globals.main_layer.tileLayer(),
-        globals.getBgLayers(),
-        globals.getFgLayers(),
-        &globals.viewport,
-        globals.player.actor(),
-        &globals.mob_actors,
-    );
-    globals.scene.scroll_state = .{ .x = 0, .y = 1 };
-
     // Init virtual mouse
     globals.vmouse = controls.VirtualMouse{};
-
-    // Init editor
-    globals.editor = Editor.init(&globals.scene, &globals.vmouse);
-    globals.editor_mode = false;
 }
 
 pub fn main() anyerror!void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
     rl.setConfigFlags(.{
         // .fullscreen_mode = true,
         .vsync_hint = true,
@@ -271,13 +236,21 @@ pub fn main() anyerror!void {
     rl.setTextureFilter(target.texture, .texture_filter_bilinear);
     defer rl.unloadRenderTexture(target);
 
-    const music = rl.loadMusicStream("assets/music/time_for_adventure.mp3");
-    rl.playMusicStream(music);
-
+    // Setup static game data
     initGameData();
 
+    const scene = createDefaultScene(allocator);
+    defer scene.destroy();
+
+    // Init editor
+    globals.editor = Editor.init(scene, &globals.vmouse);
+    globals.editor_mode = false;
+
+    // Play music
+    rl.playMusicStream(globals.music);
+
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
-        rl.updateMusicStream(music);
+        rl.updateMusicStream(globals.music);
         // Update
         //----------------------------------------------------------------------------------
         // TODO: Update your variables here
@@ -313,7 +286,7 @@ pub fn main() anyerror!void {
         }
 
         globals.viewport.update(delta_time);
-        try globals.scene.update(delta_time);
+        try scene.update(delta_time);
 
         if (globals.editor_mode) {
             globals.editor.update(delta_time);
@@ -328,8 +301,8 @@ pub fn main() anyerror!void {
         globals.vmouse.update(scale);
 
         globals.viewport.draw();
-        globals.scene.draw();
-        globals.scene.drawDebug();
+        scene.draw();
+        scene.drawDebug();
 
         if (globals.editor_mode) {
             globals.editor.draw();
@@ -361,4 +334,23 @@ pub fn main() anyerror!void {
             rl.Color.white,
         );
     }
+}
+
+pub fn rebuildAndStoreDefaultTileset(allocator: std.mem.Allocator, tileset_path: []const u8) void {
+    const tileset_image = rl.loadImage("assets/sprites/world_tileset.png");
+    var size: c_int = undefined;
+    const image_data = rl.exportImageToMemory(tileset_image, ".png", &size);
+    const tileset = Tileset.Tileset512.create(image_data[0..@intCast(size)], .{ .x = 16, .y = 16 }, &generateTilesetCollisionData(), allocator) catch |err| {
+        std.log.err("Error storing tileset to file: {!}\n", .{err});
+        @panic("skill issues");
+    };
+    const tileset_file = helpers.openFile(tileset_path, .{ .mode = .write_only }) catch {
+        std.log.err("Error opening file for writing: {s}\n", .{tileset_path});
+        @panic("skill issues");
+    };
+    tileset.writeToFile(tileset_file) catch {
+        std.log.err("Error writing tileset to file: {s}\n", .{tileset_path});
+        @panic("skill issues");
+    };
+    std.debug.print("stored tileset file successfully\n", .{});
 }

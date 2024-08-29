@@ -10,6 +10,7 @@ pub const Interface = struct {
     entity: *const fn (ctx: *anyopaque) Entity,
     getHitboxRect: *const fn (ctx: *anyopaque) rl.Rectangle,
     getGridRect: *const fn (ctx: *anyopaque) shapes.IRect,
+    setPos: *const fn (ctx: *anyopaque, pos: rl.Vector2) void,
 };
 
 pub fn entity(self: *const Actor) Entity {
@@ -22,6 +23,10 @@ pub fn getHitboxRect(self: *const Actor) rl.Rectangle {
 
 pub fn getGridRect(self: *const Actor) shapes.IRect {
     return self.impl.getGridRect(self.ptr);
+}
+
+pub fn setPos(self: *const Actor, pos: rl.Vector2) void {
+    return self.impl.setPos(self.ptr, pos);
 }
 
 pub const Player = @import("player.zig");

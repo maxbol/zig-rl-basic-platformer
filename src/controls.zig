@@ -1,5 +1,9 @@
+const Scene = @import("scene.zig");
+const TileLayer = @import("tile_layer/tile_layer.zig");
 const constants = @import("constants.zig");
+const helpers = @import("helpers.zig");
 const rl = @import("raylib");
+const shapes = @import("shapes.zig");
 
 pub const KBD_MOVE_RIGHT: *const [1]rl.KeyboardKey = &.{rl.KeyboardKey.key_d};
 pub const KBD_MOVE_LEFT: *const [1]rl.KeyboardKey = &.{rl.KeyboardKey.key_a};
@@ -28,8 +32,30 @@ pub fn isKeyboardControlPressed(key_binding: []const rl.KeyboardKey) bool {
 pub const VirtualMouse = struct {
     pos: rl.Vector2 = .{ .x = 0, .y = 0 },
 
-    pub fn getMousePosition(self: *VirtualMouse) rl.Vector2 {
+    pub fn getMousePosition(self: *const VirtualMouse) rl.Vector2 {
         return self.pos;
+    }
+
+    pub fn getScenePosition(self: *const VirtualMouse, scene: *const Scene) ?rl.Vector2 {
+        if (!rl.checkCollisionPointRec(self.pos, scene.viewport.rectangle)) {
+            return null;
+        }
+        //
+        var mouse_scene_pos = self.pos;
+        mouse_scene_pos.x += scene.viewport_x_offset;
+        mouse_scene_pos.x -= scene.viewport.rectangle.x;
+        mouse_scene_pos.y += scene.viewport_y_offset;
+        mouse_scene_pos.y -= scene.viewport.rectangle.y;
+
+        return mouse_scene_pos;
+    }
+
+    pub fn getGridPosition(self: *const VirtualMouse, scene: *const Scene, layer: TileLayer) ?shapes.IPos {
+        const scene_pos = self.getScenePosition(scene) orelse return null;
+        return helpers.getGridPos(
+            shapes.IPos.fromVec2(layer.getTileset().getTileSize()),
+            shapes.IPos.fromVec2(scene_pos),
+        );
     }
 
     pub fn update(self: *VirtualMouse, scale: f32) void {

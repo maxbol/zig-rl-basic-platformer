@@ -55,6 +55,7 @@ pub fn actor(self: *Player) Actor {
         .entity = entityCast,
         .getHitboxRect = getHitboxRect,
         .getGridRect = getGridRect,
+        .setPos = setPos,
     } };
 }
 
@@ -100,6 +101,12 @@ pub fn handleCollision(self: *Player, axis: CollidableBody.MoveAxis, _: i8) void
             self.sprite.setAnimation(.Death, null, true);
         }
     }
+}
+
+fn setPos(ctx: *anyopaque, pos: rl.Vector2) void {
+    const self: *Player = @ptrCast(@alignCast(ctx));
+    self.collidable.hitbox.x = pos.x;
+    self.collidable.hitbox.y = pos.y;
 }
 
 fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
@@ -172,7 +179,7 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     }
 
     // Collision with mobs
-    if (!self.is_stunlocked) {
+    if (!self.is_stunlocked and !debug.isPaused()) {
         for (scene.mobs) |mob| {
             var player_hitbox = getHitboxRect(ctx);
             const mob_hitbox = mob.getHitboxRect();

@@ -47,6 +47,7 @@ pub fn actor(self: *Mob) Actor {
         .entity = entityCast,
         .getHitboxRect = getHitboxRect,
         .getGridRect = getGridRect,
+        .setPos = setPos,
     } };
 }
 
@@ -103,7 +104,7 @@ inline fn detectOnNextTile(lookahead: i32, sign: i8, mob_gridbox: shapes.IRect, 
 }
 
 fn detectNearbyPlayer(self: *Mob, scene: *Scene, delta_time: f32) void {
-    const player_gridbox = scene.getPlayer().getGridRect();
+    const player_gridbox = scene.player.getGridRect();
     const mob_gridbox = getGridRect(self);
     var lookahead = line_of_sight;
     var is_hunting = false;
@@ -127,6 +128,12 @@ fn randomlyAcquireNextHuntjumpDistance(self: *Mob) void {
     self.next_huntjump_distance = @floatFromInt(globals.rand.intRangeAtMostBiased(u8, 80, 160));
 }
 
+fn setPos(ctx: *anyopaque, pos: rl.Vector2) void {
+    const self: *Mob = @ptrCast(@alignCast(ctx));
+    self.collidable.hitbox.x = pos.x;
+    self.collidable.hitbox.y = pos.y;
+}
+
 fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.UpdateError!void {
     const self: *Mob = @ptrCast(@alignCast(ctx));
 
@@ -139,18 +146,20 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.UpdateError!vo
     self.detectNearbyPlayer(scene, delta_time);
 
     // Hunt jumping
-    if (!self.is_hunting and self.did_huntjump and !self.is_jumping) {
-        self.did_huntjump = false;
-    }
-    if (self.is_hunting and !self.did_huntjump and !self.is_jumping) {
-        const player_hitbox = scene.getPlayer().getHitboxRect();
-        const mob_hitbox = getHitboxRect(ctx);
+    if (!self.is_jumping) {
+        if (!self.is_hunting and self.did_huntjump) {
+            self.did_huntjump = false;
+        }
+        if (self.is_hunting and !self.did_huntjump) {
+            const player_hitbox = scene.player.getHitboxRect();
+            const mob_hitbox = getHitboxRect(ctx);
 
-        if (@abs(player_hitbox.x - mob_hitbox.x) < self.next_huntjump_distance) {
-            self.speed.y = jump_speed;
-            self.is_jumping = true;
-            self.did_huntjump = true;
-            self.randomlyAcquireNextHuntjumpDistance();
+            if (@abs(player_hitbox.x - mob_hitbox.x) < self.next_huntjump_distance) {
+                self.speed.y = jump_speed;
+                self.is_jumping = true;
+                self.did_huntjump = true;
+                self.randomlyAcquireNextHuntjumpDistance();
+            }
         }
     }
 
