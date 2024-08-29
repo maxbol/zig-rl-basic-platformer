@@ -180,8 +180,6 @@ pub fn writeBytes(self: *const Scene, writer: anytype) !void {
         try layer.writeBytes(writer.any());
     }
 
-    // Selma är jättesnygg
-
     // Write mob locations
     for (0..self.mobs_amount) |i| {
         const mob_pos = self.mobs_starting_pos[i];
