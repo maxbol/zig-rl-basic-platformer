@@ -42,7 +42,6 @@ pub fn FixedSizeTileLayer(comptime size: usize) type {
 
             var tileset_path_buf: [3 * 1024]u8 = undefined;
             std.mem.copyForwards(u8, &tileset_path_buf, tileset_path);
-            std.debug.print("inited tileset_path_buf as {s}\n", .{tileset_path_buf});
 
             const tileset_path_len: u16 = @intCast(tileset_path.len);
 

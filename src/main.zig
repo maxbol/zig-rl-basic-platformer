@@ -148,6 +148,16 @@ pub fn createDefaultScene(allocator: std.mem.Allocator) *Scene {
     };
     scene.scroll_state = .{ .x = 0, .y = 1 };
 
+    // Store scene in new loc
+    const new_file = helpers.openFile("data/scenes/level1-new.scene", .{ .mode = .write_only }) catch {
+        std.log.err("Error opening file for writing: {s}\n", .{"data/scenes/level1-new.scene"});
+        std.process.exit(1);
+    };
+    scene.writeBytes(new_file.writer()) catch |err| {
+        std.log.err("Error writing scene to file: {!}\n", .{err});
+        std.process.exit(1);
+    };
+
     return scene;
 }
 

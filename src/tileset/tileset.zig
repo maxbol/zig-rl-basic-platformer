@@ -102,27 +102,22 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !Tileset {
     // Map size
     const map_size = try reader.readInt(u16, std.builtin.Endian.big);
     const bitpacked_map_size = map_size / 8;
-    std.debug.print("read map_size={d}\n", .{map_size});
-    std.debug.print("bitpacked_map_size={d}\n", .{bitpacked_map_size});
 
     // Collision map
     var collision_map = std.mem.zeroes([TILESET_SIZE_4096]bool);
     for (0..bitpacked_map_size) |byte_idx| {
         const byte = try reader.readByte();
-        std.debug.print("reading byte {d} as {b}\n", .{ byte_idx, byte });
         for (0..8) |bit_idx| {
             if (byte & (@as(u8, 1) << (7 - @as(u3, @intCast(bit_idx)))) != 0) {
                 collision_map[(byte_idx * 8) + bit_idx] = true;
             }
         }
     }
-    std.debug.print("collision_map={any}\n", .{collision_map});
 
     // Image data
     var image_data_buf: [1024 * 30]u8 = undefined;
     const image_data_len = try reader.readAll(&image_data_buf);
     const image_data = image_data_buf[0..image_data_len];
-    // std.debug.print("image_data={any}\n", .{image_data});
 
     if (map_size >= TILESET_SIZE_4096) {
         return error.TilesetTooBig;

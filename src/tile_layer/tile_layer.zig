@@ -240,7 +240,6 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !@This() {
 
     // Tile data size
     const data_size = try reader.readInt(usize, std.builtin.Endian.big);
-    std.debug.print("data_size={d}\n", .{data_size});
     if (data_size > MAX_DATA_SIZE) {
         return error.LayerTooBig;
     }

@@ -58,7 +58,6 @@ pub fn create(
     std.mem.copyForwards(Actor, &mobs_buf, mobs);
     std.mem.copyForwards(rl.Vector2, &mobs_starting_pos_buf, mobs_starting_pos);
 
-    std.debug.print("This happens\n", .{});
     var bg_layer_list = std.ArrayList(TileLayer).init(allocator);
     var fg_layer_list = std.ArrayList(TileLayer).init(allocator);
 
@@ -164,6 +163,10 @@ pub fn writeBytes(self: *const Scene, writer: anytype) !void {
     const fg_layers_len: u8 = @intCast(self.fg_layers.items.len);
     try writer.writeInt(usize, fg_layers_len, .big);
 
+    // Write number of mobs
+    const mobs_amount: u16 = @intCast(self.mobs_amount);
+    try writer.writeInt(u16, mobs_amount, .big);
+
     // Write main layer
     try self.main_layer.writeBytes(writer.any());
 
@@ -175,6 +178,13 @@ pub fn writeBytes(self: *const Scene, writer: anytype) !void {
     // Write fg layers
     for (self.fg_layers.items) |layer| {
         try layer.writeBytes(writer.any());
+    }
+
+    // Write mob locations
+    for (0..self.mobs_amount) |i| {
+        const mob_pos = self.mobs_starting_pos[i];
+        const mob_pos_bytes = std.mem.toBytes(mob_pos);
+        _ = try writer.write(&mob_pos_bytes);
     }
 }
 

@@ -180,7 +180,8 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
 
     // Collision with mobs
     if (!self.is_stunlocked and !debug.isPaused()) {
-        for (scene.mobs) |mob| {
+        for (0..scene.mobs_amount) |mob_idx| {
+            const mob = scene.mobs[mob_idx];
             var player_hitbox = getHitboxRect(ctx);
             const mob_hitbox = mob.getHitboxRect();
 
@@ -198,7 +199,6 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
                 self.speed.y = knockback_y_speed;
                 if (self.lives > 0) {
                     self.lives -= 1;
-                    std.debug.print("You were hit! Lives left={d}\n", .{self.lives});
                 }
             }
         }
