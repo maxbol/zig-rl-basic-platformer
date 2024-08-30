@@ -16,67 +16,6 @@ const rl = @import("raylib");
 const static = @import("static.zig");
 const std = @import("std");
 
-// Clouds - 145
-// Clouds and sky - 161
-// Sky - 177
-fn generateBgTileData() [static.XS_TILE_LAYER_SIZE]u8 {
-    var bg_tile_data: [static.XS_TILE_LAYER_SIZE]u8 = undefined;
-
-    for (0..35) |y| {
-        for (0..1) |x| {
-            bg_tile_data[y * 1 + x] = blk: {
-                if (y < 12) {
-                    break :blk 145;
-                } else if (y == 12) {
-                    break :blk 161;
-                } else if (y > 12) {
-                    break :blk 177;
-                }
-                break :blk 0;
-            };
-        }
-    }
-
-    return bg_tile_data;
-}
-
-fn generateMainTileData() [static.MEDIUM_TILE_LAYER_SIZE]u8 {
-    var fg_tile_data: [static.MEDIUM_TILE_LAYER_SIZE]u8 = undefined;
-
-    for (0..40) |y| {
-        for (0..100) |x| {
-            fg_tile_data[y * 100 + x] = blk: {
-                if (y < 20) {
-                    break :blk 0;
-                } else if (y == 20) {
-                    if (x == 6 or x == 15) {
-                        break :blk 1;
-                    }
-                    break :blk 0;
-                }
-                if (y < 24) {
-                    if (x == 15) {
-                        break :blk 1;
-                    }
-                    break :blk 0;
-                } else if (y == 24) {
-                    if (x == 1 or x == 15 or x == 16) {
-                        break :blk 1;
-                    }
-                    break :blk 0;
-                } else if (y == 25) {
-                    break :blk 1;
-                } else {
-                    break :blk 17;
-                }
-                break :blk 0;
-            };
-        }
-    }
-
-    return fg_tile_data;
-}
-
 fn generateTilesetCollisionData() [512]bool {
     var fg_collision_data: [512]bool = std.mem.zeroes([512]bool);
 
@@ -135,14 +74,14 @@ pub fn createDefaultScene(allocator: std.mem.Allocator) *Scene {
     scene.scroll_state = .{ .x = 0, .y = 1 };
 
     // Store scene in new loc
-    const new_file = helpers.openFile("data/scenes/level1-new.scene", .{ .mode = .write_only }) catch {
-        std.log.err("Error opening file for writing: {s}\n", .{"data/scenes/level1-new.scene"});
-        std.process.exit(1);
-    };
-    scene.writeBytes(new_file.writer()) catch |err| {
-        std.log.err("Error writing scene to file: {!}\n", .{err});
-        std.process.exit(1);
-    };
+    // const new_file = helpers.openFile("data/scenes/level1-new.scene", .{ .mode = .write_only }) catch {
+    //     std.log.err("Error opening file for writing: {s}\n", .{"data/scenes/level1-new.scene"});
+    //     std.process.exit(1);
+    // };
+    // scene.writeBytes(new_file.writer()) catch |err| {
+    //     std.log.err("Error writing scene to file: {!}\n", .{err});
+    //     std.process.exit(1);
+    // };
 
     return scene;
 }
@@ -177,29 +116,13 @@ pub fn initGameData() void {
         player_sprite_texture,
         .{ .x = 32, .y = 32 },
         globals.player_animations.reader(),
+        .Idle,
     );
     globals.player = Actor.Player.init(
         rl.Rectangle.init(0, 0, constants.TILE_SIZE, 20),
         player_sprite,
         .{ .x = 8, .y = 8 },
     );
-
-    // Init mobs
-    for (0..constants.MOB_AMOUNT) |i| {
-        globals.mobs[i] = Actor.Mob.initMobByIndex(0) catch |err| {
-            std.log.err("Error initializing mob: {!}\n", .{err});
-            std.process.exit(1);
-        };
-        const pos = rl.Vector2.init(
-            (1 + @as(f32, @floatFromInt(i))) * constants.MOB_SPACING,
-            0,
-        );
-        globals.mobs[i].actor().setPos(pos);
-    }
-
-    for (0..constants.MOB_AMOUNT) |i| {
-        globals.mob_actors[i] = globals.mobs[i].actor();
-    }
 
     // Init virtual mouse
     globals.vmouse = controls.VirtualMouse{};
@@ -275,7 +198,7 @@ pub fn main() anyerror!void {
         try scene.update(delta_time);
 
         if (globals.editor_mode) {
-            globals.editor.update(delta_time);
+            try globals.editor.update(delta_time);
         }
 
         // Draw to render texture

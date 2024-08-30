@@ -72,7 +72,7 @@ pub fn move(
     self.grid_rect = grid_rect;
 }
 
-pub fn drawDebug(self: *CollidableBody, scene: *const Scene) void {
+pub fn drawDebug(self: *const CollidableBody, scene: *const Scene) void {
     if (debug.isDebugFlagSet(.ShowHitboxes)) {
         const rect = scene.getViewportAdjustedPos(rl.Rectangle, self.hitbox);
         rl.drawRectangleLinesEx(rect, 1, rl.Color.red);

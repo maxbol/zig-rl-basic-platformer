@@ -50,5 +50,7 @@ pub const GreenSlime = Mob.Prefab(
         "assets/sprites/slime_green.png",
         // Animation buffer
         getAnimations(),
+        // Initial animation
+        .Walk,
     ),
 );

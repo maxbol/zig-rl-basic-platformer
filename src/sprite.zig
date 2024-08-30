@@ -19,25 +19,6 @@ freeze_animation_on_last_frame: bool = false,
 animation_clock: f32 = 0,
 current_display_frame: u8 = 0,
 
-// pub const SpriteData = struct {
-//     size: rl.Vector2,
-//     texture: rl.Texture2D,
-//     sprite_texture_map_r: SpriteTextureMap,
-//     sprite_texture_map_l: SpriteTextureMap,
-//     animation_buffer: an.AnimationBufferReader,
-// };
-
-// pub const SpritePool = struct {
-//     const pool_size: usize = 128;
-//     sprite_data: SpriteData,
-//     sprites: [pool_size]Sprite = undefined,
-//
-//
-//     pub fn init(sprite_data: SpriteData) SpritePool {
-//         return .{ .sprite_data = sprite_data };
-//     }
-// };
-
 pub const SpriteTextureMap = [128]?rl.Rectangle;
 
 pub const FlipState = enum(u2) {
@@ -50,12 +31,16 @@ pub fn Prefab(
     size_y: f32,
     texture_path: [*:0]const u8,
     animation_buffer: anytype,
+    initial_animation: an.AnimationType,
 ) type {
     return struct {
+        pub const SIZE_X = size_x;
+        pub const SIZE_Y = size_y;
+
         pub fn init() Sprite {
             const size = rl.Vector2.init(size_x, size_y);
             const texture = rl.loadTexture(texture_path);
-            return Sprite.init(texture, size, animation_buffer.reader());
+            return Sprite.init(texture, size, animation_buffer.reader(), initial_animation);
         }
     };
 }
@@ -64,6 +49,7 @@ pub fn init(
     texture: rl.Texture2D,
     size: rl.Vector2,
     animation_buffer: an.AnimationBufferReader,
+    initial_animation: an.AnimationType,
 ) Sprite {
     const sprite_texture_map_r = helpers.buildRectMap(128, texture.width, texture.height, size.x, size.y, 1, 1);
     const sprite_texture_map_l = helpers.buildRectMap(128, texture.width, texture.height, size.x, size.y, -1, 1);
@@ -74,6 +60,7 @@ pub fn init(
         .sprite_texture_map_r = sprite_texture_map_r,
         .sprite_texture_map_l = sprite_texture_map_l,
         .texture = texture,
+        .current_animation = initial_animation,
     };
 }
 
@@ -88,6 +75,14 @@ pub fn setAnimation(self: *Sprite, animation: an.AnimationType, queued: ?an.Anim
 
 pub fn setFlip(self: *Sprite, flip: FlipState, state: bool) void {
     self.flip_mask = if (state) @intFromEnum(flip) | self.flip_mask else ~@intFromEnum(flip) & self.flip_mask;
+}
+
+pub fn getSourceRect(self: *const Sprite) ?rl.Rectangle {
+    if (self.flip_mask & @intFromEnum(FlipState.XFlip) == 0) {
+        return self.sprite_texture_map_r[self.current_display_frame];
+    } else {
+        return self.sprite_texture_map_l[self.current_display_frame];
+    }
 }
 
 pub fn update(self: *Sprite, _: *Scene, delta_time: f32) !void {
@@ -117,22 +112,11 @@ pub fn update(self: *Sprite, _: *Scene, delta_time: f32) !void {
     self.current_display_frame = current_animation.frames[frame_idx];
 }
 
-pub fn draw(self: *const Sprite, scene: *const Scene, pos: rl.Vector2) void {
+pub fn draw(self: *const Sprite, scene: *const Scene, pos: rl.Vector2, color: rl.Color) void {
     // Don't render if no animation frame
     if (self.current_display_frame == 0) {
         return;
     }
-
-    // Get source rect from texture map
-    const rect = blk: {
-        if (self.flip_mask & @intFromEnum(FlipState.XFlip) == 0) {
-            break :blk self.sprite_texture_map_r[self.current_display_frame];
-        } else {
-            break :blk self.sprite_texture_map_l[self.current_display_frame];
-        }
-    } orelse {
-        return;
-    };
 
     // Don't render if out of viewport bounds
     if (pos.x + self.size.x < scene.viewport_x_offset or pos.x > scene.viewport_x_limit) {
@@ -141,6 +125,11 @@ pub fn draw(self: *const Sprite, scene: *const Scene, pos: rl.Vector2) void {
     if (pos.y + self.size.y < scene.viewport_y_offset or pos.y > scene.viewport_y_limit) {
         return;
     }
+
+    // Get source rect from texture map
+    const rect = self.getSourceRect() orelse {
+        return;
+    };
 
     // Add viewport culling
     const cull_x: f32 = cull: {
@@ -164,7 +153,7 @@ pub fn draw(self: *const Sprite, scene: *const Scene, pos: rl.Vector2) void {
     const dest = scene.getViewportAdjustedPos(rl.Vector2, pos);
 
     // Do a culled rectangle draw
-    _ = helpers.culledRectDraw(self.texture, rect, dest, rl.Color.white, cull_x, cull_y);
+    _ = helpers.culledRectDraw(self.texture, rect, dest, color, cull_x, cull_y);
 }
 
 pub fn drawDebug(self: *const Sprite, scene: *const Scene, pos: rl.Vector2) void {

@@ -21,7 +21,7 @@ bg_layers: std.ArrayList(TileLayer),
 fg_layers: std.ArrayList(TileLayer),
 player: Actor = undefined,
 player_starting_pos: rl.Vector2,
-mobs: [constants.MAX_AMOUNT_OF_MOBS]Actor,
+mobs: [constants.MAX_AMOUNT_OF_MOBS]Actor.Mob,
 mobs_starting_pos: [constants.MAX_AMOUNT_OF_MOBS]rl.Vector2,
 mobs_amount: usize,
 gravity: f32 = 13 * 60,
@@ -44,20 +44,10 @@ pub fn create(
     viewport: *Viewport,
     player: Actor,
     player_starting_pos: rl.Vector2,
-    mobs: []Actor,
-    mobs_starting_pos: []rl.Vector2,
+    mobs: [constants.MAX_AMOUNT_OF_MOBS]Actor.Mob,
+    mobs_starting_pos: [constants.MAX_AMOUNT_OF_MOBS]rl.Vector2,
+    mobs_amount: usize,
 ) !*Scene {
-    if (mobs.len != mobs_starting_pos.len) {
-        std.log.err("Error: mob and mob starting pos count mismatch\n", .{});
-        return error.MobStartingPosCountMismatch;
-    }
-    const mobs_amount = mobs.len;
-
-    var mobs_buf: [constants.MAX_AMOUNT_OF_MOBS]Actor = undefined;
-    var mobs_starting_pos_buf: [constants.MAX_AMOUNT_OF_MOBS]rl.Vector2 = undefined;
-    std.mem.copyForwards(Actor, &mobs_buf, mobs);
-    std.mem.copyForwards(rl.Vector2, &mobs_starting_pos_buf, mobs_starting_pos);
-
     var bg_layer_list = std.ArrayList(TileLayer).init(allocator);
     var fg_layer_list = std.ArrayList(TileLayer).init(allocator);
 
@@ -78,8 +68,8 @@ pub fn create(
         .fg_layers = fg_layer_list,
         .scroll_state = rl.Vector2.init(0, 0),
         .viewport = viewport,
-        .mobs = mobs_buf,
-        .mobs_starting_pos = mobs_starting_pos_buf,
+        .mobs = mobs,
+        .mobs_starting_pos = mobs_starting_pos,
         .mobs_amount = mobs_amount,
         .player = player,
         .player_starting_pos = player_starting_pos,
@@ -143,13 +133,7 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
         mobs_pos[i] = std.mem.bytesToValue(rl.Vector2, &mob_pos_bytes);
         mobs[i] = try Actor.Mob.initMobByIndex(mob_type);
     }
-
-    // Temp solution: generate mob starting positions from hitbox locations
-    for (0..constants.MOB_AMOUNT) |i| {
-        const x = globals.mobs[i].collidable.hitbox.x;
-        const y = globals.mobs[i].collidable.hitbox.y;
-        globals.mobs_starting_pos[i] = rl.Vector2.init(x, y);
-    }
+    std.debug.print("{d} mobs spawned\n", .{mob_amount});
 
     return Scene.create(
         allocator,
@@ -159,8 +143,9 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
         &globals.viewport,
         globals.player.actor(),
         rl.Vector2.init(0, 0),
-        &globals.mob_actors,
-        &globals.mobs_starting_pos,
+        mobs,
+        mobs_pos,
+        mob_amount,
     );
 }
 
@@ -205,10 +190,23 @@ pub fn writeBytes(self: *const Scene, writer: anytype) !void {
     }
 }
 
+pub fn spawnMob(self: *Scene, mob_type: usize, pos: rl.Vector2) !void {
+    var mob: Actor.Mob = try Actor.Mob.initMobByIndex(mob_type);
+    mob.setPos(pos);
+
+    self.mobs[self.mobs_amount] = mob;
+    self.mobs_starting_pos[self.mobs_amount] = pos;
+    self.mobs_amount += 1;
+}
+
 pub fn update(self: *Scene, delta_time: f32) !void {
     if (!self.first_frame_initialization_done) {
         self.first_frame_initialization_done = true;
         self.player.setPos(self.player_starting_pos);
+
+        for (0..self.mobs_amount) |i| {
+            self.mobs[i].setPos(self.mobs_starting_pos[i]);
+        }
     }
 
     const pixel_size = self.main_layer.getPixelSize();
@@ -233,7 +231,7 @@ pub fn update(self: *Scene, delta_time: f32) !void {
 
     if (!debug.isPaused()) {
         for (0..self.mobs_amount) |i| {
-            try self.mobs[i].entity().update(self, delta_time);
+            try self.mobs[i].update(self, delta_time);
         }
     }
 
@@ -247,8 +245,8 @@ pub fn draw(self: *const Scene) void {
 
     self.main_layer.draw(self);
 
-    for (self.mobs[0..self.mobs_amount]) |actor| {
-        actor.entity().draw(self);
+    for (0..self.mobs_amount) |i| {
+        self.mobs[i].draw(self);
     }
 
     self.player.entity().draw(self);
@@ -265,8 +263,8 @@ pub fn drawDebug(self: *const Scene) void {
 
     self.main_layer.drawDebug(self);
 
-    for (self.mobs[0..self.mobs_amount]) |actor| {
-        actor.entity().drawDebug(self);
+    for (0..self.mobs_amount) |i| {
+        self.mobs[i].drawDebug(self);
     }
 
     self.player.entity().drawDebug(self);

@@ -39,6 +39,8 @@ pub fn Prefab(
     SpritePrefab: anytype,
 ) type {
     return struct {
+        pub const Sprite = SpritePrefab;
+
         pub fn init() Mob {
             const sprite = SpritePrefab.init();
             return Mob.init(hitbox, sprite, sprite_offset, behavior);
@@ -60,26 +62,6 @@ pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2, mob
     return mob;
 }
 
-pub fn actor(self: *Mob) Actor {
-    return .{ .ptr = self, .impl = &.{
-        .entity = entityCast,
-        .getHitboxRect = getHitboxRect,
-        .getGridRect = getGridRect,
-        .setPos = setPos,
-    } };
-}
-
-pub fn entity(self: *Mob) Entity {
-    return .{
-        .ptr = self,
-        .impl = &.{
-            .update = update,
-            .draw = draw,
-            .drawDebug = drawDebug,
-        },
-    };
-}
-
 pub fn handleCollision(self: *Mob, axis: CollidableBody.MoveAxis, sign: i8) void {
     if (axis == CollidableBody.MoveAxis.X) {
         // Reverse direction when hitting an obstacle (unless we are hunting the player)
@@ -95,19 +77,12 @@ pub fn handleCollision(self: *Mob, axis: CollidableBody.MoveAxis, sign: i8) void
     }
 }
 
-fn getGridRect(ctx: *anyopaque) shapes.IRect {
-    const self: *Mob = @ptrCast(@alignCast(ctx));
+pub fn getGridRect(self: *const Mob) shapes.IRect {
     return self.collidable.grid_rect;
 }
 
-fn getHitboxRect(ctx: *anyopaque) rl.Rectangle {
-    const self: *Mob = @ptrCast(@alignCast(ctx));
+pub fn getHitboxRect(self: *const Mob) rl.Rectangle {
     return self.collidable.hitbox;
-}
-
-fn entityCast(ctx: *anyopaque) Entity {
-    const self: *Mob = @ptrCast(@alignCast(ctx));
-    return self.entity();
 }
 
 fn move(self: *Mob, scene: *const Scene, comptime axis: CollidableBody.MoveAxis, amount: f32) void {
@@ -146,15 +121,12 @@ fn randomlyAcquireNextHuntjumpDistance(self: *Mob) void {
     self.next_huntjump_distance = @floatFromInt(globals.rand.intRangeAtMostBiased(u8, 80, 160));
 }
 
-fn setPos(ctx: *anyopaque, pos: rl.Vector2) void {
-    const self: *Mob = @ptrCast(@alignCast(ctx));
+pub fn setPos(self: *Mob, pos: rl.Vector2) void {
     self.collidable.hitbox.x = pos.x;
     self.collidable.hitbox.y = pos.y;
 }
 
-fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.UpdateError!void {
-    const self: *Mob = @ptrCast(@alignCast(ctx));
-
+pub fn update(self: *Mob, scene: *Scene, delta_time: f32) Entity.UpdateError!void {
     // Start walking if standing still
     if (self.speed.x == 0) {
         self.speed.x = self.behavior.walk_speed;
@@ -170,7 +142,7 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.UpdateError!vo
         }
         if (self.is_hunting and !self.did_huntjump) {
             const player_hitbox = scene.player.getHitboxRect();
-            const mob_hitbox = getHitboxRect(ctx);
+            const mob_hitbox = getHitboxRect(self);
 
             if (@abs(player_hitbox.x - mob_hitbox.x) < self.next_huntjump_distance) {
                 self.speed.y = self.behavior.jump_speed;
@@ -209,33 +181,21 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.UpdateError!vo
     try self.sprite.update(scene, delta_time);
 }
 
-fn draw(ctx: *anyopaque, scene: *const Scene) void {
-    const self: *Mob = @ptrCast(@alignCast(ctx));
+pub fn draw(self: *const Mob, scene: *const Scene) void {
     const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.collidable.hitbox);
-
-    self.sprite.draw(scene, sprite_pos);
+    self.sprite.draw(scene, sprite_pos, rl.Color.white);
 }
 
-fn drawDebug(ctx: *anyopaque, scene: *const Scene) void {
-    const self: *Mob = @ptrCast(@alignCast(ctx));
+pub fn drawDebug(self: *const Mob, scene: *const Scene) void {
     const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.collidable.hitbox);
 
     self.sprite.drawDebug(scene, sprite_pos);
     self.collidable.drawDebug(scene);
 }
 
-pub const Slime = Prefab(.{
-    .walk_speed = 1 * 60,
-    .fall_speed = 3.6 * 60,
-    .hunt_speed = 2 * 60,
-    .jump_speed = -4 * 60,
-    .hunt_acceleration = 10 * 60,
-    .line_of_sight = 10, // See 10 tiles ahead
-});
-
 pub const GreenSlime = @import("mob/slime.zig").GreenSlime;
 
-const bestiary: [1]type = .{
+pub const bestiary: [1]type = .{
     GreenSlime,
 };
 pub fn initMobByIndex(index: usize) !Mob {
@@ -245,4 +205,15 @@ pub fn initMobByIndex(index: usize) !Mob {
         }
     }
     return error.NoSuchMob;
+}
+
+pub inline fn getBiggestMobSpriteSize() f32 {
+    var max: f32 = 0;
+    inline for (bestiary, 0..) |MobPrefab, i| {
+        _ = i; // autofix
+        const SpritePrefab = MobPrefab.Sprite;
+        const biggest_size_dim = @max(SpritePrefab.SIZE_X, SpritePrefab.SIZE_Y);
+        max = @max(max, biggest_size_dim);
+    }
+    return max;
 }

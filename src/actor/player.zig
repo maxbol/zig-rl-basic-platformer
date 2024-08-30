@@ -217,7 +217,7 @@ fn draw(ctx: *anyopaque, scene: *const Scene) void {
     const self: *Player = @ptrCast(@alignCast(ctx));
     const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.collidable.hitbox);
 
-    self.sprite.draw(scene, sprite_pos);
+    self.sprite.draw(scene, sprite_pos, rl.Color.white);
 }
 
 fn drawDebug(ctx: *anyopaque, scene: *const Scene) void {
