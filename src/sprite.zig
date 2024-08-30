@@ -45,6 +45,21 @@ pub const FlipState = enum(u2) {
     YFlip = 0b10,
 };
 
+pub fn Prefab(
+    size_x: f32,
+    size_y: f32,
+    texture_path: [*:0]const u8,
+    animation_buffer: anytype,
+) type {
+    return struct {
+        pub fn init() Sprite {
+            const size = rl.Vector2.init(size_x, size_y);
+            const texture = rl.loadTexture(texture_path);
+            return Sprite.init(texture, size, animation_buffer.reader());
+        }
+    };
+}
+
 pub fn init(
     texture: rl.Texture2D,
     size: rl.Vector2,

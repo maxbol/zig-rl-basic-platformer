@@ -1,11 +1,11 @@
 const std = @import("std");
 
 pub const AnimationBufferReader = struct {
-    ptr: *anyopaque,
+    ptr: *const anyopaque,
     impl: *const Interface,
 
     pub const Interface = struct {
-        readAnimation: *const fn (ctx: *anyopaque, animation_type: AnimationType) AnimationBufferError!AnimationData,
+        readAnimation: *const fn (ctx: *const anyopaque, animation_type: AnimationType) AnimationBufferError!AnimationData,
     };
 
     pub fn readAnimation(self: AnimationBufferReader, animation_type: AnimationType) AnimationBufferError!AnimationData {
@@ -25,7 +25,7 @@ pub fn AnimationBuffer(animation_index: []const AnimationType, max_no_of_frames:
     return struct {
         data: BufferData = std.mem.zeroes(BufferData),
 
-        pub fn reader(self: *@This()) AnimationBufferReader {
+        pub fn reader(self: *const @This()) AnimationBufferReader {
             return .{
                 .ptr = self,
                 .impl = &.{
@@ -67,10 +67,10 @@ pub fn AnimationBuffer(animation_index: []const AnimationType, max_no_of_frames:
         }
 
         pub fn readAnimation(
-            ctx: *anyopaque,
+            ctx: *const anyopaque,
             animation_type: AnimationType,
         ) !AnimationData {
-            const self: *@This() = @ptrCast(@alignCast(ctx));
+            const self: *const @This() = @ptrCast(@alignCast(ctx));
             const animation_idx = blk: {
                 for (animation_index, 0..) |anim, i| {
                     if (anim == animation_type) {
@@ -103,7 +103,7 @@ pub fn AnimationBuffer(animation_index: []const AnimationType, max_no_of_frames:
 
 pub const AnimationData = struct {
     duration: f16,
-    frames: []u8,
+    frames: []const u8,
 };
 
 pub const AnimationType = enum(usize) {

@@ -126,20 +126,6 @@ fn getPlayerAnimations() static.PlayerAnimationBuffer {
     return buffer;
 }
 
-fn getSlimeAnimations() static.MobAnimationBuffer {
-    var buffer = static.MobAnimationBuffer{};
-
-    buffer.writeAnimation(.Walk, 1, &.{ 1, 2, 3, 4, 3, 2 });
-    buffer.writeAnimation(.Attack, 0.5, &.{ 5, 6, 7, 8 });
-    buffer.writeAnimation(.Hit, 0.1, &.{ 9, 10, 11, 12 });
-
-    return buffer;
-}
-
-pub fn cleanupGameData(scene: *Scene) void {
-    scene.destroy();
-}
-
 pub fn createDefaultScene(allocator: std.mem.Allocator) *Scene {
     // Init scene
     const scene = Scene.loadSceneFromFile(allocator, globals.scene_file) catch |err| {
@@ -184,7 +170,6 @@ pub fn initGameData() void {
 
     // Init animation frames
     globals.player_animations = getPlayerAnimations();
-    globals.slime_animations = getSlimeAnimations();
 
     // Init player actor
     const player_sprite_texture = rl.loadTexture("assets/sprites/knight.png");
@@ -200,25 +185,16 @@ pub fn initGameData() void {
     );
 
     // Init mobs
-    const slime_sprite_texture = rl.loadTexture("assets/sprites/slime_green.png");
     for (0..constants.MOB_AMOUNT) |i| {
-        var slime_sprite = Sprite.init(
-            slime_sprite_texture,
-            .{ .x = 24, .y = 24 },
-            globals.slime_animations.reader(),
+        globals.mobs[i] = Actor.Mob.initMobByIndex(0) catch |err| {
+            std.log.err("Error initializing mob: {!}\n", .{err});
+            std.process.exit(1);
+        };
+        const pos = rl.Vector2.init(
+            (1 + @as(f32, @floatFromInt(i))) * constants.MOB_SPACING,
+            0,
         );
-        slime_sprite.current_animation = .Walk;
-
-        globals.mobs[i] = Actor.Mob.init(
-            rl.Rectangle.init(
-                (1 + @as(f32, @floatFromInt(i))) * constants.MOB_SPACING,
-                0,
-                12,
-                12,
-            ),
-            slime_sprite,
-            .{ .x = 6, .y = 12 },
-        );
+        globals.mobs[i].actor().setPos(pos);
     }
 
     for (0..constants.MOB_AMOUNT) |i| {

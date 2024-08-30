@@ -21,20 +21,38 @@ is_hunting: bool = false,
 is_jumping: bool = false,
 did_huntjump: bool = false,
 next_huntjump_distance: f32 = 80,
+behavior: MobBehavior,
 
-const walk_speed: f32 = 1 * 60;
-const fall_speed: f32 = 3.6 * 60;
-const hunt_speed: f32 = 2 * 60;
-const jump_speed: f32 = -4 * 60;
-const hunt_acceleration: f32 = 10 * 60;
-const line_of_sight: i32 = 10; // See 10 tiles ahead
+pub const MobBehavior = struct {
+    walk_speed: f32 = 1 * 60,
+    fall_speed: f32 = 3.6 * 60,
+    hunt_speed: f32 = 2 * 60,
+    jump_speed: f32 = -4 * 60,
+    hunt_acceleration: f32 = 10 * 60,
+    line_of_sight: i32 = 10, // See 10 tiles ahead
+};
 
-pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2) Mob {
+pub fn Prefab(
+    hitbox: rl.Rectangle,
+    sprite_offset: rl.Vector2,
+    behavior: MobBehavior,
+    SpritePrefab: anytype,
+) type {
+    return struct {
+        pub fn init() Mob {
+            const sprite = SpritePrefab.init();
+            return Mob.init(hitbox, sprite, sprite_offset, behavior);
+        }
+    };
+}
+
+pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2, mob_attributes: MobBehavior) Mob {
     var mob = Mob{
         .speed = rl.Vector2.init(0, 0),
         .sprite = sprite,
         .sprite_offset = sprite_offset,
         .collidable = CollidableBody.init(hitbox),
+        .behavior = mob_attributes,
     };
 
     mob.randomlyAcquireNextHuntjumpDistance();
@@ -66,7 +84,7 @@ pub fn handleCollision(self: *Mob, axis: CollidableBody.MoveAxis, sign: i8) void
     if (axis == CollidableBody.MoveAxis.X) {
         // Reverse direction when hitting an obstacle (unless we are hunting the player)
         if (!self.is_hunting) {
-            self.speed.x = -@as(f32, @floatFromInt(sign)) * walk_speed;
+            self.speed.x = -@as(f32, @floatFromInt(sign)) * self.behavior.walk_speed;
         }
     } else {
         if (sign == 1) {
@@ -106,18 +124,18 @@ inline fn detectOnNextTile(lookahead: i32, sign: i8, mob_gridbox: shapes.IRect, 
 fn detectNearbyPlayer(self: *Mob, scene: *Scene, delta_time: f32) void {
     const player_gridbox = scene.player.getGridRect();
     const mob_gridbox = getGridRect(self);
-    var lookahead = line_of_sight;
+    var lookahead = self.behavior.line_of_sight;
     var is_hunting = false;
 
     while (lookahead > 0) : (lookahead -= 1) {
         if (detectOnNextTile(lookahead, 1, mob_gridbox, player_gridbox)) {
             is_hunting = true;
-            self.speed.x = approach(self.speed.x, hunt_speed, hunt_acceleration * delta_time);
+            self.speed.x = approach(self.speed.x, self.behavior.hunt_speed, self.behavior.hunt_acceleration * delta_time);
             break;
         }
         if (detectOnNextTile(lookahead, -1, mob_gridbox, player_gridbox)) {
             is_hunting = true;
-            self.speed.x = approach(self.speed.x, -hunt_speed, hunt_acceleration * delta_time);
+            self.speed.x = approach(self.speed.x, -self.behavior.hunt_speed, self.behavior.hunt_acceleration * delta_time);
             break;
         }
     }
@@ -139,7 +157,7 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.UpdateError!vo
 
     // Start walking if standing still
     if (self.speed.x == 0) {
-        self.speed.x = walk_speed;
+        self.speed.x = self.behavior.walk_speed;
     }
 
     // Try to spot the player by raycasting
@@ -155,7 +173,7 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.UpdateError!vo
             const mob_hitbox = getHitboxRect(ctx);
 
             if (@abs(player_hitbox.x - mob_hitbox.x) < self.next_huntjump_distance) {
-                self.speed.y = jump_speed;
+                self.speed.y = self.behavior.jump_speed;
                 self.is_jumping = true;
                 self.did_huntjump = true;
                 self.randomlyAcquireNextHuntjumpDistance();
@@ -165,11 +183,11 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.UpdateError!vo
 
     // Slow down when hunt is over
     if (!self.is_hunting) {
-        self.speed.x = std.math.sign(self.speed.x) * walk_speed;
+        self.speed.x = std.math.sign(self.speed.x) * self.behavior.walk_speed;
     }
 
     // Gravity
-    self.speed.y = approach(self.speed.y, fall_speed, scene.gravity * delta_time);
+    self.speed.y = approach(self.speed.y, self.behavior.fall_speed, scene.gravity * delta_time);
 
     // Set animation and flip sprite
     if (self.is_hunting) {
@@ -204,4 +222,27 @@ fn drawDebug(ctx: *anyopaque, scene: *const Scene) void {
 
     self.sprite.drawDebug(scene, sprite_pos);
     self.collidable.drawDebug(scene);
+}
+
+pub const Slime = Prefab(.{
+    .walk_speed = 1 * 60,
+    .fall_speed = 3.6 * 60,
+    .hunt_speed = 2 * 60,
+    .jump_speed = -4 * 60,
+    .hunt_acceleration = 10 * 60,
+    .line_of_sight = 10, // See 10 tiles ahead
+});
+
+pub const GreenSlime = @import("mob/slime.zig").GreenSlime;
+
+const bestiary: [1]type = .{
+    GreenSlime,
+};
+pub fn initMobByIndex(index: usize) !Mob {
+    inline for (bestiary, 0..) |MobPrefab, i| {
+        if (i == index) {
+            return MobPrefab.init();
+        }
+    }
+    return error.NoSuchMob;
 }

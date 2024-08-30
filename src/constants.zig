@@ -35,8 +35,8 @@ pub const VIEWPORT_SMALL_RECT = rl.Rectangle.init(
 
 pub const PATH_SCENES = "scenes/";
 
-pub const MOB_AMOUNT = 100;
-pub const MOB_SPACING = 20;
+pub const MOB_AMOUNT = 20;
+pub const MOB_SPACING = 200;
 
 pub const MAX_AMOUNT_OF_BG_LAYERS = 2;
 pub const MAX_AMOUNT_OF_FG_LAYERS = 1;

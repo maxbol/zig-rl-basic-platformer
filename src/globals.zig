@@ -24,6 +24,6 @@ pub var player: Actor.Player = undefined;
 pub var player_animations: static.PlayerAnimationBuffer = undefined;
 pub var rand: std.Random = undefined;
 pub var scene_file = "data/scenes/level1.scene";
-pub var slime_animations: static.MobAnimationBuffer = undefined;
+// pub var slime_animations: static.MobAnimationBuffer = undefined;
 pub var viewport: Viewport = undefined;
 pub var vmouse = controls.VirtualMouse{};

@@ -109,10 +109,13 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
     }
 
     // Read number of bg layers
-    const bg_layers_len = try reader.readInt(usize, .big);
+    const bg_layers_len = try reader.readByte();
 
     // Read number of fg fg_layers
-    const fg_layers_len = try reader.readInt(usize, .big);
+    const fg_layers_len = try reader.readByte();
+
+    // Read number of mobs
+    const mob_amount: usize = @intCast(try reader.readInt(u16, .big));
 
     // Read main layer
     const main_layer = try TileLayer.readBytes(allocator, reader);
@@ -129,6 +132,16 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
     for (0..fg_layers_len) |_| {
         const layer = try TileLayer.readBytes(allocator, reader);
         try fg_layers.append(layer);
+    }
+
+    // Read mobs
+    var mobs_pos: [constants.MAX_AMOUNT_OF_MOBS]rl.Vector2 = undefined;
+    var mobs: [constants.MAX_AMOUNT_OF_MOBS]Actor.Mob = undefined;
+    for (0..mob_amount) |i| {
+        const mob_type = try reader.readByte();
+        const mob_pos_bytes = try reader.readBytesNoEof(8);
+        mobs_pos[i] = std.mem.bytesToValue(rl.Vector2, &mob_pos_bytes);
+        mobs[i] = try Actor.Mob.initMobByIndex(mob_type);
     }
 
     // Temp solution: generate mob starting positions from hitbox locations
@@ -157,11 +170,11 @@ pub fn writeBytes(self: *const Scene, writer: anytype) !void {
 
     // Write number of bg layers
     const bg_layers_len: u8 = @intCast(self.bg_layers.items.len);
-    try writer.writeInt(usize, bg_layers_len, .big);
+    try writer.writeByte(bg_layers_len);
 
     // Write number of fg layers
     const fg_layers_len: u8 = @intCast(self.fg_layers.items.len);
-    try writer.writeInt(usize, fg_layers_len, .big);
+    try writer.writeByte(fg_layers_len);
 
     // Write number of mobs
     const mobs_amount: u16 = @intCast(self.mobs_amount);
@@ -182,6 +195,10 @@ pub fn writeBytes(self: *const Scene, writer: anytype) !void {
 
     // Write mob locations
     for (0..self.mobs_amount) |i| {
+        // Mob type
+        try writer.writeByte(0);
+
+        // Mob position
         const mob_pos = self.mobs_starting_pos[i];
         const mob_pos_bytes = std.mem.toBytes(mob_pos);
         _ = try writer.write(&mob_pos_bytes);
