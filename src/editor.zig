@@ -3,6 +3,7 @@ const Editor = @This();
 const Scene = @import("scene.zig");
 const Sprite = @import("sprite.zig");
 const TileLayer = @import("tile_layer/tile_layer.zig");
+const an = @import("animation.zig");
 const constants = @import("constants.zig");
 const controls = @import("controls.zig");
 const globals = @import("globals.zig");
@@ -18,8 +19,13 @@ vmouse: *controls.VirtualMouse,
 
 mob_palette_window: rl.Rectangle = undefined,
 mob_palette_sprites: [Actor.Mob.bestiary.len]Sprite = undefined,
+mob_palette_sprite_rects: [Actor.Mob.bestiary.len]rl.Rectangle = undefined,
 mob_palette_hover_mob: ?usize = null,
 mob_palette_selected_mob: ?usize = null,
+mob_palette_hover_eraser: bool = false,
+mob_palette_eraser_mode: bool = false,
+mob_palette_eraser_rect: rl.Rectangle = rl.Rectangle.init(0, 0, 0, 0),
+mob_palette_eraser_sprite: Sprite = undefined,
 
 mob_editor_scene_overlay_mouse_scene_pos: ?rl.Vector2 = null,
 
@@ -39,29 +45,93 @@ tile_palette_selected_tile: ?usize = null,
 const tile_palette_cols_per_row = 9;
 const mob_palette_cols = 5;
 const mob_palette_rows = 2;
+const mob_palette_biggest_sprite_size = @max(constants.BIGGEST_MOB_SPRITE_SIZE, @max(EraserSprite.SIZE_X, EraserSprite.SIZE_Y));
 
 pub fn init(scene: *Scene, vmouse: *controls.VirtualMouse) Editor {
-    var mob_palette_sprites: [Actor.Mob.bestiary.len]Sprite = undefined;
-    inline for (Actor.Mob.bestiary, 0..) |MobPrefab, i| {
-        const sprite = MobPrefab.Sprite.init();
-        mob_palette_sprites[i] = sprite;
-    }
-
-    return .{
+    var editor = Editor{
         .active_layer = scene.main_layer,
         .scene = scene,
         .vmouse = vmouse,
-        .mob_palette_sprites = mob_palette_sprites,
     };
+
+    editor.initMobPaletteWindow();
+    editor.initTilePaletteWindow();
+    editor.initSaveButton();
+
+    return editor;
 }
 
-fn updateSaveButton(self: *Editor) void {
+fn initSaveButton(self: *Editor) void {
     self.save_btn_rect = rl.Rectangle.init(
         constants.GAME_SIZE_X - 100,
         constants.GAME_SIZE_Y - 50,
         100 - constants.VIEWPORT_PADDING_X,
         50 - constants.VIEWPORT_PADDING_Y,
     );
+}
+
+fn initMobPaletteWindow(self: *Editor) void {
+    const editor_width = mob_palette_biggest_sprite_size * mob_palette_cols;
+    const editor_height = mob_palette_biggest_sprite_size * mob_palette_rows;
+    const editor_x = constants.VIEWPORT_PADDING_X;
+    const editor_y = constants.GAME_SIZE_Y - editor_height - constants.VIEWPORT_PADDING_X;
+
+    // Init window rect
+    self.mob_palette_window = rl.Rectangle.init(editor_x, editor_y, editor_width, editor_height);
+
+    // Init sprites
+    self.mob_palette_eraser_sprite = EraserSprite.init();
+    inline for (Actor.Mob.bestiary, 0..) |MobPrefab, i| {
+        const sprite = MobPrefab.Sprite.init();
+        self.mob_palette_sprites[i] = sprite;
+    }
+
+    // Init destination rects
+    // TODO 01/09/2024: Move to update() logic
+    for (0..mob_palette_rows * mob_palette_cols) |i| {
+        if (i > self.mob_palette_sprites.len) {
+            break;
+        }
+
+        const col = @divFloor(i, mob_palette_cols);
+        const row = i % mob_palette_cols;
+
+        var rect: *rl.Rectangle = undefined;
+        var sprite: *Sprite = undefined;
+
+        if (i == self.mob_palette_sprites.len) {
+            sprite = &self.mob_palette_eraser_sprite;
+            rect = &self.mob_palette_eraser_rect;
+        } else {
+            sprite = &self.mob_palette_sprites[i];
+            rect = &self.mob_palette_sprite_rects[i];
+        }
+
+        const padding_x = mob_palette_biggest_sprite_size - sprite.size.x;
+        const padding_y = mob_palette_biggest_sprite_size - sprite.size.y;
+        const x = self.mob_palette_window.x + @as(f32, @floatFromInt(row)) * mob_palette_biggest_sprite_size + padding_x;
+        const y = self.mob_palette_window.y + @as(f32, @floatFromInt(col)) * mob_palette_biggest_sprite_size + padding_y;
+        const pos = rl.Vector2{ .x = x, .y = y };
+
+        rect.* = rl.Rectangle.init(
+            pos.x,
+            pos.y,
+            sprite.size.x,
+            sprite.size.y,
+        );
+    }
+}
+
+fn initTilePaletteWindow(self: *Editor) void {
+    const editor_x = constants.GAME_SIZE_X - (constants.TILE_SIZE * tile_palette_cols_per_row) - constants.VIEWPORT_PADDING_X;
+    const editor_y = constants.VIEWPORT_PADDING_Y;
+    const editor_width = constants.TILE_SIZE * tile_palette_cols_per_row;
+    const editor_height = constants.VIEWPORT_SMALL_HEIGHT;
+
+    self.tile_palette_window = rl.Rectangle.init(editor_x, editor_y, editor_width, editor_height);
+}
+
+fn updateSaveButton(self: *Editor) void {
     self.save_btn_hover = rl.checkCollisionPointRec(self.vmouse.pos, self.save_btn_rect);
 
     if (rl.isMouseButtonPressed(rl.MouseButton.mouse_button_left) and self.save_btn_hover) {
@@ -111,41 +181,38 @@ fn updateMobEditorSceneOverlay(self: *Editor) !void {
 }
 
 fn updateMobPaletteWindow(self: *Editor, delta_time: f32) !void {
-    const editor_width = constants.BIGGEST_MOB_SPRITE_SIZE * mob_palette_cols;
-    const editor_height = mob_palette_rows * constants.BIGGEST_MOB_SPRITE_SIZE;
-    const editor_x = constants.VIEWPORT_PADDING_X;
-    const editor_y = constants.GAME_SIZE_Y - editor_height - constants.VIEWPORT_PADDING_X;
-
-    self.mob_palette_window = rl.Rectangle.init(editor_x, editor_y, editor_width, editor_height);
-
     for (0..self.mob_palette_sprites.len) |i| {
         try self.mob_palette_sprites[i].update(self.scene, delta_time);
     }
+    try self.mob_palette_eraser_sprite.update(self.scene, delta_time);
 
     const mouse_pos = self.vmouse.getMousePosition();
 
     if (rl.checkCollisionPointRec(mouse_pos, self.mob_palette_window)) {
-        for (0..self.mob_palette_sprites.len) |i| {
-            const sprite = self.mob_palette_sprites[i];
-            const col = @divFloor(i, mob_palette_cols);
-            const row = i % mob_palette_cols;
-            const padding_x = constants.BIGGEST_MOB_SPRITE_SIZE - sprite.size.x;
-            const padding_y = constants.BIGGEST_MOB_SPRITE_SIZE - sprite.size.y;
-            const x = self.mob_palette_window.x + @as(f32, @floatFromInt(row)) * constants.BIGGEST_MOB_SPRITE_SIZE + padding_x;
-            const y = self.mob_palette_window.y + @as(f32, @floatFromInt(col)) * constants.BIGGEST_MOB_SPRITE_SIZE + padding_y;
-            const pos = rl.Vector2{ .x = x, .y = y };
-            const col_rect = rl.Rectangle.init(pos.x, pos.y, sprite.size.x, sprite.size.y);
+        self.mob_palette_hover_eraser = false;
+        self.mob_palette_hover_mob = null;
 
+        for (self.mob_palette_sprite_rects, 0..) |col_rect, i| {
             if (rl.checkCollisionPointRec(mouse_pos, col_rect)) {
                 self.mob_palette_hover_mob = i;
             }
         }
-    } else {
-        self.mob_palette_hover_mob = null;
+        if (rl.checkCollisionPointRec(mouse_pos, self.mob_palette_eraser_rect)) {
+            self.mob_palette_hover_eraser = true;
+        }
     }
 
-    if (rl.isMouseButtonDown(rl.MouseButton.mouse_button_left) and self.mob_palette_hover_mob != null) {
-        self.mob_palette_selected_mob = self.mob_palette_hover_mob;
+    if (rl.isMouseButtonPressed(rl.MouseButton.mouse_button_left)) {
+        if (self.mob_palette_hover_mob != null) {
+            self.mob_palette_selected_mob = self.mob_palette_hover_mob;
+            self.mob_palette_eraser_mode = false;
+        } else if (self.mob_palette_hover_eraser) {
+            self.mob_palette_selected_mob = null;
+            self.mob_palette_eraser_mode = true;
+        } else {
+            self.mob_palette_selected_mob = null;
+            self.mob_palette_eraser_mode = false;
+        }
         self.tile_palette_selected_tile = null;
     }
 }
@@ -159,13 +226,6 @@ fn updateTilePaletteWindow(self: *Editor) void {
     } else if (rl.isKeyPressed(rl.KeyboardKey.key_page_up) and self.tile_palette_row_offset > 0) {
         self.tile_palette_row_offset -= 1;
     }
-
-    const editor_x = constants.GAME_SIZE_X - (constants.TILE_SIZE * tile_palette_cols_per_row) - constants.VIEWPORT_PADDING_X;
-    const editor_y = constants.VIEWPORT_PADDING_Y;
-    const editor_width = constants.TILE_SIZE * tile_palette_cols_per_row;
-    const editor_height = constants.VIEWPORT_SMALL_HEIGHT;
-
-    self.tile_palette_window = rl.Rectangle.init(editor_x, editor_y, editor_width, editor_height);
 
     const max_visible_rows: usize = @divFloor(
         @as(usize, @intFromFloat(self.tile_palette_window.height)),
@@ -207,20 +267,29 @@ fn drawSaveButton(self: *const Editor) void {
 }
 
 fn drawMobEditorSceneOverlay(self: *const Editor) void {
-    const selected_mob = self.mob_palette_selected_mob orelse return;
     const mouse_scene_pos = self.mob_editor_scene_overlay_mouse_scene_pos orelse return;
 
     for (0..self.scene.mobs_amount) |i| {
         const pos = self.scene.mobs_starting_pos[i];
         self.scene.mobs[i].sprite.draw(self.scene, pos, rl.Color.white.fade(0.5));
     }
+    const selected_mob = self.mob_palette_selected_mob;
 
-    const sprite = self.scene.mobs[selected_mob].sprite;
-    const draw_pos = rl.Vector2.init(
-        mouse_scene_pos.x - (sprite.size.x / 2),
-        mouse_scene_pos.y - (sprite.size.y / 2),
-    );
-    sprite.draw(self.scene, draw_pos, rl.Color.green.fade(0.5));
+    if (selected_mob) |mob_idx| {
+        const sprite = self.mob_palette_sprites[mob_idx];
+        const draw_pos = rl.Vector2.init(
+            mouse_scene_pos.x - (sprite.size.x / 2),
+            mouse_scene_pos.y - (sprite.size.y / 2),
+        );
+        sprite.draw(self.scene, draw_pos, rl.Color.green.fade(0.5));
+    } else if (self.mob_palette_eraser_mode) {
+        rl.drawCircle(
+            @intFromFloat(self.vmouse.pos.x),
+            @intFromFloat(self.vmouse.pos.y),
+            50,
+            rl.Color.red.fade(0.5),
+        );
+    }
 }
 
 fn drawTileEditorSceneOverlay(self: *const Editor) void {
@@ -248,17 +317,30 @@ fn drawTileEditorSceneOverlay(self: *const Editor) void {
 fn drawMobPaletteWindow(self: *const Editor) void {
     helpers.drawRectBorder(self.mob_palette_window, 1, rl.Color.white);
 
-    inline for (Actor.Mob.bestiary, 0..) |MobPrefab, i| {
-        const sprite = self.mob_palette_sprites[i];
-        if (sprite.getSourceRect()) |rect| {
-            const col = @divFloor(i, mob_palette_cols);
-            const row = i % mob_palette_cols;
-            const padding_x = constants.BIGGEST_MOB_SPRITE_SIZE - MobPrefab.Sprite.SIZE_X;
-            const padding_y = constants.BIGGEST_MOB_SPRITE_SIZE - MobPrefab.Sprite.SIZE_Y;
-            const x = self.mob_palette_window.x + @as(f32, @floatFromInt(row)) * constants.BIGGEST_MOB_SPRITE_SIZE + padding_x;
-            const y = self.mob_palette_window.y + @as(f32, @floatFromInt(col)) * constants.BIGGEST_MOB_SPRITE_SIZE + padding_y;
-            const pos = rl.Vector2{ .x = x, .y = y };
-            const color = blk: {
+    for (0..mob_palette_rows * mob_palette_cols) |i| {
+        if (i > self.mob_palette_sprites.len) {
+            break;
+        }
+
+        var dest: *const rl.Rectangle = undefined;
+        var sprite: *const Sprite = undefined;
+        var color: rl.Color = undefined;
+
+        if (i == self.mob_palette_sprites.len) {
+            color = blk: {
+                if (self.mob_palette_eraser_mode) {
+                    break :blk rl.Color.green;
+                }
+                if (self.mob_palette_hover_eraser) {
+                    break :blk rl.Color.white;
+                }
+                break :blk rl.Color.white.fade(0.5);
+            };
+            sprite = &self.mob_palette_eraser_sprite;
+            std.debug.print("Should be drawing eraser sprite\n", .{});
+            dest = &self.mob_palette_eraser_rect;
+        } else {
+            color = blk: {
                 if (self.mob_palette_selected_mob == i) {
                     break :blk rl.Color.green;
                 } else if (self.mob_palette_hover_mob == i) {
@@ -266,7 +348,13 @@ fn drawMobPaletteWindow(self: *const Editor) void {
                 }
                 break :blk rl.Color.white.fade(0.5);
             };
-            std.debug.print("drawing sprite for mob {d} at {d}, {d}\n", .{ i, x, y });
+            sprite = &self.mob_palette_sprites[i];
+            dest = &self.mob_palette_sprite_rects[i];
+        }
+
+        rl.drawRectangleLinesEx(dest.*, 1, color);
+        if (sprite.getSourceRect()) |rect| {
+            const pos = rl.Vector2{ .x = dest.x, .y = dest.y };
             sprite.texture.drawRec(rect, pos, color);
         }
     }
@@ -329,3 +417,5 @@ fn getTilePaletteTileDest(self: *const Editor, tile_idx: usize, row_offset: usiz
 
     return rl.Vector2.init(x, y);
 }
+
+const EraserSprite = Sprite.Prefab(24, 24, "assets/icons/eraser.png", an.getNoAnimationsBuffer(), .Idle);

@@ -115,3 +115,10 @@ pub const AnimationType = enum(usize) {
     Attack,
     Jump,
 };
+
+pub const NoAnimationsBuffer = AnimationBuffer(&.{.Idle}, 1);
+pub fn getNoAnimationsBuffer() NoAnimationsBuffer {
+    var buffer = NoAnimationsBuffer{};
+    buffer.writeAnimation(.Idle, 0.5, &.{1});
+    return buffer;
+}
