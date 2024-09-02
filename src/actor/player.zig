@@ -89,17 +89,21 @@ fn move(self: *Player, scene: *const Scene, comptime axis: CollidableBody.MoveAx
     self.collidable.move(scene, axis, amount, self);
 }
 
-pub fn handleCollision(self: *Player, axis: CollidableBody.MoveAxis, _: i8) void {
+pub fn handleCollision(self: *Player, axis: CollidableBody.MoveAxis, sign: i8) void {
     if (axis == CollidableBody.MoveAxis.X) {
         self.speed.x = 0;
     } else {
         self.speed.y = 0;
-        self.jump_counter = 0;
-        self.is_stunlocked = false;
 
-        if (self.lives == 0) {
-            self.sprite.setAnimation(.Death, null, true);
-        }
+				if (sign == 1) {
+					// Only reset jump counter when colliding with something below player
+	        self.jump_counter = 0;
+	        self.is_stunlocked = false;
+	
+	        if (self.lives == 0) {
+	            self.sprite.setAnimation(.Death, null, true);
+	        }
+				}
     }
 }
 
@@ -165,9 +169,7 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
             self.sprite.setAnimation(.Jump, null, true);
         } else if (self.speed.x == 0) {
             self.sprite.setAnimation(.Idle, null, false);
-        } else if (self.speed.x > 0) {
-            self.sprite.setAnimation(.Walk, null, false);
-        } else if (self.speed.x < 0) {
+        } else {
             self.sprite.setAnimation(.Walk, null, false);
         }
     }
@@ -200,6 +202,10 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
                 if (self.lives > 0) {
                     self.lives -= 1;
                 }
+
+								// Break out of loop to avoid registering collisions with
+								// multiple mobs in a single frame
+								break;
             }
         }
     }
