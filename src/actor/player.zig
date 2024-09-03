@@ -96,15 +96,15 @@ pub fn handleCollision(self: *Player, axis: CollidableBody.MoveAxis, sign: i8) v
     } else {
         self.speed.y = 0;
 
-				if (sign == 1) {
-					// Only reset jump counter when colliding with something below player
-	        self.jump_counter = 0;
-	        self.is_stunlocked = false;
-	
-	        if (self.lives == 0) {
-	            self.sprite.setAnimation(.Death, null, true);
-	        }
-				}
+        if (sign == 1) {
+            // Only reset jump counter when colliding with something below player
+            self.jump_counter = 0;
+            self.is_stunlocked = false;
+
+            if (self.lives == 0) {
+                self.sprite.setAnimation(.Death, null, true);
+            }
+        }
     }
 }
 
@@ -209,9 +209,9 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
                     self.lives -= 1;
                 }
 
-								// Break out of loop to avoid registering collisions with
-								// multiple mobs in a single frame
-								break;
+                // Break out of loop to avoid registering collisions with
+                // multiple mobs in a single frame
+                break;
             }
         }
     }
