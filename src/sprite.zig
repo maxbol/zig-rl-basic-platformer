@@ -29,7 +29,7 @@ pub const FlipState = enum(u2) {
 pub fn Prefab(
     size_x: f32,
     size_y: f32,
-    texture_path: [*:0]const u8,
+    loadTexture: fn () rl.Texture2D,
     animation_buffer: anytype,
     initial_animation: an.AnimationType,
 ) type {
@@ -39,7 +39,7 @@ pub fn Prefab(
 
         pub fn init() Sprite {
             const size = rl.Vector2.init(size_x, size_y);
-            const texture = rl.loadTexture(texture_path);
+            const texture = loadTexture();
             return Sprite.init(texture, size, animation_buffer.reader(), initial_animation);
         }
     };

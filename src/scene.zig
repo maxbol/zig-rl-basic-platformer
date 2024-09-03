@@ -1,4 +1,5 @@
 const Actor = @import("actor/actor.zig");
+const Collectable = @import("collectable/collectable.zig");
 const Entity = @import("entity.zig");
 const Scene = @This();
 const Sprite = @import("sprite.zig");
@@ -19,13 +20,15 @@ viewport: *Viewport,
 main_layer: TileLayer,
 bg_layers: std.ArrayList(TileLayer),
 fg_layers: std.ArrayList(TileLayer),
-player: Actor = undefined,
+player: *Actor.Player = undefined,
 player_starting_pos: rl.Vector2,
 mobs: [constants.MAX_AMOUNT_OF_MOBS]Actor.Mob,
 mobs_starting_pos: [constants.MAX_AMOUNT_OF_MOBS]rl.Vector2,
 mobs_amount: usize,
 gravity: f32 = 13 * 60,
 first_frame_initialization_done: bool = false,
+collectables: [constants.MAX_AMOUNT_OF_COLLECTABLES]Collectable = undefined,
+collectables_amount: usize,
 
 max_x_scroll: f32 = 0,
 max_y_scroll: f32 = 0,
@@ -42,11 +45,13 @@ pub fn create(
     bg_layers: []const TileLayer,
     fg_layers: []const TileLayer,
     viewport: *Viewport,
-    player: Actor,
+    player: *Actor.Player,
     player_starting_pos: rl.Vector2,
     mobs: [constants.MAX_AMOUNT_OF_MOBS]Actor.Mob,
     mobs_starting_pos: [constants.MAX_AMOUNT_OF_MOBS]rl.Vector2,
     mobs_amount: usize,
+    collectables: [constants.MAX_AMOUNT_OF_COLLECTABLES]Collectable,
+    collectables_amount: usize,
 ) !*Scene {
     var bg_layer_list = std.ArrayList(TileLayer).init(allocator);
     var fg_layer_list = std.ArrayList(TileLayer).init(allocator);
@@ -73,6 +78,8 @@ pub fn create(
         .mobs_amount = mobs_amount,
         .player = player,
         .player_starting_pos = player_starting_pos,
+        .collectables_amount = collectables_amount,
+        .collectables = collectables,
     };
 
     return new;
@@ -107,6 +114,9 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
     // Read number of mobs
     const mob_amount: usize = @intCast(try reader.readInt(u16, .big));
 
+    // Read number of collectables
+    const collectables_amount: usize = @intCast(try reader.readInt(u16, .big));
+
     // Read main layer
     const main_layer = try TileLayer.readBytes(allocator, reader);
 
@@ -135,17 +145,28 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
     }
     std.debug.print("{d} mobs spawned\n", .{mob_amount});
 
+    // Read collectables
+    var collectables: [constants.MAX_AMOUNT_OF_COLLECTABLES]Collectable = undefined;
+    for (0..collectables_amount) |i| {
+        const collectable_type = try reader.readByte();
+        const collectable_pos_bytes = try reader.readBytesNoEof(8);
+        const collectable_pos = std.mem.bytesToValue(rl.Vector2, &collectable_pos_bytes);
+        collectables[i] = try Collectable.initCollectableByIndex(collectable_type, collectable_pos);
+    }
+
     return Scene.create(
         allocator,
         main_layer,
         try bg_layers.toOwnedSlice(),
         try fg_layers.toOwnedSlice(),
         &globals.viewport,
-        globals.player.actor(),
+        &globals.player,
         rl.Vector2.init(0, 0),
         mobs,
         mobs_pos,
         mob_amount,
+        collectables,
+        collectables_amount,
     );
 }
 
@@ -162,8 +183,22 @@ pub fn writeBytes(self: *const Scene, writer: anytype) !void {
     try writer.writeByte(fg_layers_len);
 
     // Write number of mobs
-    const mobs_amount: u16 = @intCast(self.mobs_amount);
+    var mobs_amount: u16 = 0;
+    for (0..self.mobs_amount) |i| {
+        if (!self.mobs[i].is_deleted) {
+            mobs_amount += 1;
+        }
+    }
     try writer.writeInt(u16, mobs_amount, .big);
+
+    // Write number of collectables
+    var collectables_amount: u16 = 0;
+    for (0..self.collectables_amount) |i| {
+        if (!self.collectables[i].is_deleted) {
+            collectables_amount += 1;
+        }
+    }
+    try writer.writeInt(u16, collectables_amount, .big);
 
     // Write main layer
     try self.main_layer.writeBytes(writer.any());
@@ -180,6 +215,10 @@ pub fn writeBytes(self: *const Scene, writer: anytype) !void {
 
     // Write mob locations
     for (0..self.mobs_amount) |i| {
+        if (self.mobs[i].is_deleted) {
+            continue;
+        }
+
         // Mob type
         try writer.writeByte(0);
 
@@ -187,6 +226,21 @@ pub fn writeBytes(self: *const Scene, writer: anytype) !void {
         const mob_pos = self.mobs_starting_pos[i];
         const mob_pos_bytes = std.mem.toBytes(mob_pos);
         _ = try writer.write(&mob_pos_bytes);
+    }
+
+    // Write collectible locations
+    for (0..self.collectables_amount) |i| {
+        if (self.collectables[i].is_deleted) {
+            continue;
+        }
+
+        // Collectable type
+        try writer.writeByte(0);
+
+        // Collectable position
+        const collectable_pos = self.collectables[i].hitbox;
+        const collectable_pos_bytes = std.mem.toBytes(collectable_pos);
+        _ = try writer.write(&collectable_pos_bytes);
     }
 }
 
@@ -199,10 +253,14 @@ pub fn spawnMob(self: *Scene, mob_type: usize, pos: rl.Vector2) !void {
     self.mobs_amount += 1;
 }
 
+pub fn removeMob(self: *Scene, mob_idx: usize) void {
+    self.mobs[mob_idx].delete();
+}
+
 pub fn update(self: *Scene, delta_time: f32) !void {
     if (!self.first_frame_initialization_done) {
         self.first_frame_initialization_done = true;
-        self.player.setPos(self.player_starting_pos);
+        self.player.actor().setPos(self.player_starting_pos);
 
         for (0..self.mobs_amount) |i| {
             self.mobs[i].setPos(self.mobs_starting_pos[i]);
@@ -235,6 +293,10 @@ pub fn update(self: *Scene, delta_time: f32) !void {
         }
     }
 
+    for (0..self.collectables_amount) |i| {
+        try self.collectables[i].update(self, delta_time);
+    }
+
     try self.player.entity().update(self, delta_time);
 }
 
@@ -247,6 +309,10 @@ pub fn draw(self: *const Scene) void {
 
     for (0..self.mobs_amount) |i| {
         self.mobs[i].draw(self);
+    }
+
+    for (0..self.collectables_amount) |i| {
+        self.collectables[i].draw(self);
     }
 
     self.player.entity().draw(self);

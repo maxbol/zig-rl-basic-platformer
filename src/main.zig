@@ -148,8 +148,10 @@ pub fn main() anyerror!void {
     // Setup static game data
     initGameData();
 
+    std.debug.print("Creating scene\n", .{});
     const scene = createDefaultScene(allocator);
     defer scene.destroy();
+    std.debug.print("Created scene\n", .{});
 
     // Init editor
     globals.editor = Editor.init(scene, &globals.vmouse);

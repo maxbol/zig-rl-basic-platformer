@@ -43,4 +43,5 @@ pub const MOB_SPACING = 200;
 pub const MAX_AMOUNT_OF_BG_LAYERS = 2;
 pub const MAX_AMOUNT_OF_FG_LAYERS = 1;
 
-pub const MAX_AMOUNT_OF_MOBS = 3100;
+pub const MAX_AMOUNT_OF_MOBS = 1000;
+pub const MAX_AMOUNT_OF_COLLECTABLES = 1000;

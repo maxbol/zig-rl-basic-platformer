@@ -21,6 +21,7 @@ speed: rl.Vector2,
 jump_counter: u2 = 0,
 lives: u8 = 10,
 is_stunlocked: bool = false,
+score: u32 = 0,
 
 sfx_hurt: rl.Sound,
 sfx_jump: rl.Sound,
@@ -182,6 +183,11 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     if (!self.is_stunlocked and !debug.isPaused()) {
         for (0..scene.mobs_amount) |mob_idx| {
             const mob = scene.mobs[mob_idx];
+
+            if (mob.is_dead or mob.is_deleted) {
+                continue;
+            }
+
             var player_hitbox = getHitboxRect(ctx);
             const mob_hitbox = mob.getHitboxRect();
 

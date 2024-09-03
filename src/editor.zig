@@ -28,6 +28,8 @@ mob_palette_eraser_rect: rl.Rectangle = rl.Rectangle.init(0, 0, 0, 0),
 mob_palette_eraser_sprite: Sprite = undefined,
 
 mob_editor_scene_overlay_mouse_scene_pos: ?rl.Vector2 = null,
+mod_editor_scene_overlay_marked_for_deletion: [constants.MAX_AMOUNT_OF_MOBS]bool = undefined,
+mob_editor_scene_overlay_no_marked_for_deletion: u8 = 0,
 
 save_btn_rect: rl.Rectangle = undefined,
 save_btn_hover: bool = false,
@@ -46,6 +48,7 @@ const tile_palette_cols_per_row = 9;
 const mob_palette_cols = 5;
 const mob_palette_rows = 2;
 const mob_palette_biggest_sprite_size = @max(constants.BIGGEST_MOB_SPRITE_SIZE, @max(EraserSprite.SIZE_X, EraserSprite.SIZE_Y));
+const mob_editor_scene_overlay_eraser_radius = 20;
 
 pub fn init(scene: *Scene, vmouse: *controls.VirtualMouse) Editor {
     var editor = Editor{
@@ -154,7 +157,7 @@ fn updateTileEditorSceneOverlay(self: *Editor) void {
 
     self.tile_editor_scene_overlay_mouse_grid_pos = self.vmouse.getGridPosition(scene, layer) orelse return;
 
-    if (rl.isMouseButtonPressed(rl.MouseButton.mouse_button_left)) blk: {
+    if (rl.isMouseButtonDown(rl.MouseButton.mouse_button_left)) blk: {
         const selected_tile = self.tile_palette_selected_tile orelse break :blk;
         const mouse_grid_pos = self.tile_editor_scene_overlay_mouse_grid_pos orelse break :blk;
         const tile_idx = layer.getTileIdxFromRowAndCol(
@@ -167,6 +170,35 @@ fn updateTileEditorSceneOverlay(self: *Editor) void {
 
 fn updateMobEditorSceneOverlay(self: *Editor) !void {
     self.mob_editor_scene_overlay_mouse_scene_pos = self.vmouse.getScenePosition(self.scene);
+    self.mod_editor_scene_overlay_marked_for_deletion = undefined;
+
+    if (self.mob_palette_eraser_mode and self.mob_editor_scene_overlay_mouse_scene_pos != null) {
+        for (self.scene.mobs_starting_pos, 0..) |pos, i| {
+            const mob_hitbox = self.scene.mobs[i].collidable.hitbox;
+            const h_rect = rl.Rectangle.init(
+                pos.x,
+                pos.y,
+                mob_hitbox.width,
+                mob_hitbox.height,
+            );
+
+            const should_delete = rl.checkCollisionCircleRec(
+                self.mob_editor_scene_overlay_mouse_scene_pos.?,
+                mob_editor_scene_overlay_eraser_radius,
+                h_rect,
+            );
+
+            self.mod_editor_scene_overlay_marked_for_deletion[i] = should_delete;
+        }
+
+        if (rl.isMouseButtonPressed(rl.MouseButton.mouse_button_left)) {
+            for (0..self.scene.mobs_amount) |i| {
+                if (self.mod_editor_scene_overlay_marked_for_deletion[i]) {
+                    self.scene.removeMob(i);
+                }
+            }
+        }
+    }
 
     if (rl.isMouseButtonPressed(rl.MouseButton.mouse_button_left)) {
         const selected_mob = self.mob_palette_selected_mob orelse return;
@@ -188,10 +220,9 @@ fn updateMobPaletteWindow(self: *Editor, delta_time: f32) !void {
 
     const mouse_pos = self.vmouse.getMousePosition();
 
+    self.mob_palette_hover_eraser = false;
+    self.mob_palette_hover_mob = null;
     if (rl.checkCollisionPointRec(mouse_pos, self.mob_palette_window)) {
-        self.mob_palette_hover_eraser = false;
-        self.mob_palette_hover_mob = null;
-
         for (self.mob_palette_sprite_rects, 0..) |col_rect, i| {
             if (rl.checkCollisionPointRec(mouse_pos, col_rect)) {
                 self.mob_palette_hover_mob = i;
@@ -206,14 +237,13 @@ fn updateMobPaletteWindow(self: *Editor, delta_time: f32) !void {
         if (self.mob_palette_hover_mob != null) {
             self.mob_palette_selected_mob = self.mob_palette_hover_mob;
             self.mob_palette_eraser_mode = false;
+            self.tile_palette_selected_tile = null;
         } else if (self.mob_palette_hover_eraser) {
+            std.debug.print("Going into eraser mode\n", .{});
             self.mob_palette_selected_mob = null;
             self.mob_palette_eraser_mode = true;
-        } else {
-            self.mob_palette_selected_mob = null;
-            self.mob_palette_eraser_mode = false;
+            self.tile_palette_selected_tile = null;
         }
-        self.tile_palette_selected_tile = null;
     }
 }
 
@@ -254,9 +284,10 @@ fn updateTilePaletteWindow(self: *Editor) void {
         self.tile_palette_focus = false;
     }
 
-    if (rl.isMouseButtonDown(rl.MouseButton.mouse_button_left) and self.tile_palette_hover_tile != null) {
+    if (rl.isMouseButtonPressed(rl.MouseButton.mouse_button_left) and self.tile_palette_hover_tile != null) {
         self.tile_palette_selected_tile = self.tile_palette_hover_tile;
         self.mob_palette_selected_mob = null;
+        self.mob_palette_eraser_mode = false;
     }
 }
 
@@ -270,8 +301,13 @@ fn drawMobEditorSceneOverlay(self: *const Editor) void {
     const mouse_scene_pos = self.mob_editor_scene_overlay_mouse_scene_pos orelse return;
 
     for (0..self.scene.mobs_amount) |i| {
+        if (self.scene.mobs[i].is_deleted) {
+            continue;
+        }
         const pos = self.scene.mobs_starting_pos[i];
-        self.scene.mobs[i].sprite.draw(self.scene, pos, rl.Color.white.fade(0.5));
+        const is_marked_for_deletion = self.mod_editor_scene_overlay_marked_for_deletion[i];
+        const color = if (is_marked_for_deletion) rl.Color.red.fade(0.5) else rl.Color.white.fade(0.5);
+        self.scene.mobs[i].sprite.draw(self.scene, pos, color);
     }
     const selected_mob = self.mob_palette_selected_mob;
 
@@ -286,7 +322,7 @@ fn drawMobEditorSceneOverlay(self: *const Editor) void {
         rl.drawCircle(
             @intFromFloat(self.vmouse.pos.x),
             @intFromFloat(self.vmouse.pos.y),
-            50,
+            mob_editor_scene_overlay_eraser_radius,
             rl.Color.red.fade(0.5),
         );
     }
@@ -418,4 +454,15 @@ fn getTilePaletteTileDest(self: *const Editor, tile_idx: usize, row_offset: usiz
     return rl.Vector2.init(x, y);
 }
 
-const EraserSprite = Sprite.Prefab(24, 24, "assets/icons/eraser.png", an.getNoAnimationsBuffer(), .Idle);
+fn loadEraserTexture() rl.Texture2D {
+    std.debug.print("loading eraser texture\n", .{});
+    return rl.loadTexture("assets/icons/eraser.png");
+}
+
+const EraserSprite = Sprite.Prefab(
+    24,
+    24,
+    loadEraserTexture,
+    an.getNoAnimationsBuffer(),
+    .Idle,
+);

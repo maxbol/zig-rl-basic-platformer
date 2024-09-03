@@ -23,6 +23,9 @@ did_huntjump: bool = false,
 next_huntjump_distance: f32 = 80,
 behavior: MobBehavior,
 
+is_deleted: bool = false,
+is_dead: bool = false,
+
 pub const MobBehavior = struct {
     walk_speed: f32 = 1 * 60,
     fall_speed: f32 = 3.6 * 60,
@@ -40,6 +43,7 @@ pub fn Prefab(
 ) type {
     return struct {
         pub const Sprite = SpritePrefab;
+        pub const Hitbox = hitbox;
 
         pub fn init() Mob {
             const sprite = SpritePrefab.init();
@@ -97,7 +101,7 @@ inline fn detectOnNextTile(lookahead: i32, sign: i8, mob_gridbox: shapes.IRect, 
 }
 
 fn detectNearbyPlayer(self: *Mob, scene: *Scene, delta_time: f32) void {
-    const player_gridbox = scene.player.getGridRect();
+    const player_gridbox = scene.player.actor().getGridRect();
     const mob_gridbox = getGridRect(self);
     var lookahead = self.behavior.line_of_sight;
     var is_hunting = false;
@@ -126,7 +130,19 @@ pub fn setPos(self: *Mob, pos: rl.Vector2) void {
     self.collidable.hitbox.y = pos.y;
 }
 
+pub fn delete(self: *Mob) void {
+    self.is_deleted = true;
+}
+
+pub fn kill(self: *Mob) void {
+    self.is_dead = true;
+}
+
 pub fn update(self: *Mob, scene: *Scene, delta_time: f32) Entity.UpdateError!void {
+    if (self.is_deleted or self.is_dead) {
+        return;
+    }
+
     // Start walking if standing still
     if (self.speed.x == 0) {
         self.speed.x = self.behavior.walk_speed;
@@ -141,7 +157,7 @@ pub fn update(self: *Mob, scene: *Scene, delta_time: f32) Entity.UpdateError!voi
             self.did_huntjump = false;
         }
         if (self.is_hunting and !self.did_huntjump) {
-            const player_hitbox = scene.player.getHitboxRect();
+            const player_hitbox = scene.player.actor().getHitboxRect();
             const mob_hitbox = getHitboxRect(self);
 
             if (@abs(player_hitbox.x - mob_hitbox.x) < self.next_huntjump_distance) {
@@ -182,11 +198,17 @@ pub fn update(self: *Mob, scene: *Scene, delta_time: f32) Entity.UpdateError!voi
 }
 
 pub fn draw(self: *const Mob, scene: *const Scene) void {
+    if (self.is_deleted or self.is_dead) {
+        return;
+    }
     const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.collidable.hitbox);
     self.sprite.draw(scene, sprite_pos, rl.Color.white);
 }
 
 pub fn drawDebug(self: *const Mob, scene: *const Scene) void {
+    if (self.is_deleted or self.is_dead) {
+        return;
+    }
     const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.collidable.hitbox);
 
     self.sprite.drawDebug(scene, sprite_pos);
@@ -209,8 +231,7 @@ pub fn initMobByIndex(index: usize) !Mob {
 
 pub inline fn getBiggestMobSpriteSize() f32 {
     var max: f32 = 0;
-    inline for (bestiary, 0..) |MobPrefab, i| {
-        _ = i; // autofix
+    inline for (bestiary) |MobPrefab| {
         const SpritePrefab = MobPrefab.Sprite;
         const biggest_size_dim = @max(SpritePrefab.SIZE_X, SpritePrefab.SIZE_Y);
         max = @max(max, biggest_size_dim);

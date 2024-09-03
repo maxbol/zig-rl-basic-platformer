@@ -1,12 +1,23 @@
 const Mob = @import("../mob.zig");
 const Sprite = @import("../../sprite.zig");
 const an = @import("../../animation.zig");
+const rl = @import("raylib");
 
 const AnimationBuffer = an.AnimationBuffer(&.{
     .Walk,
     .Attack,
     .Hit,
 }, 6);
+
+var texture: ?rl.Texture = null;
+
+fn loadTexture() rl.Texture {
+    if (texture) |t| {
+        return t;
+    }
+    texture = rl.loadTexture("assets/sprites/slime_green.png");
+    return texture.?;
+}
 
 fn getAnimations() AnimationBuffer {
     var buffer = AnimationBuffer{};
@@ -47,7 +58,7 @@ pub const GreenSlime = Mob.Prefab(
         // Height
         24,
         // Texture path
-        "assets/sprites/slime_green.png",
+        loadTexture,
         // Animation buffer
         getAnimations(),
         // Initial animation
