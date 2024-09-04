@@ -9,32 +9,34 @@ pub fn FixedSizeTileset(size: usize) type {
         image: rl.Image,
         rect_map: RectMap,
         tile_size: rl.Vector2,
-        collision_map: CollisionMap,
+        flag_map: FlagMap,
         allocator: std.mem.Allocator,
 
         pub const RectMap = [size]?rl.Rectangle;
-        pub const CollisionMap = [size]bool;
+        pub const FlagMap = [size]u8;
 
         pub const map_size = size;
         pub const bitpacked_size = size / 8;
         pub const data_format_version = 1;
         pub const serialized_size = 1 + 8 + (size / 8) + (1024 * 30);
 
-        pub fn create(image_data: []const u8, tile_size: rl.Vector2, collision_map: []const bool, allocator: std.mem.Allocator) !*@This() {
+        pub fn create(image_data: []const u8, tile_size: rl.Vector2, flag_map: []const u8, allocator: std.mem.Allocator) !*@This() {
             const new = try allocator.create(@This());
             const image = rl.loadImageFromMemory(".png", image_data);
+            std.debug.print("loading texture from image {any}\n", .{image.data});
             const texture = rl.loadTextureFromImage(image);
+            std.debug.print("building rect map\n", .{});
             const rect_map = helpers.buildRectMap(size, texture.width, texture.height, tile_size.x, tile_size.y, 1, 1);
 
-            var colmap: CollisionMap = std.mem.zeroes([size]bool);
-            std.mem.copyForwards(bool, &colmap, collision_map);
+            var flag_map_owned: FlagMap = std.mem.zeroes([size]u8);
+            std.mem.copyForwards(u8, &flag_map_owned, flag_map);
 
             new.* = .{
                 .image = image,
                 .texture = texture,
                 .tile_size = tile_size,
                 .rect_map = rect_map,
-                .collision_map = colmap,
+                .flag_map = flag_map_owned,
                 .allocator = allocator,
             };
             return new;
@@ -70,14 +72,16 @@ pub fn FixedSizeTileset(size: usize) type {
             // Set map size (2 bytes)
             try writer.writeInt(u16, map_size, .big);
 
-            // Serialize collision map (size / 8 bytes)
-            var col_map_bitpacked: [bitpacked_size]u8 = std.mem.zeroes([bitpacked_size]u8);
-            for (self.collision_map, 0..) |is_collidable, bit_idx| {
-                const byte_idx = @divFloor(bit_idx, 8);
-                const bit_offset: u3 = @intCast(bit_idx % 8);
-                col_map_bitpacked[byte_idx] |= @as(u8, if (is_collidable) 1 else 0) << (7 - bit_offset);
-            }
-            _ = try writer.write(&col_map_bitpacked);
+            // Serialize collision map (size)
+            // var col_map_bitpacked: [size]u8 = std.mem.zeroes([size]u8);
+            const flag_map_bytes = std.mem.toBytes(self.flag_map);
+            _ = try writer.write(&flag_map_bytes);
+            // for (self.flag_map, 0..) |is_collidable, bit_idx| {
+            //     const byte_idx = @divFloor(bit_idx, 8);
+            //     const bit_offset: u3 = @intCast(bit_idx % 8);
+            //     col_map_bitpacked[byte_idx] |= @as(u8, if (is_collidable) 1 else 0) << (7 - bit_offset);
+            // }
+            // _ = try writer.write(&col_map_bitpacked);
 
             // Serialize texture (max 30 KiB)
             var file_size: c_int = undefined;
@@ -126,7 +130,7 @@ pub fn FixedSizeTileset(size: usize) type {
 
         fn isCollidable(ctx: *anyopaque, tile_index: usize) bool {
             const self: *@This() = @ptrCast(@alignCast(ctx));
-            return self.collision_map[tile_index];
+            return self.flag_map[tile_index] & @intFromEnum(Tileset.TileFlag.Collidable) != 0;
         }
     };
 }

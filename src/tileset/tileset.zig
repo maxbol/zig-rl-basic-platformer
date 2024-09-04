@@ -101,17 +101,17 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !Tileset {
 
     // Map size
     const map_size = try reader.readInt(u16, std.builtin.Endian.big);
-    const bitpacked_map_size = map_size / 8;
 
     // Collision map
-    var collision_map = std.mem.zeroes([TILESET_SIZE_4096]bool);
-    for (0..bitpacked_map_size) |byte_idx| {
+    var flag_map = std.mem.zeroes([TILESET_SIZE_4096]u8);
+    for (0..map_size) |byte_idx| {
         const byte = try reader.readByte();
-        for (0..8) |bit_idx| {
-            if (byte & (@as(u8, 1) << (7 - @as(u3, @intCast(bit_idx)))) != 0) {
-                collision_map[(byte_idx * 8) + bit_idx] = true;
-            }
-        }
+        flag_map[byte_idx] = byte;
+        // for (0..8) |bit_idx| {
+        //     if (byte & (@as(u8, 1) << (7 - @as(u3, @intCast(bit_idx)))) != 0) {
+        //         collision_map[(byte_idx * 8) + bit_idx] = true;
+        //     }
+        // }
     }
 
     // Image data
@@ -124,15 +124,15 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !Tileset {
     }
 
     if (map_size >= TILESET_SIZE_2048) {
-        return (try Tileset4096.create(image_data, tile_size, collision_map[0..4096], allocator)).tileset();
+        return (try Tileset4096.create(image_data, tile_size, flag_map[0..4096], allocator)).tileset();
     } else if (map_size >= TILESET_SIZE_1024) {
-        return (try Tileset2048.create(image_data, tile_size, collision_map[0..2048], allocator)).tileset();
+        return (try Tileset2048.create(image_data, tile_size, flag_map[0..2048], allocator)).tileset();
     } else if (map_size >= TILESET_SIZE_512) {
-        return (try Tileset1024.create(image_data, tile_size, collision_map[0..1024], allocator)).tileset();
+        return (try Tileset1024.create(image_data, tile_size, flag_map[0..1024], allocator)).tileset();
     } else if (map_size >= TILESET_SIZE_256) {
-        return (try Tileset512.create(image_data, tile_size, collision_map[0..512], allocator)).tileset();
+        return (try Tileset512.create(image_data, tile_size, flag_map[0..512], allocator)).tileset();
     } else {
-        return (try Tileset256.create(image_data, tile_size, collision_map[0..256], allocator)).tileset();
+        return (try Tileset256.create(image_data, tile_size, flag_map[0..256], allocator)).tileset();
     }
 }
 
@@ -141,3 +141,15 @@ pub fn loadTilesetFromFile(allocator: std.mem.Allocator, file_path: []const u8) 
     defer file.close();
     return readBytes(allocator, file.reader());
 }
+
+pub const TileFlag = enum(u8) {
+    Collidable = 0b00000001,
+
+    pub fn mask(flags: []TileFlag) u8 {
+        var result: u8 = 0;
+        for (flags) |flag| {
+            result |= flag;
+        }
+        return result;
+    }
+};

@@ -98,9 +98,11 @@ pub fn draw(self: *const Collectable, scene: *const Scene) void {
 }
 
 pub const Coin = @import("collectables/coin.zig").Coin;
+pub const HealthGrape = @import("collectables/fruit.zig").HealthGrape;
 
-pub const prefabs: [1]type = .{
+pub const prefabs: [2]type = .{
     Coin,
+    HealthGrape,
 };
 
 pub fn initCollectableByIndex(index: usize, pos: rl.Vector2) !Collectable {

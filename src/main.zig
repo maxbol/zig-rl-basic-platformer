@@ -13,56 +13,17 @@ const debug = @import("debug.zig");
 const globals = @import("globals.zig");
 const helpers = @import("helpers.zig");
 const rl = @import("raylib");
-const static = @import("static.zig");
 const std = @import("std");
 
-fn generateTilesetCollisionData() [512]bool {
-    var fg_collision_data: [512]bool = std.mem.zeroes([512]bool);
+fn generateTilesetTileFlagMap() [512]u8 {
+    var fg_collision_data: [512]u8 = std.mem.zeroes([512]u8);
 
-    fg_collision_data[1] = true;
-    fg_collision_data[3] = true;
-    fg_collision_data[4] = true;
-    fg_collision_data[17] = true;
+    fg_collision_data[1] = @intFromEnum(Tileset.TileFlag.Collidable);
+    fg_collision_data[3] = @intFromEnum(Tileset.TileFlag.Collidable);
+    fg_collision_data[4] = @intFromEnum(Tileset.TileFlag.Collidable);
+    fg_collision_data[17] = @intFromEnum(Tileset.TileFlag.Collidable);
 
     return fg_collision_data;
-}
-
-fn getPlayerAnimations() static.PlayerAnimationBuffer {
-    var buffer = static.PlayerAnimationBuffer{};
-
-    buffer.writeAnimation(.Idle, 0.5, &.{ 1, 2, 3, 4 });
-    buffer.writeAnimation(.Jump, 0.1, &.{4});
-    buffer.writeAnimation(.Walk, 1, blk: {
-        var data: [16]u8 = undefined;
-        for (17..33, 0..) |i, idx| {
-            data[idx] = @intCast(i);
-        }
-        break :blk &data;
-    });
-    buffer.writeAnimation(.Roll, 0.8, blk: {
-        var data: [8]u8 = undefined;
-        for (41..49, 0..) |i, idx| {
-            data[idx] = @intCast(i);
-        }
-        break :blk &data;
-    });
-    buffer.writeAnimation(.Hit, 0.15, blk: {
-        var data: [3]u8 = undefined;
-        // for (49..53, 0..) |i, idx| {
-        for (49..52, 0..) |i, idx| {
-            data[idx] = @intCast(i);
-        }
-        break :blk &data;
-    });
-    buffer.writeAnimation(.Death, 1, blk: {
-        var data: [4]u8 = undefined;
-        for (57..61, 0..) |i, idx| {
-            data[idx] = @intCast(i);
-        }
-        break :blk &data;
-    });
-
-    return buffer;
 }
 
 pub fn createDefaultScene(allocator: std.mem.Allocator) *Scene {
@@ -97,22 +58,8 @@ pub fn initGameData() void {
     // Init viewport
     globals.viewport = Viewport.init(constants.VIEWPORT_BIG_RECT);
 
-    // Init animation frames
-    globals.player_animations = getPlayerAnimations();
-
     // Init player actor
-    const player_sprite_texture = rl.loadTexture("assets/sprites/knight.png");
-    const player_sprite = Sprite.init(
-        player_sprite_texture,
-        .{ .x = 32, .y = 32 },
-        globals.player_animations.reader(),
-        .Idle,
-    );
-    globals.player = Actor.Player.init(
-        rl.Rectangle.init(0, 0, constants.TILE_SIZE, 20),
-        player_sprite,
-        .{ .x = 8, .y = 8 },
-    );
+    globals.player = Actor.Player.KnightPlayer.init(rl.Vector2{ .x = 0, .y = 0 });
 
     // Init virtual mouse
     globals.vmouse = controls.VirtualMouse{};
@@ -121,6 +68,7 @@ pub fn initGameData() void {
 pub fn main() anyerror!void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
+
     rl.setConfigFlags(.{
         // .fullscreen_mode = true,
         .vsync_hint = true,
@@ -240,16 +188,16 @@ pub fn rebuildAndStoreDefaultTileset(allocator: std.mem.Allocator, tileset_path:
     const tileset_image = rl.loadImage("assets/sprites/world_tileset.png");
     var size: c_int = undefined;
     const image_data = rl.exportImageToMemory(tileset_image, ".png", &size);
-    const tileset = Tileset.Tileset512.create(image_data[0..@intCast(size)], .{ .x = 16, .y = 16 }, &generateTilesetCollisionData(), allocator) catch |err| {
+    const tileset = Tileset.Tileset512.create(image_data[0..@intCast(size)], .{ .x = 16, .y = 16 }, &generateTilesetTileFlagMap(), allocator) catch |err| {
         std.log.err("Error storing tileset to file: {!}\n", .{err});
-        @panic("skill issues");
+        std.process.exit(1);
     };
     const tileset_file = helpers.openFile(tileset_path, .{ .mode = .write_only }) catch {
         std.log.err("Error opening file for writing: {s}\n", .{tileset_path});
-        @panic("skill issues");
+        std.process.exit(1);
     };
     tileset.writeToFile(tileset_file) catch {
         std.log.err("Error writing tileset to file: {s}\n", .{tileset_path});
-        @panic("skill issues");
+        std.process.exit(1);
     };
 }

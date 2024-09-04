@@ -8,7 +8,6 @@ const constants = @import("constants.zig");
 const controls = @import("controls.zig");
 const debug = @import("debug.zig");
 const rl = @import("raylib");
-const static = @import("static.zig");
 const std = @import("std");
 
 pub var debug_flags: []const debug.DebugFlag = undefined;
@@ -21,7 +20,6 @@ pub var mobs_starting_pos: [constants.MOB_AMOUNT]rl.Vector2 = undefined;
 pub var music: rl.Music = undefined;
 pub var on_save_sfx: rl.Sound = undefined;
 pub var player: Actor.Player = undefined;
-pub var player_animations: static.PlayerAnimationBuffer = undefined;
 pub var rand: std.Random = undefined;
 pub var scene_file = "data/scenes/level1.scene";
 // pub var slime_animations: static.MobAnimationBuffer = undefined;
