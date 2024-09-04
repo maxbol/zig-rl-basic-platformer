@@ -73,16 +73,6 @@ pub fn createDefaultScene(allocator: std.mem.Allocator) *Scene {
     };
     scene.scroll_state = .{ .x = 0, .y = 1 };
 
-    // Store scene in new loc
-    // const new_file = helpers.openFile("data/scenes/level1-new.scene", .{ .mode = .write_only }) catch {
-    //     std.log.err("Error opening file for writing: {s}\n", .{"data/scenes/level1-new.scene"});
-    //     std.process.exit(1);
-    // };
-    // scene.writeBytes(new_file.writer()) catch |err| {
-    //     std.log.err("Error writing scene to file: {!}\n", .{err});
-    //     std.process.exit(1);
-    // };
-
     return scene;
 }
 
@@ -148,14 +138,13 @@ pub fn main() anyerror!void {
     // Setup static game data
     initGameData();
 
-    std.debug.print("Creating scene\n", .{});
     const scene = createDefaultScene(allocator);
     defer scene.destroy();
-    std.debug.print("Created scene\n", .{});
 
     // Init editor
-    globals.editor = Editor.init(scene, &globals.vmouse);
+    globals.editor = try Editor.create(allocator, scene, &globals.vmouse);
     globals.editor_mode = false;
+    defer globals.editor.destroy();
 
     // Play music
     rl.playMusicStream(globals.music);
@@ -263,5 +252,4 @@ pub fn rebuildAndStoreDefaultTileset(allocator: std.mem.Allocator, tileset_path:
         std.log.err("Error writing tileset to file: {s}\n", .{tileset_path});
         @panic("skill issues");
     };
-    std.debug.print("stored tileset file successfully\n", .{});
 }

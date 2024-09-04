@@ -105,53 +105,73 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
         return error.InvalidDataFormatVersion;
     }
 
+    // Read verbosity
+    const verbose = try reader.readByte();
+    // const verbose = 0;
+
     // Read number of bg layers
+    if (verbose > 0) try reader.skipBytes(BYTE_NO_BG_LAYERS_HEADER.len, .{});
     const bg_layers_len = try reader.readByte();
 
     // Read number of fg fg_layers
+    if (verbose > 0) try reader.skipBytes(BYTE_NO_FG_LAYERS_HEADER.len, .{});
     const fg_layers_len = try reader.readByte();
 
     // Read number of mobs
+    if (verbose > 0) try reader.skipBytes(BYTE_NO_MOBS_HEADER.len, .{});
     const mob_amount: usize = @intCast(try reader.readInt(u16, .big));
 
     // Read number of collectables
+    if (verbose > 0) try reader.skipBytes(BYTE_NO_COLLECTABLES_HEADER.len, .{});
     const collectables_amount: usize = @intCast(try reader.readInt(u16, .big));
 
     // Read main layer
+    if (verbose > 0) try reader.skipBytes(BYTE_MAIN_LAYER_HEADER.len, .{});
+    std.debug.print("Reading main layer...\n", .{});
     const main_layer = try TileLayer.readBytes(allocator, reader);
 
     // Read bg layers
+    if (verbose > 0) try reader.skipBytes(BYTE_BG_LAYERS_HEADER.len, .{});
     var bg_layers = std.ArrayList(TileLayer).init(allocator);
-    for (0..bg_layers_len) |_| {
+    for (0..bg_layers_len) |i| {
+        std.debug.print("Reading bg layer {d}...\n", .{i});
         const layer = try TileLayer.readBytes(allocator, reader);
         try bg_layers.append(layer);
     }
 
     // Read fg layers
+    if (verbose > 0) try reader.skipBytes(BYTE_FG_LAYERS_HEADER.len, .{});
     var fg_layers = std.ArrayList(TileLayer).init(allocator);
-    for (0..fg_layers_len) |_| {
+    for (0..fg_layers_len) |i| {
+        std.debug.print("Reading fg layer {d}...\n", .{i});
         const layer = try TileLayer.readBytes(allocator, reader);
         try fg_layers.append(layer);
     }
 
     // Read mobs
+    if (verbose > 0) try reader.skipBytes(BYTE_MOB_HEADER.len, .{});
     var mobs_pos: [constants.MAX_AMOUNT_OF_MOBS]rl.Vector2 = undefined;
     var mobs: [constants.MAX_AMOUNT_OF_MOBS]Actor.Mob = undefined;
     for (0..mob_amount) |i| {
         const mob_type = try reader.readByte();
         const mob_pos_bytes = try reader.readBytesNoEof(8);
         mobs_pos[i] = std.mem.bytesToValue(rl.Vector2, &mob_pos_bytes);
-        mobs[i] = try Actor.Mob.initMobByIndex(mob_type);
+        std.debug.print("Initing mob with index {d} at pos {d}, {d}\n", .{ mob_type, mobs_pos[i].x, mobs_pos[i].y });
+        mobs[i] = try Actor.Mob.initMobByIndex(mob_type, mobs_pos[i]);
     }
-    std.debug.print("{d} mobs spawned\n", .{mob_amount});
 
     // Read collectables
+    if (verbose > 0) try reader.skipBytes(BYTE_COLLECTABLE_HEADER.len, .{});
     var collectables: [constants.MAX_AMOUNT_OF_COLLECTABLES]Collectable = undefined;
     for (0..collectables_amount) |i| {
         const collectable_type = try reader.readByte();
         const collectable_pos_bytes = try reader.readBytesNoEof(8);
         const collectable_pos = std.mem.bytesToValue(rl.Vector2, &collectable_pos_bytes);
-        collectables[i] = try Collectable.initCollectableByIndex(collectable_type, collectable_pos);
+        std.debug.print("Initing collectable with index {d} at pos {d}, {d}\n", .{ collectable_type, collectable_pos.x, collectable_pos.y });
+        collectables[i] = Collectable.initCollectableByIndex(collectable_type, collectable_pos) catch |err| blk: {
+            std.log.err("{d} Error: failed to init collectable by type: {d}: {!}\n", .{ i, collectable_type, err });
+            break :blk Collectable.stub();
+        };
     }
 
     return Scene.create(
@@ -170,19 +190,41 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
     );
 }
 
-pub fn writeBytes(self: *const Scene, writer: anytype) !void {
+const BYTE_NO_BG_LAYERS_HEADER = "\nNO_BG_LAYERS\n";
+const BYTE_NO_FG_LAYERS_HEADER = "\nNO_FG_LAYERS\n";
+const BYTE_NO_MOBS_HEADER = "\nNO_MOBS\n";
+const BYTE_NO_COLLECTABLES_HEADER = "\nNO_COLLECTABLES\n";
+const BYTE_MAIN_LAYER_HEADER = "\nMAIN_LAYER\n";
+const BYTE_BG_LAYERS_HEADER = "\nBG_LAYERS\n";
+const BYTE_FG_LAYERS_HEADER = "\nFG_LAYERS\n";
+const BYTE_MOB_HEADER = "\nMOBS\n";
+const BYTE_COLLECTABLE_HEADER = "\nCOLLECTABLES\n";
+
+pub fn writeBytes(self: *const Scene, writer: anytype, verbose: bool) !void {
     // Write version
     try writer.writeByte(data_format_version);
 
-    // Write number of bg layers
+    // Write verbosity (1 - verbose, 0 - silent)
+    try writer.writeByte(if (verbose) 1 else 0);
+
+    // Write n)umber of bg layers
+    if (verbose) {
+        _ = try writer.write(BYTE_NO_BG_LAYERS_HEADER);
+    }
     const bg_layers_len: u8 = @intCast(self.bg_layers.items.len);
     try writer.writeByte(bg_layers_len);
 
     // Write number of fg layers
+    if (verbose) {
+        _ = try writer.write(BYTE_NO_FG_LAYERS_HEADER);
+    }
     const fg_layers_len: u8 = @intCast(self.fg_layers.items.len);
     try writer.writeByte(fg_layers_len);
 
     // Write number of mobs
+    if (verbose) {
+        _ = try writer.write(BYTE_NO_MOBS_HEADER);
+    }
     var mobs_amount: u16 = 0;
     for (0..self.mobs_amount) |i| {
         if (!self.mobs[i].is_deleted) {
@@ -192,6 +234,9 @@ pub fn writeBytes(self: *const Scene, writer: anytype) !void {
     try writer.writeInt(u16, mobs_amount, .big);
 
     // Write number of collectables
+    if (verbose) {
+        _ = try writer.write(BYTE_NO_COLLECTABLES_HEADER);
+    }
     var collectables_amount: u16 = 0;
     for (0..self.collectables_amount) |i| {
         if (!self.collectables[i].is_deleted) {
@@ -201,19 +246,31 @@ pub fn writeBytes(self: *const Scene, writer: anytype) !void {
     try writer.writeInt(u16, collectables_amount, .big);
 
     // Write main layer
+    if (verbose) {
+        _ = try writer.write(BYTE_MAIN_LAYER_HEADER);
+    }
     try self.main_layer.writeBytes(writer.any());
 
     // Write bg layers
+    if (verbose) {
+        _ = try writer.write(BYTE_BG_LAYERS_HEADER);
+    }
     for (self.bg_layers.items) |layer| {
         try layer.writeBytes(writer.any());
     }
 
     // Write fg layers
+    if (verbose) {
+        _ = try writer.write(BYTE_FG_LAYERS_HEADER);
+    }
     for (self.fg_layers.items) |layer| {
         try layer.writeBytes(writer.any());
     }
 
     // Write mob locations
+    if (verbose) {
+        _ = try writer.write(BYTE_MOB_HEADER);
+    }
     for (0..self.mobs_amount) |i| {
         if (self.mobs[i].is_deleted) {
             continue;
@@ -229,6 +286,9 @@ pub fn writeBytes(self: *const Scene, writer: anytype) !void {
     }
 
     // Write collectible locations
+    if (verbose) {
+        _ = try writer.write(BYTE_COLLECTABLE_HEADER);
+    }
     for (0..self.collectables_amount) |i| {
         if (self.collectables[i].is_deleted) {
             continue;
@@ -238,15 +298,21 @@ pub fn writeBytes(self: *const Scene, writer: anytype) !void {
         try writer.writeByte(0);
 
         // Collectable position
-        const collectable_pos = self.collectables[i].hitbox;
+        const collectable_pos = self.collectables[i].getInitialPos();
         const collectable_pos_bytes = std.mem.toBytes(collectable_pos);
         _ = try writer.write(&collectable_pos_bytes);
     }
 }
 
-pub fn spawnMob(self: *Scene, mob_type: usize, pos: rl.Vector2) !void {
-    var mob: Actor.Mob = try Actor.Mob.initMobByIndex(mob_type);
-    mob.setPos(pos);
+pub fn spawnCollectable(self: *Scene, collectable_type: usize, pos: rl.Vector2) SpawnError!void {
+    const collectable: Collectable = try Collectable.initCollectableByIndex(collectable_type, pos);
+    self.collectables[self.collectables_amount] = collectable;
+    self.collectables_amount += 1;
+}
+
+pub fn spawnMob(self: *Scene, mob_type: usize, pos: rl.Vector2) SpawnError!void {
+    std.debug.print("Spawning mob @ {d}, {d}\n", .{ pos.x, pos.y });
+    const mob: Actor.Mob = try Actor.Mob.initMobByIndex(mob_type, pos);
 
     self.mobs[self.mobs_amount] = mob;
     self.mobs_starting_pos[self.mobs_amount] = pos;
@@ -262,9 +328,9 @@ pub fn update(self: *Scene, delta_time: f32) !void {
         self.first_frame_initialization_done = true;
         self.player.actor().setPos(self.player_starting_pos);
 
-        for (0..self.mobs_amount) |i| {
-            self.mobs[i].setPos(self.mobs_starting_pos[i]);
-        }
+        // for (0..self.mobs_amount) |i| {
+        //     self.mobs[i].setPos(self.mobs_starting_pos[i]);
+        // }
     }
 
     const pixel_size = self.main_layer.getPixelSize();
@@ -435,3 +501,7 @@ pub fn loadSceneFromFile(allocator: std.mem.Allocator, file_path: []const u8) !*
     defer file.close();
     return readBytes(allocator, file.reader());
 }
+
+pub const SpawnError = error{
+    NoSuchItem,
+};

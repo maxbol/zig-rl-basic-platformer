@@ -12,7 +12,7 @@ const static = @import("static.zig");
 const std = @import("std");
 
 pub var debug_flags: []const debug.DebugFlag = undefined;
-pub var editor: Editor = undefined;
+pub var editor: *Editor = undefined;
 pub var editor_mode: bool = false;
 pub var font: rl.Font = undefined;
 pub var mob_actors: [constants.MOB_AMOUNT]Actor = undefined;

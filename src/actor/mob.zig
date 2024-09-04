@@ -13,6 +13,7 @@ const shapes = @import("../shapes.zig");
 
 const approach = helpers.approach;
 
+initial_hitbox: rl.Rectangle,
 collidable: CollidableBody,
 sprite: Sprite,
 sprite_offset: rl.Vector2,
@@ -45,15 +46,23 @@ pub fn Prefab(
         pub const Sprite = SpritePrefab;
         pub const Hitbox = hitbox;
 
-        pub fn init() Mob {
+        pub fn init(pos: rl.Vector2) Mob {
+            std.debug.print("Initing mob prefab with pos: x: {d}, y: {d}\n", .{ pos.x, pos.y });
             const sprite = SpritePrefab.init();
-            return Mob.init(hitbox, sprite, sprite_offset, behavior);
+
+            var mob_hitbox = hitbox;
+            mob_hitbox.x = pos.x;
+            mob_hitbox.y = pos.y;
+
+            return Mob.init(mob_hitbox, sprite, sprite_offset, behavior);
         }
     };
 }
 
 pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2, mob_attributes: MobBehavior) Mob {
+    std.debug.print("Initing mob with hitbox x: {d}, y: {d}\n", .{ hitbox.x, hitbox.y });
     var mob = Mob{
+        .initial_hitbox = hitbox,
         .speed = rl.Vector2.init(0, 0),
         .sprite = sprite,
         .sprite_offset = sprite_offset,
@@ -87,6 +96,13 @@ pub fn getGridRect(self: *const Mob) shapes.IRect {
 
 pub fn getHitboxRect(self: *const Mob) rl.Rectangle {
     return self.collidable.hitbox;
+}
+
+pub fn getInitialPos(self: *const Mob) rl.Vector2 {
+    return .{
+        .x = self.initial_hitbox.x,
+        .y = self.initial_hitbox.y,
+    };
 }
 
 fn move(self: *Mob, scene: *const Scene, comptime axis: CollidableBody.MoveAxis, amount: f32) void {
@@ -217,21 +233,22 @@ pub fn drawDebug(self: *const Mob, scene: *const Scene) void {
 
 pub const GreenSlime = @import("mob/slime.zig").GreenSlime;
 
-pub const bestiary: [1]type = .{
+pub const prefabs: [1]type = .{
     GreenSlime,
 };
-pub fn initMobByIndex(index: usize) !Mob {
-    inline for (bestiary, 0..) |MobPrefab, i| {
+pub fn initMobByIndex(index: usize, pos: rl.Vector2) Scene.SpawnError!Mob {
+    std.debug.print("Initing mob by index with pos x: {d}, y: {d}\n", .{ pos.x, pos.y });
+    inline for (prefabs, 0..) |MobPrefab, i| {
         if (i == index) {
-            return MobPrefab.init();
+            return MobPrefab.init(pos);
         }
     }
-    return error.NoSuchMob;
+    return Scene.SpawnError.NoSuchItem;
 }
 
 pub inline fn getBiggestMobSpriteSize() f32 {
     var max: f32 = 0;
-    inline for (bestiary) |MobPrefab| {
+    inline for (prefabs) |MobPrefab| {
         const SpritePrefab = MobPrefab.Sprite;
         const biggest_size_dim = @max(SpritePrefab.SIZE_X, SpritePrefab.SIZE_Y);
         max = @max(max, biggest_size_dim);
