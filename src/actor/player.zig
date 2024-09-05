@@ -25,6 +25,7 @@ lives: u8 = 10,
 is_stunlocked: bool = false,
 score: u32 = 0,
 is_slipping: bool = false,
+face_dir: u1 = 1,
 
 sfx_hurt: rl.Sound,
 sfx_jump: rl.Sound,
@@ -175,7 +176,6 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     const is_rolling = self.sprite.current_animation == .Roll;
 
     // Left/right movement
-    var facing_right = self.speed.x > 0;
     if (self.is_stunlocked) {
         self.speed.x = approach(self.speed.x, 0, fly_reduce * delta_time);
     } else if (is_rolling) {
@@ -186,9 +186,9 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
         const acceleration = if (is_slipping) slip_acceleration else run_acceleration;
         if (controls.isKeyboardControlDown(controls.KBD_MOVE_LEFT)) {
             self.speed.x = approach(self.speed.x, -speed, acceleration * turn_multiplier * delta_time);
-            facing_right = false;
+            self.face_dir = 0;
         } else if (controls.isKeyboardControlDown(controls.KBD_MOVE_RIGHT)) {
-            facing_right = true;
+            self.face_dir = 1;
             self.speed.x = approach(self.speed.x, speed, acceleration * turn_multiplier * delta_time);
         } else {
             if (!is_grounded) {
@@ -219,10 +219,10 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
         }
     }
 
-    if (facing_right) {
-        self.sprite.setFlip(Sprite.FlipState.XFlip, if (self.is_stunlocked) true else false);
+    if (self.is_stunlocked) {
+        self.sprite.setFlip(.XFlip, self.speed.x > 0);
     } else {
-        self.sprite.setFlip(Sprite.FlipState.XFlip, if (self.is_stunlocked) false else true);
+        self.sprite.setFlip(Sprite.FlipState.XFlip, self.face_dir == 0);
     }
 
     // Collision with mobs
