@@ -114,6 +114,7 @@ pub const AnimationType = enum(usize) {
     Death,
     Attack,
     Jump,
+    Slipping,
 };
 
 pub const NoAnimationsBuffer = AnimationBuffer(&.{.Idle}, 1);

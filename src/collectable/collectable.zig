@@ -37,6 +37,7 @@ pub fn Prefab(
 ) type {
     return struct {
         pub const Sprite = SpritePrefab;
+        pub const spr_offset = sprite_offset;
 
         pub fn init(pos: rl.Vector2) Collectable {
             const sprite = SpritePrefab.init();

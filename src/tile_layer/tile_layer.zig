@@ -168,7 +168,7 @@ pub fn drawDebug(layer: TileLayer, scene: *const Scene) void {
     }
 }
 
-pub fn collideAt(layer: TileLayer, rect: shapes.IRect, grid_rect: shapes.IRect) bool {
+pub fn collideAt(layer: TileLayer, rect: shapes.IRect, grid_rect: shapes.IRect) ?u8 {
     const tileset = layer.getTileset();
     const tile_size = shapes.IPos.fromVec2(tileset.getTileSize());
 
@@ -182,8 +182,8 @@ pub fn collideAt(layer: TileLayer, rect: shapes.IRect, grid_rect: shapes.IRect) 
         for (min_col..max_col) |col_idx| {
             const tile_idx = layer.getTileIdxFromRowAndCol(row_idx, col_idx);
             const tile = layer.getTileFromRowAndCol(row_idx, col_idx) orelse continue;
-
-            if (!tileset.isCollidable(tile)) {
+            const tile_flags = tileset.getTileFlags(tile);
+            if (tile_flags & @intFromEnum(Tileset.TileFlag.Collidable) == 0) {
                 continue;
             }
 
@@ -199,12 +199,12 @@ pub fn collideAt(layer: TileLayer, rect: shapes.IRect, grid_rect: shapes.IRect) 
             layer.storeCollisionData(tile_idx, is_colliding);
 
             if (is_colliding) {
-                return true;
+                return tile_flags;
             }
         }
     }
 
-    return false;
+    return null;
 }
 
 pub const FixedSizeTileLayer = @import("fixed_size_tile_layer.zig").FixedSizeTileLayer;

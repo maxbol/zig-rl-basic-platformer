@@ -21,6 +21,7 @@ fn generateTilesetTileFlagMap() [512]u8 {
     fg_collision_data[1] = @intFromEnum(Tileset.TileFlag.Collidable);
     fg_collision_data[3] = @intFromEnum(Tileset.TileFlag.Collidable);
     fg_collision_data[4] = @intFromEnum(Tileset.TileFlag.Collidable);
+    fg_collision_data[7] = @intFromEnum(Tileset.TileFlag.Collidable) | @intFromEnum(Tileset.TileFlag.Slippery);
     fg_collision_data[17] = @intFromEnum(Tileset.TileFlag.Collidable);
 
     return fg_collision_data;
@@ -59,7 +60,7 @@ pub fn initGameData() void {
     globals.viewport = Viewport.init(constants.VIEWPORT_BIG_RECT);
 
     // Init player actor
-    globals.player = Actor.Player.KnightPlayer.init(rl.Vector2{ .x = 0, .y = 0 });
+    globals.player = Actor.Player.Knight.init(rl.Vector2{ .x = 0, .y = 0 });
 
     // Init virtual mouse
     globals.vmouse = controls.VirtualMouse{};
@@ -82,6 +83,9 @@ pub fn main() anyerror!void {
     const target = rl.loadRenderTexture(constants.GAME_SIZE_X, constants.GAME_SIZE_Y);
     rl.setTextureFilter(target.texture, .texture_filter_bilinear);
     defer rl.unloadRenderTexture(target);
+
+    // Uncomment this to regenerate the tileset:
+    // rebuildAndStoreDefaultTileset(allocator, "data/tilesets/default.tileset");
 
     // Setup static game data
     initGameData();

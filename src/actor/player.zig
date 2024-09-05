@@ -2,6 +2,7 @@ const Actor = @import("actor.zig");
 const CollidableBody = @import("collidable_body.zig");
 const Entity = @import("../entity.zig");
 const Player = @This();
+const Tileset = @import("../tileset/tileset.zig");
 const Scene = @import("../scene.zig");
 const Sprite = @import("../sprite.zig");
 const an = @import("../animation.zig");
@@ -23,66 +24,20 @@ jump_counter: u2 = 0,
 lives: u8 = 10,
 is_stunlocked: bool = false,
 score: u32 = 0,
+is_slipping: bool = false,
 
 sfx_hurt: rl.Sound,
 sfx_jump: rl.Sound,
 
-const AnimationBuffer = an.AnimationBuffer(&.{
+pub const AnimationBuffer = an.AnimationBuffer(&.{
     .Idle,
     .Hit,
     .Walk,
     .Death,
     .Roll,
     .Jump,
+    .Slipping,
 }, 16);
-
-var texture: ?rl.Texture = null;
-
-fn loadTexture() rl.Texture {
-    if (texture) |t| {
-        return t;
-    }
-    texture = rl.loadTexture("assets/sprites/knight.png");
-    return texture.?;
-}
-
-fn getAnimations() AnimationBuffer {
-    var buffer = AnimationBuffer{};
-
-    buffer.writeAnimation(.Idle, 0.5, &.{ 1, 2, 3, 4 });
-    buffer.writeAnimation(.Jump, 0.1, &.{4});
-    buffer.writeAnimation(.Walk, 1, blk: {
-        var data: [16]u8 = undefined;
-        for (17..33, 0..) |i, idx| {
-            data[idx] = @intCast(i);
-        }
-        break :blk &data;
-    });
-    buffer.writeAnimation(.Roll, 0.8, blk: {
-        var data: [8]u8 = undefined;
-        for (41..49, 0..) |i, idx| {
-            data[idx] = @intCast(i);
-        }
-        break :blk &data;
-    });
-    buffer.writeAnimation(.Hit, 0.15, blk: {
-        var data: [3]u8 = undefined;
-        // for (49..53, 0..) |i, idx| {
-        for (49..52, 0..) |i, idx| {
-            data[idx] = @intCast(i);
-        }
-        break :blk &data;
-    });
-    buffer.writeAnimation(.Death, 1, blk: {
-        var data: [4]u8 = undefined;
-        for (57..61, 0..) |i, idx| {
-            data[idx] = @intCast(i);
-        }
-        break :blk &data;
-    });
-
-    return buffer;
-}
 
 pub fn Prefab(
     hitbox: rl.Rectangle,
@@ -105,6 +60,9 @@ pub fn Prefab(
 const run_speed: f32 = 3 * 60;
 const run_acceleration: f32 = 10 * 60;
 const run_reduce: f32 = 22 * 60;
+const slip_speed: f32 = 7 * 60;
+const slip_acceleration: f32 = 20 * 60;
+const slip_reduce: f32 = 1 * 60;
 const fly_reduce: f32 = 12 * 60;
 const fall_speed: f32 = 3.6 * 60;
 const jump_speed: f32 = -5 * 60;
@@ -166,7 +124,7 @@ fn move(self: *Player, scene: *const Scene, comptime axis: CollidableBody.MoveAx
     self.collidable.move(scene, axis, amount, self);
 }
 
-pub fn handleCollision(self: *Player, axis: CollidableBody.MoveAxis, sign: i8) void {
+pub fn handleCollision(self: *Player, axis: CollidableBody.MoveAxis, sign: i8, tile_flags: u8) void {
     if (axis == CollidableBody.MoveAxis.X) {
         self.speed.x = 0;
     } else {
@@ -176,6 +134,7 @@ pub fn handleCollision(self: *Player, axis: CollidableBody.MoveAxis, sign: i8) v
             // Only reset jump counter when colliding with something below player
             self.jump_counter = 0;
             self.is_stunlocked = false;
+            self.is_slipping = tile_flags & @intFromEnum(Tileset.TileFlag.Slippery) != 0;
 
             if (self.lives == 0) {
                 self.sprite.setAnimation(.Death, null, true);
@@ -205,6 +164,7 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
         self.jump_counter += 1;
     }
     const is_grounded = self.jump_counter == 0;
+    const is_slipping = self.is_slipping and is_grounded;
 
     // Rolling
     if (self.speed.x != 0 and self.sprite.current_animation != .Roll and !self.is_stunlocked and is_grounded and controls.isKeyboardControlPressed(controls.KBD_ROLL)) {
@@ -215,20 +175,26 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     const is_rolling = self.sprite.current_animation == .Roll;
 
     // Left/right movement
+    var facing_right = self.speed.x > 0;
     if (self.is_stunlocked) {
         self.speed.x = approach(self.speed.x, 0, fly_reduce * delta_time);
     } else if (is_rolling) {
         self.speed.x = approach(self.speed.x, 0, roll_reduce * delta_time);
     } else {
+        const turn_multiplier: f32 = if (self.speed.x > 0 and !is_slipping) 3 else 1;
+        const speed = if (is_slipping) slip_speed else run_speed;
+        const acceleration = if (is_slipping) slip_acceleration else run_acceleration;
         if (controls.isKeyboardControlDown(controls.KBD_MOVE_LEFT)) {
-            const turn_multiplier: f32 = if (self.speed.x > 0) 3 else 1;
-            self.speed.x = approach(self.speed.x, -run_speed, run_acceleration * turn_multiplier * delta_time);
+            self.speed.x = approach(self.speed.x, -speed, acceleration * turn_multiplier * delta_time);
+            facing_right = false;
         } else if (controls.isKeyboardControlDown(controls.KBD_MOVE_RIGHT)) {
-            const turn_multiplier: f32 = if (self.speed.x < 0) 3 else 1;
-            self.speed.x = approach(self.speed.x, run_speed, run_acceleration * turn_multiplier * delta_time);
+            facing_right = true;
+            self.speed.x = approach(self.speed.x, speed, acceleration * turn_multiplier * delta_time);
         } else {
             if (!is_grounded) {
                 self.speed.x = approach(self.speed.x, 0, fly_reduce * delta_time);
+            } else if (is_slipping) {
+                self.speed.x = approach(self.speed.x, 0, slip_reduce * delta_time);
             } else {
                 self.speed.x = approach(self.speed.x, 0, run_reduce * delta_time);
             }
@@ -244,6 +210,8 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     } else if (!is_rolling) {
         if (!is_grounded) {
             self.sprite.setAnimation(.Jump, null, true);
+        } else if (is_slipping) {
+            self.sprite.setAnimation(.Slipping, null, false);
         } else if (self.speed.x == 0) {
             self.sprite.setAnimation(.Idle, null, false);
         } else {
@@ -251,9 +219,9 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
         }
     }
 
-    if (self.speed.x > 0) {
+    if (facing_right) {
         self.sprite.setFlip(Sprite.FlipState.XFlip, if (self.is_stunlocked) true else false);
-    } else if (self.speed.x < 0) {
+    } else {
         self.sprite.setFlip(Sprite.FlipState.XFlip, if (self.is_stunlocked) false else true);
     }
 
@@ -316,14 +284,4 @@ fn drawDebug(ctx: *anyopaque, scene: *const Scene) void {
     self.collidable.drawDebug(scene);
 }
 
-pub const KnightPlayer = Prefab(
-    .{ .x = 0, .y = 0, .width = constants.TILE_SIZE, .height = 20 },
-    .{ .x = 8, .y = 8 },
-    Sprite.Prefab(
-        32,
-        32,
-        loadTexture,
-        getAnimations(),
-        .Idle,
-    ),
-);
+pub const Knight = @import("player/knight.zig").Knight;

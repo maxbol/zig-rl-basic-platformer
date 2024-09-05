@@ -14,7 +14,9 @@ pub const Interface = struct {
     getRectMap: *const fn (ctx: *anyopaque) []?rl.Rectangle,
     getTexture: *const fn (ctx: *anyopaque) rl.Texture2D,
     getTileSize: *const fn (ctx: *anyopaque) rl.Vector2,
+    getTileFlags: *const fn (ctx: *anyopaque, tile_index: usize) u8,
     isCollidable: *const fn (ctx: *anyopaque, tile_index: usize) bool,
+    tileHasFlag: *const fn (ctx: *anyopaque, tile_index: usize, flag: TileFlag) bool,
 };
 
 pub fn destroy(self: Tileset) void {
@@ -29,12 +31,20 @@ pub fn getTexture(self: Tileset) rl.Texture2D {
     return self.impl.getTexture(self.ptr);
 }
 
+pub fn getTileFlags(self: Tileset, tile_index: usize) u8 {
+    return self.impl.getTileFlags(self.ptr, tile_index);
+}
+
 pub fn isCollidable(self: Tileset, tile_index: usize) bool {
     return self.impl.isCollidable(self.ptr, tile_index);
 }
 
 pub fn getTileSize(self: Tileset) rl.Vector2 {
     return self.impl.getTileSize(self.ptr);
+}
+
+pub fn tileHasFlag(self: Tileset, tile_index: usize, flag: TileFlag) bool {
+    return self.impl.tileHasFlag(self.ptr, tile_index, flag);
 }
 
 pub fn getRect(self: Tileset, tile_idx: usize) ?rl.Rectangle {
@@ -144,6 +154,7 @@ pub fn loadTilesetFromFile(allocator: std.mem.Allocator, file_path: []const u8) 
 
 pub const TileFlag = enum(u8) {
     Collidable = 0b00000001,
+    Slippery = 0b00000010,
 
     pub fn mask(flags: []TileFlag) u8 {
         var result: u8 = 0;

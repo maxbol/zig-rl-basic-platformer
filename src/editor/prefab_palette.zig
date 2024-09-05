@@ -22,6 +22,7 @@ pub fn PrefabPalette(
         sprites: [ItemType.prefabs.len]Sprite,
         eraser_sprite: Sprite,
         sprite_rects: [ItemType.prefabs.len]rl.Rectangle = undefined,
+        sprite_offsets: [ItemType.prefabs.len]rl.Vector2 = undefined,
         hover_item: ?usize = null,
         hover_eraser: bool = false,
         selected_item: ?usize = null,
@@ -34,12 +35,16 @@ pub fn PrefabPalette(
             const eraser_sprite = EraserSprite.init();
 
             var sprites: [ItemType.prefabs.len]Sprite = undefined;
+            var sprite_offsets: [ItemType.prefabs.len]rl.Vector2 = undefined;
+
             inline for (ItemType.prefabs, 0..) |Prefab, i| {
                 sprites[i] = Prefab.Sprite.init();
+                sprite_offsets[i] = Prefab.spr_offset;
             }
 
             return .{
                 .window = window,
+                .sprite_offsets = sprite_offsets,
                 .sprites = sprites,
                 .eraser_sprite = eraser_sprite,
                 .on_focus = on_focus,
@@ -66,8 +71,8 @@ pub fn PrefabPalette(
                     rect = &self.sprite_rects[i];
                 }
 
-                const padding_x = item_size - sprite.size.x;
-                const padding_y = item_size - sprite.size.y;
+                const padding_x = (item_size - sprite.size.x) / 2;
+                const padding_y = (item_size - sprite.size.y) / 2;
                 const x = self.window.x + @as(f32, @floatFromInt(row)) * item_size + padding_x;
                 const y = self.window.y + @as(f32, @floatFromInt(col)) * item_size + padding_y;
                 const pos = rl.Vector2{ .x = x, .y = y };
@@ -152,7 +157,7 @@ pub fn PrefabPalette(
                     dest = &self.sprite_rects[i];
                 }
 
-                rl.drawRectangleLinesEx(dest.*, 1, color);
+                // rl.drawRectangleLinesEx(dest.*, 1, color);
                 if (sprite.getSourceRect()) |rect| {
                     const pos = rl.Vector2{ .x = dest.x, .y = dest.y };
                     sprite.texture.drawRec(rect, pos, color);

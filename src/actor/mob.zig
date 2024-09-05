@@ -45,9 +45,9 @@ pub fn Prefab(
     return struct {
         pub const Sprite = SpritePrefab;
         pub const Hitbox = hitbox;
+        pub const spr_offset = sprite_offset;
 
         pub fn init(pos: rl.Vector2) Mob {
-            std.debug.print("Initing mob prefab with pos: x: {d}, y: {d}\n", .{ pos.x, pos.y });
             const sprite = SpritePrefab.init();
 
             var mob_hitbox = hitbox;
@@ -60,7 +60,6 @@ pub fn Prefab(
 }
 
 pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2, mob_attributes: MobBehavior) Mob {
-    std.debug.print("Initing mob with hitbox x: {d}, y: {d}\n", .{ hitbox.x, hitbox.y });
     var mob = Mob{
         .initial_hitbox = hitbox,
         .speed = rl.Vector2.init(0, 0),
@@ -75,7 +74,8 @@ pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2, mob
     return mob;
 }
 
-pub fn handleCollision(self: *Mob, axis: CollidableBody.MoveAxis, sign: i8) void {
+pub fn handleCollision(self: *Mob, axis: CollidableBody.MoveAxis, sign: i8, flags: u8) void {
+    _ = flags; // autofix
     if (axis == CollidableBody.MoveAxis.X) {
         // Reverse direction when hitting an obstacle (unless we are hunting the player)
         if (!self.is_hunting) {
@@ -237,7 +237,6 @@ pub const prefabs: [1]type = .{
     GreenSlime,
 };
 pub fn initMobByIndex(index: usize, pos: rl.Vector2) Scene.SpawnError!Mob {
-    std.debug.print("Initing mob by index with pos x: {d}, y: {d}\n", .{ pos.x, pos.y });
     inline for (prefabs, 0..) |MobPrefab, i| {
         if (i == index) {
             return MobPrefab.init(pos);

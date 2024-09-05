@@ -63,9 +63,10 @@ pub fn PrefabOverlay(PaletteType: type, spawn_fn: fn (scene: *Scene, item_idx: u
                 const selected_item = self.palette.selected_item orelse return;
                 const mouse_scene_pos = self.mouse_scene_pos orelse return;
                 const sprite = self.palette.sprites[selected_item];
+                const sprite_offset = self.palette.sprite_offsets[selected_item];
                 const spawn_pos = rl.Vector2.init(
-                    mouse_scene_pos.x - (sprite.size.x / 2),
-                    mouse_scene_pos.y - (sprite.size.y / 2),
+                    mouse_scene_pos.x - (sprite.size.x / 2) + sprite_offset.x,
+                    mouse_scene_pos.y - (sprite.size.y / 2) + sprite_offset.y,
                 );
                 try spawn_fn(editor.scene, selected_item, spawn_pos);
             }
@@ -79,7 +80,9 @@ pub fn PrefabOverlay(PaletteType: type, spawn_fn: fn (scene: *Scene, item_idx: u
                     continue;
                 }
 
-                const pos = item.getInitialPos();
+                var pos = item.getInitialPos();
+                pos.x -= item.sprite_offset.x;
+                pos.y -= item.sprite_offset.y;
                 const is_marked_for_deletion = self.marked_for_deletion[i];
                 const color = if (is_marked_for_deletion) rl.Color.red.fade(0.5) else rl.Color.white.fade(0.5);
                 item.sprite.draw(editor.scene, pos, color);

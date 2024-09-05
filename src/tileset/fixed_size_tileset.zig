@@ -23,9 +23,7 @@ pub fn FixedSizeTileset(size: usize) type {
         pub fn create(image_data: []const u8, tile_size: rl.Vector2, flag_map: []const u8, allocator: std.mem.Allocator) !*@This() {
             const new = try allocator.create(@This());
             const image = rl.loadImageFromMemory(".png", image_data);
-            std.debug.print("loading texture from image {any}\n", .{image.data});
             const texture = rl.loadTextureFromImage(image);
-            std.debug.print("building rect map\n", .{});
             const rect_map = helpers.buildRectMap(size, texture.width, texture.height, tile_size.x, tile_size.y, 1, 1);
 
             var flag_map_owned: FlagMap = std.mem.zeroes([size]u8);
@@ -102,8 +100,10 @@ pub fn FixedSizeTileset(size: usize) type {
                     .getTexture = getTexture,
                     .getRect = getRect,
                     .getRectMap = getRectMap,
+                    .getTileFlags = getTileFlags,
                     .getTileSize = getTileSize,
                     .isCollidable = isCollidable,
+                    .tileHasFlag = tileHasFlag,
                 },
             };
         }
@@ -128,9 +128,19 @@ pub fn FixedSizeTileset(size: usize) type {
             return self.tile_size;
         }
 
+        fn getTileFlags(ctx: *anyopaque, tile_index: usize) u8 {
+            const self: *@This() = @ptrCast(@alignCast(ctx));
+            return self.flag_map[tile_index];
+        }
+
         fn isCollidable(ctx: *anyopaque, tile_index: usize) bool {
             const self: *@This() = @ptrCast(@alignCast(ctx));
             return self.flag_map[tile_index] & @intFromEnum(Tileset.TileFlag.Collidable) != 0;
+        }
+
+        fn tileHasFlag(ctx: *anyopaque, tile_index: usize, flag: Tileset.TileFlag) bool {
+            const self: *@This() = @ptrCast(@alignCast(ctx));
+            return self.flag_map[tile_index] & @intFromEnum(flag) != 0;
         }
     };
 }

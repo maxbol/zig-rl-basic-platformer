@@ -55,7 +55,10 @@ pub fn move(
             next_hitbox,
         );
 
-        if (!scene.collideAt(next_hitbox, grid_rect)) {
+        if (scene.collideAt(next_hitbox, grid_rect)) |tile_flags| {
+            collider.handleCollision(axis, sign, tile_flags);
+            break;
+        } else {
             if (axis == MoveAxis.X) {
                 self.hitbox.x += @floatFromInt(sign);
             } else {
@@ -63,9 +66,6 @@ pub fn move(
             }
 
             mov -= sign;
-        } else {
-            collider.handleCollision(axis, sign);
-            break;
         }
     }
 

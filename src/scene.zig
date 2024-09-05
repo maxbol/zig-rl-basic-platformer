@@ -127,14 +127,12 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
 
     // Read main layer
     if (verbose > 0) try reader.skipBytes(BYTE_MAIN_LAYER_HEADER.len, .{});
-    std.debug.print("Reading main layer...\n", .{});
     const main_layer = try TileLayer.readBytes(allocator, reader);
 
     // Read bg layers
     if (verbose > 0) try reader.skipBytes(BYTE_BG_LAYERS_HEADER.len, .{});
     var bg_layers = std.ArrayList(TileLayer).init(allocator);
-    for (0..bg_layers_len) |i| {
-        std.debug.print("Reading bg layer {d}...\n", .{i});
+    for (0..bg_layers_len) |_| {
         const layer = try TileLayer.readBytes(allocator, reader);
         try bg_layers.append(layer);
     }
@@ -142,8 +140,7 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
     // Read fg layers
     if (verbose > 0) try reader.skipBytes(BYTE_FG_LAYERS_HEADER.len, .{});
     var fg_layers = std.ArrayList(TileLayer).init(allocator);
-    for (0..fg_layers_len) |i| {
-        std.debug.print("Reading fg layer {d}...\n", .{i});
+    for (0..fg_layers_len) |_| {
         const layer = try TileLayer.readBytes(allocator, reader);
         try fg_layers.append(layer);
     }
@@ -156,7 +153,6 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
         const mob_type = try reader.readByte();
         const mob_pos_bytes = try reader.readBytesNoEof(8);
         mobs_pos[i] = std.mem.bytesToValue(rl.Vector2, &mob_pos_bytes);
-        std.debug.print("Initing mob with index {d} at pos {d}, {d}\n", .{ mob_type, mobs_pos[i].x, mobs_pos[i].y });
         mobs[i] = try Actor.Mob.initMobByIndex(mob_type, mobs_pos[i]);
     }
 
@@ -167,7 +163,6 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
         const collectable_type = try reader.readByte();
         const collectable_pos_bytes = try reader.readBytesNoEof(8);
         const collectable_pos = std.mem.bytesToValue(rl.Vector2, &collectable_pos_bytes);
-        std.debug.print("Initing collectable with index {d} at pos {d}, {d}\n", .{ collectable_type, collectable_pos.x, collectable_pos.y });
         collectables[i] = Collectable.initCollectableByIndex(collectable_type, collectable_pos) catch |err| blk: {
             std.log.err("{d} Error: failed to init collectable by type: {d}: {!}\n", .{ i, collectable_type, err });
             break :blk Collectable.stub();
@@ -311,7 +306,6 @@ pub fn spawnCollectable(self: *Scene, collectable_type: usize, pos: rl.Vector2) 
 }
 
 pub fn spawnMob(self: *Scene, mob_type: usize, pos: rl.Vector2) SpawnError!void {
-    std.debug.print("Spawning mob @ {d}, {d}\n", .{ pos.x, pos.y });
     const mob: Actor.Mob = try Actor.Mob.initMobByIndex(mob_type, pos);
 
     self.mobs[self.mobs_amount] = mob;
@@ -492,7 +486,7 @@ pub fn centerViewportOnPos(self: *Scene, pos: anytype) void {
     );
 }
 
-pub fn collideAt(self: *const Scene, rect: shapes.IRect, grid_rect: shapes.IRect) bool {
+pub fn collideAt(self: *const Scene, rect: shapes.IRect, grid_rect: shapes.IRect) ?u8 {
     return self.main_layer.collideAt(rect, grid_rect);
 }
 
