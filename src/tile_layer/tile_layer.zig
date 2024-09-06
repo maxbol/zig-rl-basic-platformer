@@ -16,6 +16,7 @@ pub const Interface = struct {
     didCollideThisFrame: *const fn (ctx: *anyopaque, tile_idx: usize) bool,
     getFlags: *const fn (ctx: *anyopaque) u8,
     getPixelSize: *const fn (ctx: *anyopaque) rl.Vector2,
+    getLayerPosition: *const fn (ctx: *anyopaque, pos: rl.Vector2) rl.Vector2,
     getScrollState: *const fn (ctx: *anyopaque) *const Scrollable,
     getSize: *const fn (ctx: *anyopaque) rl.Vector2,
     getTileFromRowAndCol: *const fn (ctx: *anyopaque, row_idx: usize, col_idx: usize) ?u8,
@@ -38,6 +39,10 @@ pub fn getFlags(self: TileLayer) u8 {
 
 pub fn getPixelSize(self: TileLayer) rl.Vector2 {
     return self.impl.getPixelSize(self.ptr);
+}
+
+pub fn getLayerPosition(self: TileLayer, pos: rl.Vector2) rl.Vector2 {
+    return self.impl.getLayerPosition(self.ptr, pos);
 }
 
 pub fn getSize(self: TileLayer) rl.Vector2 {

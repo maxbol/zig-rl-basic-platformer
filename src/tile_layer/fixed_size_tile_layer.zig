@@ -130,6 +130,7 @@ pub fn FixedSizeTileLayer(comptime size: usize) type {
                     .didCollideThisFrame = didCollideThisFrame,
                     .getFlags = getFlags,
                     .getPixelSize = getPixelSize,
+                    .getLayerPosition = getLayerPosition,
                     .getSize = getSize,
                     .getScrollState = getScrollState,
                     .getTileset = getTileset,
@@ -161,6 +162,18 @@ pub fn FixedSizeTileLayer(comptime size: usize) type {
         fn getPixelSize(ctx: *anyopaque) rl.Vector2 {
             const self: *const @This() = @ptrCast(@alignCast(ctx));
             return self.pixel_size;
+        }
+
+        fn getLayerPosition(ctx: *anyopaque, pos: rl.Vector2) rl.Vector2 {
+            const self: *const @This() = @ptrCast(@alignCast(ctx));
+
+            var layer_pos = pos;
+            layer_pos.x += self.scrollable.scroll_x_pixels;
+            layer_pos.x -= self.scrollable.viewport_x_adjust;
+            layer_pos.y += self.scrollable.scroll_y_pixels;
+            layer_pos.y -= self.scrollable.viewport_y_adjust;
+
+            return layer_pos;
         }
 
         fn getSize(ctx: *anyopaque) rl.Vector2 {

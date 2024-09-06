@@ -17,15 +17,15 @@ const std = @import("std");
 const approach = helpers.approach;
 
 collidable: CollidableBody,
-sprite: Sprite,
-sprite_offset: rl.Vector2,
-speed: rl.Vector2,
+face_dir: u1 = 1,
+is_slipping: bool = false,
+is_stunlocked: bool = false,
 jump_counter: u2 = 0,
 lives: u8 = 10,
-is_stunlocked: bool = false,
 score: u32 = 0,
-is_slipping: bool = false,
-face_dir: u1 = 1,
+speed: rl.Vector2,
+sprite: Sprite,
+sprite_offset: rl.Vector2,
 
 sfx_hurt: rl.Sound,
 sfx_jump: rl.Sound,
@@ -58,19 +58,19 @@ pub fn Prefab(
     };
 }
 
-const run_speed: f32 = 3 * 60;
-const run_acceleration: f32 = 10 * 60;
-const run_reduce: f32 = 22 * 60;
-const slip_speed: f32 = 7 * 60;
-const slip_acceleration: f32 = 20 * 60;
-const slip_reduce: f32 = 1 * 60;
-const fly_reduce: f32 = 12 * 60;
 const fall_speed: f32 = 3.6 * 60;
-const jump_speed: f32 = -5 * 60;
+const fly_reduce: f32 = 6 * 60;
+const jump_speed: f32 = -4 * 60;
 const knockback_x_speed: f32 = 6 * 60;
 const knockback_y_speed: f32 = -2 * 60;
-const roll_speed: f32 = 7 * 60;
 const roll_reduce: f32 = 2 * 60;
+const roll_speed: f32 = 7 * 60;
+const run_acceleration: f32 = 10 * 60;
+const run_reduce: f32 = 22 * 60;
+const run_speed: f32 = 3 * 60;
+const slip_acceleration: f32 = 50 * 60;
+const slip_reduce: f32 = 3 * 60;
+const slip_speed: f32 = 4 * 60;
 
 pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2) Player {
     const sfx_hurt = rl.loadSound("assets/sounds/hurt.wav");
@@ -126,6 +126,10 @@ fn move(self: *Player, scene: *const Scene, comptime axis: CollidableBody.MoveAx
 }
 
 pub fn handleCollision(self: *Player, axis: CollidableBody.MoveAxis, sign: i8, tile_flags: u8) void {
+    if (tile_flags & @intFromEnum(Tileset.TileFlag.Deadly) != 0) {
+        self.lives = 0;
+        self.sprite.setAnimation(.Death, null, true);
+    }
     if (axis == CollidableBody.MoveAxis.X) {
         self.speed.x = 0;
     } else {
@@ -170,8 +174,8 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     // Rolling
     if (self.speed.x != 0 and self.sprite.current_animation != .Roll and !self.is_stunlocked and is_grounded and controls.isKeyboardControlPressed(controls.KBD_ROLL)) {
         self.sprite.setAnimation(.Roll, .Idle, false);
+        self.sprite.setAnimationSpeed(1);
         self.speed.x = std.math.sign(self.speed.x) * roll_speed;
-        // self.speed.x = approach(self.speed.x, std.math.sign(self.speed.x) * roll_speed, roll_acceleration * delta_time);
     }
     const is_rolling = self.sprite.current_animation == .Roll;
 
@@ -207,15 +211,17 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     // Set animation and direction
     if (self.is_stunlocked) {
         self.sprite.setAnimation(.Hit, null, true);
+        self.sprite.setAnimationSpeed(1);
     } else if (!is_rolling) {
         if (!is_grounded) {
             self.sprite.setAnimation(.Jump, null, true);
-        } else if (is_slipping) {
-            self.sprite.setAnimation(.Slipping, null, false);
+            self.sprite.setAnimationSpeed(1);
         } else if (self.speed.x == 0) {
             self.sprite.setAnimation(.Idle, null, false);
+            self.sprite.setAnimationSpeed(1);
         } else {
             self.sprite.setAnimation(.Walk, null, false);
+            self.sprite.setAnimationSpeed(@min(2, @abs(self.speed.x) / 180));
         }
     }
 

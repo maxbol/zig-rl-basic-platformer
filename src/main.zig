@@ -18,11 +18,34 @@ const std = @import("std");
 fn generateTilesetTileFlagMap() [512]u8 {
     var fg_collision_data: [512]u8 = std.mem.zeroes([512]u8);
 
+    for (1..13) |i| {
+        fg_collision_data[i] |= @intFromEnum(Tileset.TileFlag.Collidable);
+    }
+
+    for (17..29) |i| {
+        fg_collision_data[i] |= @intFromEnum(Tileset.TileFlag.Collidable);
+    }
+
+    for (33..45) |i| {
+        fg_collision_data[i] |= @intFromEnum(Tileset.TileFlag.Collidable);
+    }
+
+    fg_collision_data[51] |= @intFromEnum(Tileset.TileFlag.Collidable);
+    fg_collision_data[56] |= @intFromEnum(Tileset.TileFlag.Collidable);
+    fg_collision_data[72] |= @intFromEnum(Tileset.TileFlag.Collidable);
+
     fg_collision_data[1] = @intFromEnum(Tileset.TileFlag.Collidable);
+    fg_collision_data[2] = @intFromEnum(Tileset.TileFlag.Collidable);
     fg_collision_data[3] = @intFromEnum(Tileset.TileFlag.Collidable);
     fg_collision_data[4] = @intFromEnum(Tileset.TileFlag.Collidable);
     fg_collision_data[7] = @intFromEnum(Tileset.TileFlag.Collidable) | @intFromEnum(Tileset.TileFlag.Slippery);
     fg_collision_data[17] = @intFromEnum(Tileset.TileFlag.Collidable);
+
+    fg_collision_data[7] |= @intFromEnum(Tileset.TileFlag.Slippery);
+    fg_collision_data[36] |= @intFromEnum(Tileset.TileFlag.Slippery);
+
+    fg_collision_data[151] |= @intFromEnum(Tileset.TileFlag.Collidable);
+    fg_collision_data[151] |= @intFromEnum(Tileset.TileFlag.Deadly);
 
     return fg_collision_data;
 }
@@ -46,8 +69,8 @@ pub fn initGameData() void {
     };
 
     // Init debug flags
-    globals.debug_flags = &.{ .ShowHitboxes, .ShowScrollState, .ShowFps, .ShowSpriteOutlines, .ShowTestedTiles, .ShowCollidedTiles, .ShowGridBoxes };
-    debug.setDebugFlags(globals.debug_flags);
+    globals.debug_flags = &.{ .ShowHitboxes, .ShowScrollState, .ShowFps, .ShowSpriteOutlines, .ShowTestedTiles, .ShowCollidedTiles, .ShowGridBoxes, .ShowTilemapDebug };
+    // debug.setDebugFlags(globals.debug_flags);
 
     // Init game font
     globals.font = rl.loadFont("assets/fonts/PixelOperator8.ttf");
@@ -85,7 +108,7 @@ pub fn main() anyerror!void {
     defer rl.unloadRenderTexture(target);
 
     // Uncomment this to regenerate the tileset:
-    // rebuildAndStoreDefaultTileset(allocator, "data/tilesets/default.tileset");
+    rebuildAndStoreDefaultTileset(allocator, "data/tilesets/default.tileset");
 
     // Setup static game data
     initGameData();
@@ -138,6 +161,7 @@ pub fn main() anyerror!void {
         }
 
         globals.viewport.update(delta_time);
+        scene.layer_visibility_treshold = null;
         try scene.update(delta_time);
 
         if (globals.editor_mode) {

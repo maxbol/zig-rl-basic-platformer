@@ -12,6 +12,10 @@ include_x_tiles: usize = 0,
 include_y_tiles: usize = 0,
 viewport_x_adjust: f32 = 0,
 viewport_y_adjust: f32 = 0,
+max_x_scroll: f32 = 0,
+max_y_scroll: f32 = 0,
+scroll_x_pixels: f32 = 0,
+scroll_y_pixels: f32 = 0,
 
 pub fn update(self: *Scrollable, scene: *Scene, layer: TileLayer) an.AnimationBufferError!void {
     const viewport = scene.viewport;
@@ -22,8 +26,8 @@ pub fn update(self: *Scrollable, scene: *Scene, layer: TileLayer) an.AnimationBu
 
     const pixel_size = layer.getPixelSize();
 
-    const max_x_scroll: f32 = @max(pixel_size.x - viewport_rect.width, 0);
-    const max_y_scroll: f32 = @max(pixel_size.y - viewport_rect.height, 0);
+    self.max_x_scroll = @max(pixel_size.x - viewport_rect.width, 0);
+    self.max_y_scroll = @max(pixel_size.y - viewport_rect.height, 0);
 
     const scroll_state_x = blk: {
         if ((layer.getFlags() & @intFromEnum(LayerFlag.InvertXScroll)) > 0) {
@@ -39,14 +43,14 @@ pub fn update(self: *Scrollable, scene: *Scene, layer: TileLayer) an.AnimationBu
         break :blk scroll_state.y;
     };
 
-    const scroll_x_pixels: f32 = @round(scroll_state_x * max_x_scroll);
-    const scroll_y_pixels: f32 = @round(scroll_state_y * max_y_scroll);
+    self.scroll_x_pixels = @round(scroll_state_x * self.max_x_scroll);
+    self.scroll_y_pixels = @round(scroll_state_y * self.max_y_scroll);
 
-    self.scroll_x_tiles = @intFromFloat(@floor(scroll_x_pixels / tile_size.x));
-    self.scroll_y_tiles = @intFromFloat(@floor(scroll_y_pixels / tile_size.y));
+    self.scroll_x_tiles = @intFromFloat(@floor(self.scroll_x_pixels / tile_size.x));
+    self.scroll_y_tiles = @intFromFloat(@floor(self.scroll_y_pixels / tile_size.y));
 
-    self.sub_tile_scroll_x = @mod(scroll_x_pixels, tile_size.x);
-    self.sub_tile_scroll_y = @mod(scroll_y_pixels, tile_size.y);
+    self.sub_tile_scroll_x = @mod(self.scroll_x_pixels, tile_size.x);
+    self.sub_tile_scroll_y = @mod(self.scroll_y_pixels, tile_size.y);
 
     const viewport_tile_size_x: usize = @intFromFloat(@floor(viewport_rect.width / tile_size.x));
     const viewport_tile_size_y: usize = @intFromFloat(@floor(viewport_rect.height / tile_size.y));

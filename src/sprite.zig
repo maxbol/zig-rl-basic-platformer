@@ -16,6 +16,7 @@ animation_buffer: an.AnimationBufferReader,
 current_animation: an.AnimationType = .Idle,
 queued_animation: ?an.AnimationType = null,
 freeze_animation_on_last_frame: bool = false,
+animation_speed: f32 = 1,
 animation_clock: f32 = 0,
 current_display_frame: u8 = 0,
 
@@ -73,6 +74,10 @@ pub fn setAnimation(self: *Sprite, animation: an.AnimationType, queued: ?an.Anim
     self.freeze_animation_on_last_frame = freeze_animation_on_last_frame;
 }
 
+pub fn setAnimationSpeed(self: *Sprite, speed: f32) void {
+    self.animation_speed = speed;
+}
+
 pub fn setFlip(self: *Sprite, flip: FlipState, state: bool) void {
     self.flip_mask = if (state) @intFromEnum(flip) | self.flip_mask else ~@intFromEnum(flip) & self.flip_mask;
 }
@@ -97,7 +102,7 @@ pub fn update(self: *Sprite, _: *Scene, delta_time: f32) !void {
         current_animation.frames.len - 1,
     );
 
-    self.animation_clock += delta_time;
+    self.animation_clock += delta_time * self.animation_speed;
 
     if (self.animation_clock > current_animation.duration) {
         if (self.queued_animation) |queued_animation| {

@@ -19,7 +19,7 @@ pub fn update(self: *TileOverlay, editor: *Editor, _: f32) void {
     }
 
     const scene = editor.scene;
-    const layer = editor.active_layer;
+    const layer = editor.getActiveLayer();
 
     self.mouse_grid_pos = editor.vmouse.getGridPosition(scene, layer) orelse return;
 
@@ -39,7 +39,7 @@ pub fn draw(self: *const TileOverlay, editor: *const Editor) void {
         return;
     }
 
-    const layer = editor.active_layer;
+    const layer = editor.getActiveLayer();
     const scroll = layer.getScrollState();
 
     const selected_tile = self.palette.selected_tile orelse return;

@@ -4,6 +4,7 @@ const Entity = @import("../entity.zig");
 const Mob = @This();
 const Scene = @import("../scene.zig");
 const Sprite = @import("../sprite.zig");
+const Tileset = @import("../tileset/tileset.zig");
 const an = @import("../animation.zig");
 const globals = @import("../globals.zig");
 const helpers = @import("../helpers.zig");
@@ -109,7 +110,24 @@ fn move(self: *Mob, scene: *const Scene, comptime axis: CollidableBody.MoveAxis,
     self.collidable.move(scene, axis, amount, self);
 }
 
-inline fn detectOnNextTile(lookahead: i32, sign: i8, mob_gridbox: shapes.IRect, player_gridbox: shapes.IRect) bool {
+fn detectGapOnNextTile(self: *Mob, scene: *const Scene, _: f32) bool {
+    const hitbox = self.getHitboxRect();
+    const sign = std.math.sign(self.speed.x);
+    const next_x = hitbox.x + (hitbox.width * sign);
+    const next_y = hitbox.y + 1;
+    const next = shapes.IRect.fromRect(rl.Rectangle.init(next_x, next_y, hitbox.width, hitbox.height));
+    const grid_rect = helpers.getGridRect(
+        shapes.IPos.fromVec2(scene.main_layer.getTileset().getTileSize()),
+        next,
+    );
+    const collision_flags = scene.collideAt(next, grid_rect);
+    if (collision_flags) |flags| {
+        return flags & @intFromEnum(Tileset.TileFlag.Collidable) == 0;
+    }
+    return true;
+}
+
+inline fn detectPlayerOnNextTile(lookahead: i32, sign: i8, mob_gridbox: shapes.IRect, player_gridbox: shapes.IRect) bool {
     const next_x = mob_gridbox.x + (sign * lookahead);
     const next_y = mob_gridbox.y;
     const next_gridbox = shapes.IRect.init(next_x, next_y, mob_gridbox.width, mob_gridbox.height);
@@ -123,12 +141,12 @@ fn detectNearbyPlayer(self: *Mob, scene: *Scene, delta_time: f32) void {
     var is_hunting = false;
 
     while (lookahead > 0) : (lookahead -= 1) {
-        if (detectOnNextTile(lookahead, 1, mob_gridbox, player_gridbox)) {
+        if (detectPlayerOnNextTile(lookahead, 1, mob_gridbox, player_gridbox)) {
             is_hunting = true;
             self.speed.x = approach(self.speed.x, self.behavior.hunt_speed, self.behavior.hunt_acceleration * delta_time);
             break;
         }
-        if (detectOnNextTile(lookahead, -1, mob_gridbox, player_gridbox)) {
+        if (detectPlayerOnNextTile(lookahead, -1, mob_gridbox, player_gridbox)) {
             is_hunting = true;
             self.speed.x = approach(self.speed.x, -self.behavior.hunt_speed, self.behavior.hunt_acceleration * delta_time);
             break;
@@ -166,6 +184,11 @@ pub fn update(self: *Mob, scene: *Scene, delta_time: f32) Entity.UpdateError!voi
 
     // Try to spot the player by raycasting
     self.detectNearbyPlayer(scene, delta_time);
+
+    // Reverse direction to avoid walking down gaps if not hunting
+    if (!self.is_jumping and !self.is_hunting and self.detectGapOnNextTile(scene, delta_time)) {
+        self.speed.x = -self.speed.x;
+    }
 
     // Hunt jumping
     if (!self.is_jumping) {

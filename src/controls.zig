@@ -36,25 +36,23 @@ pub const VirtualMouse = struct {
         return self.pos;
     }
 
-    pub fn getScenePosition(self: *const VirtualMouse, scene: *const Scene) ?rl.Vector2 {
+    pub fn getLayerPosition(self: *const VirtualMouse, scene: *const Scene, layer: TileLayer) ?rl.Vector2 {
         if (!rl.checkCollisionPointRec(self.pos, scene.viewport.rectangle)) {
             return null;
         }
-        //
-        var mouse_scene_pos = self.pos;
-        mouse_scene_pos.x += scene.viewport_x_offset;
-        mouse_scene_pos.x -= scene.viewport.rectangle.x;
-        mouse_scene_pos.y += scene.viewport_y_offset;
-        mouse_scene_pos.y -= scene.viewport.rectangle.y;
 
-        return mouse_scene_pos;
+        return layer.getLayerPosition(self.pos);
+    }
+
+    pub fn getScenePosition(self: *const VirtualMouse, scene: *const Scene) ?rl.Vector2 {
+        return self.getLayerPosition(scene, scene.main_layer);
     }
 
     pub fn getGridPosition(self: *const VirtualMouse, scene: *const Scene, layer: TileLayer) ?shapes.IPos {
-        const scene_pos = self.getScenePosition(scene) orelse return null;
+        const layer_pos = self.getLayerPosition(scene, layer) orelse return null;
         return helpers.getGridPos(
             shapes.IPos.fromVec2(layer.getTileset().getTileSize()),
-            shapes.IPos.fromVec2(scene_pos),
+            shapes.IPos.fromVec2(layer_pos),
         );
     }
 

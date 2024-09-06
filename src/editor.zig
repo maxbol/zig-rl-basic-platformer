@@ -18,7 +18,7 @@ const std = @import("std");
 
 allocator: std.mem.Allocator,
 
-active_layer: TileLayer,
+active_layer_idx: i16,
 scene: *Scene,
 vmouse: *controls.VirtualMouse,
 
@@ -63,12 +63,12 @@ pub fn create(allocator: std.mem.Allocator, scene: *Scene, vmouse: *controls.Vir
     overlay_tiles.* = Overlay.TileOverlay.init(palette_tiles);
 
     editor.* = Editor{
+        .active_layer_idx = 0,
         .allocator = allocator,
         .active_palette = .None,
         .palette_mob = palette_mob,
         .palette_collectables = palette_collectables,
         .palette_tiles = palette_tiles,
-        .active_layer = scene.main_layer,
         .scene = scene,
         .vmouse = vmouse,
         .overlay_mob = overlay_mob,
@@ -89,6 +89,16 @@ pub fn destroy(self: *Editor) void {
     self.allocator.destroy(self.palette_collectables);
     self.allocator.destroy(self.palette_tiles);
     self.allocator.destroy(self);
+}
+
+pub fn getActiveLayer(self: *const Editor) TileLayer {
+    if (self.active_layer_idx < 0) {
+        return self.scene.bg_layers.items[self.scene.bg_layers.items.len - @abs(self.active_layer_idx)];
+    }
+    if (self.active_layer_idx > 0) {
+        return self.scene.fg_layers.items[@intCast(self.active_layer_idx - 1)];
+    }
+    return self.scene.main_layer;
 }
 
 fn onFocus(self: *Editor, palette_type: Palette.ActivePaletteType) void {
@@ -128,6 +138,15 @@ fn drawSaveButton(self: *const Editor) void {
 }
 
 pub fn update(self: *Editor, delta_time: f32) !void {
+    self.scene.layer_visibility_treshold = self.active_layer_idx;
+
+    if (rl.isKeyPressed(rl.KeyboardKey.key_home) and -@as(i16, @intCast(self.scene.bg_layers.items.len)) < self.active_layer_idx) {
+        self.active_layer_idx -= 1;
+    }
+    if (rl.isKeyPressed(rl.KeyboardKey.key_end) and self.scene.fg_layers.items.len > self.active_layer_idx) {
+        self.active_layer_idx += 1;
+    }
+
     self.palette_tiles.update(self, delta_time);
     try self.palette_mob.update(self, delta_time);
     try self.palette_collectables.update(self, delta_time);

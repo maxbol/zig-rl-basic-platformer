@@ -27,7 +27,7 @@ pub fn init(on_focus: *const fn (*Editor, Palette.ActivePaletteType) void) TileP
 }
 
 pub fn update(self: *TilePalette, editor: *Editor, _: f32) void {
-    const layer = editor.active_layer;
+    const layer = editor.getActiveLayer();
     const tileset = layer.getTileset();
 
     if (rl.isKeyPressed(rl.KeyboardKey.key_page_down)) {
@@ -70,7 +70,7 @@ pub fn draw(self: *const TilePalette, editor: *const Editor, is_focused: bool) v
     // Draw window border
     helpers.drawRectBorder(self.window, 1, rl.Color.white);
 
-    const layer = editor.active_layer;
+    const layer = editor.getActiveLayer();
     const tileset = layer.getTileset();
 
     for (self.start_idx..self.end_idx) |tile_idx| {

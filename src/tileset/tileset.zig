@@ -155,6 +155,7 @@ pub fn loadTilesetFromFile(allocator: std.mem.Allocator, file_path: []const u8) 
 pub const TileFlag = enum(u8) {
     Collidable = 0b00000001,
     Slippery = 0b00000010,
+    Deadly = 0b00000100,
 
     pub fn mask(flags: []TileFlag) u8 {
         var result: u8 = 0;

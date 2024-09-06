@@ -3,6 +3,7 @@ const Collectable = @import("collectable/collectable.zig");
 const Entity = @import("entity.zig");
 const Scene = @This();
 const Sprite = @import("sprite.zig");
+const Tileset = @import("tileset/tileset.zig");
 const Viewport = @import("viewport.zig");
 const constants = @import("constants.zig");
 const debug = @import("debug.zig");
@@ -29,6 +30,7 @@ gravity: f32 = 13 * 60,
 first_frame_initialization_done: bool = false,
 collectables: [constants.MAX_AMOUNT_OF_COLLECTABLES]Collectable = undefined,
 collectables_amount: usize,
+layer_visibility_treshold: ?i16 = null,
 
 max_x_scroll: f32 = 0,
 max_y_scroll: f32 = 0,
@@ -321,10 +323,6 @@ pub fn update(self: *Scene, delta_time: f32) !void {
     if (!self.first_frame_initialization_done) {
         self.first_frame_initialization_done = true;
         self.player.actor().setPos(self.player_starting_pos);
-
-        // for (0..self.mobs_amount) |i| {
-        //     self.mobs[i].setPos(self.mobs_starting_pos[i]);
-        // }
     }
 
     const pixel_size = self.main_layer.getPixelSize();
@@ -361,11 +359,17 @@ pub fn update(self: *Scene, delta_time: f32) !void {
 }
 
 pub fn draw(self: *const Scene) void {
-    for (self.bg_layers.items) |layer| {
+    for (self.bg_layers.items, 0..) |layer, i| {
+        const layer_mask_index = -@as(i16, @intCast(self.bg_layers.items.len - i));
+        if (self.layer_visibility_treshold != null and layer_mask_index > self.layer_visibility_treshold.?) {
+            break;
+        }
         layer.draw(self);
     }
 
-    self.main_layer.draw(self);
+    if (self.layer_visibility_treshold == null or self.layer_visibility_treshold.? >= 0) {
+        self.main_layer.draw(self);
+    }
 
     for (0..self.mobs_amount) |i| {
         self.mobs[i].draw(self);
@@ -377,7 +381,11 @@ pub fn draw(self: *const Scene) void {
 
     self.player.entity().draw(self);
 
-    for (self.fg_layers.items) |layer| {
+    for (self.fg_layers.items, 0..) |layer, i| {
+        const layer_mask_index: i16 = @intCast(i + 1);
+        if (self.layer_visibility_treshold != null and layer_mask_index > self.layer_visibility_treshold.?) {
+            break;
+        }
         layer.draw(self);
     }
 }
@@ -475,19 +483,32 @@ pub fn centerViewportOnPos(self: *Scene, pos: anytype) void {
             pos.x - (self.viewport.rectangle.width / 2),
             0,
         ) / self.max_x_scroll,
-        self.max_x_scroll,
+        1,
     );
     self.scroll_state.y = @min(
         @max(
             pos.y - (self.viewport.rectangle.height / 2),
             0,
         ) / self.max_y_scroll,
-        self.max_y_scroll,
+        1,
     );
 }
 
 pub fn collideAt(self: *const Scene, rect: shapes.IRect, grid_rect: shapes.IRect) ?u8 {
-    return self.main_layer.collideAt(rect, grid_rect);
+    const tile_flags = self.main_layer.collideAt(rect, grid_rect);
+    if (tile_flags) |flags| {
+        return flags;
+    }
+
+    if (rect.x < 0 or rect.y < 0) {
+        return @intFromEnum(Tileset.TileFlag.Collidable);
+    }
+
+    if (@as(f32, @floatFromInt(rect.x + rect.width)) > self.main_layer.getPixelSize().x or @as(f32, @floatFromInt(rect.y + rect.height)) > self.main_layer.getPixelSize().y) {
+        return @intFromEnum(Tileset.TileFlag.Collidable);
+    }
+
+    return null;
 }
 
 pub fn loadSceneFromFile(allocator: std.mem.Allocator, file_path: []const u8) !*Scene {
