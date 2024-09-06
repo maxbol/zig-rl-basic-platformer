@@ -12,11 +12,10 @@ const AnimationBuffer = an.AnimationBuffer(&.{
 var texture: ?rl.Texture = null;
 
 fn loadTexture() rl.Texture {
-    if (texture) |t| {
-        return t;
-    }
-    texture = rl.loadTexture("assets/sprites/slime_green.png");
-    return texture.?;
+    return texture orelse {
+        texture = rl.loadTexture("assets/sprites/slime_green.png");
+        return texture.?;
+    };
 }
 
 fn getAnimations() AnimationBuffer {

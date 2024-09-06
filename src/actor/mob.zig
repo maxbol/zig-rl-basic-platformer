@@ -75,6 +75,15 @@ pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2, mob
     return mob;
 }
 
+pub fn reset(self: *Mob) void {
+    if (self.is_deleted) {
+        return;
+    }
+
+    self.* = Mob.init(self.initial_hitbox, self.sprite, self.sprite_offset, self.behavior);
+    self.sprite.reset();
+}
+
 pub fn handleCollision(self: *Mob, axis: CollidableBody.MoveAxis, sign: i8, flags: u8) void {
     _ = flags; // autofix
     if (axis == CollidableBody.MoveAxis.X) {
@@ -218,9 +227,9 @@ pub fn update(self: *Mob, scene: *Scene, delta_time: f32) Entity.UpdateError!voi
 
     // Set animation and flip sprite
     if (self.is_hunting) {
-        self.sprite.setAnimation(.Attack, null, false);
+        self.sprite.setAnimation(.{ .animation = .Attack });
     } else {
-        self.sprite.setAnimation(.Walk, null, false);
+        self.sprite.setAnimation(.{ .animation = .Walk });
     }
 
     if (self.speed.x > 0) {

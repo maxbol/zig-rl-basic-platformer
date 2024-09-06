@@ -16,6 +16,7 @@ const std = @import("std");
 
 const approach = helpers.approach;
 
+initial_hitbox: rl.Rectangle,
 collidable: CollidableBody,
 face_dir: u1 = 1,
 is_slipping: bool = false,
@@ -77,6 +78,7 @@ pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2) Pla
     const sfx_jump = rl.loadSound("assets/sounds/jump.wav");
 
     return .{
+        .initial_hitbox = hitbox,
         .sfx_hurt = sfx_hurt,
         .sfx_jump = sfx_jump,
         .speed = rl.Vector2.init(0, 0),
@@ -84,6 +86,11 @@ pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2) Pla
         .sprite_offset = sprite_offset,
         .collidable = CollidableBody.init(hitbox),
     };
+}
+
+pub fn reset(self: *Player) void {
+    self.* = Player.init(self.initial_hitbox, self.sprite, self.sprite_offset);
+    self.sprite.reset();
 }
 
 pub fn actor(self: *Player) Actor {
@@ -128,7 +135,10 @@ fn move(self: *Player, scene: *const Scene, comptime axis: CollidableBody.MoveAx
 pub fn handleCollision(self: *Player, axis: CollidableBody.MoveAxis, sign: i8, tile_flags: u8) void {
     if (tile_flags & @intFromEnum(Tileset.TileFlag.Deadly) != 0) {
         self.lives = 0;
-        self.sprite.setAnimation(.Death, null, true);
+        self.sprite.setAnimation(.{
+            .animation = .Death,
+            .on_animation_finished = .{ .context = self, .call = handleGameOver },
+        });
     }
     if (axis == CollidableBody.MoveAxis.X) {
         self.speed.x = 0;
@@ -142,7 +152,10 @@ pub fn handleCollision(self: *Player, axis: CollidableBody.MoveAxis, sign: i8, t
             self.is_slipping = tile_flags & @intFromEnum(Tileset.TileFlag.Slippery) != 0;
 
             if (self.lives == 0) {
-                self.sprite.setAnimation(.Death, null, true);
+                self.sprite.setAnimation(.{
+                    .animation = .Death,
+                    .on_animation_finished = .{ .context = self, .call = handleGameOver },
+                });
             }
         }
     }
@@ -152,6 +165,14 @@ fn setPos(ctx: *anyopaque, pos: rl.Vector2) void {
     const self: *Player = @ptrCast(@alignCast(ctx));
     self.collidable.hitbox.x = pos.x;
     self.collidable.hitbox.y = pos.y;
+}
+
+fn revertToIdle(_: *anyopaque, sprite: *Sprite, _: *Scene) void {
+    sprite.setAnimation(.{ .animation = .Idle });
+}
+
+fn handleGameOver(_: *anyopaque, _: *Sprite, scene: *Scene) void {
+    scene.reset();
 }
 
 fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
@@ -173,8 +194,7 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
 
     // Rolling
     if (self.speed.x != 0 and self.sprite.current_animation != .Roll and !self.is_stunlocked and is_grounded and controls.isKeyboardControlPressed(controls.KBD_ROLL)) {
-        self.sprite.setAnimation(.Roll, .Idle, false);
-        self.sprite.setAnimationSpeed(1);
+        self.sprite.setAnimation(.{ .animation = .Roll, .on_animation_finished = .{ .context = self, .call = revertToIdle } });
         self.speed.x = std.math.sign(self.speed.x) * roll_speed;
     }
     const is_rolling = self.sprite.current_animation == .Roll;
@@ -210,18 +230,17 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
 
     // Set animation and direction
     if (self.is_stunlocked) {
-        self.sprite.setAnimation(.Hit, null, true);
-        self.sprite.setAnimationSpeed(1);
+        self.sprite.setAnimation(.{ .animation = .Hit });
     } else if (!is_rolling) {
         if (!is_grounded) {
-            self.sprite.setAnimation(.Jump, null, true);
-            self.sprite.setAnimationSpeed(1);
+            self.sprite.setAnimation(.{ .animation = .Jump });
         } else if (self.speed.x == 0) {
-            self.sprite.setAnimation(.Idle, null, false);
-            self.sprite.setAnimationSpeed(1);
+            self.sprite.setAnimation(.{ .animation = .Idle });
         } else {
-            self.sprite.setAnimation(.Walk, null, false);
-            self.sprite.setAnimationSpeed(@min(2, @abs(self.speed.x) / 180));
+            self.sprite.setAnimation(.{
+                .animation = .Walk,
+                .animation_speed = @min(2, @abs(self.speed.x) / 180),
+            });
         }
     }
 

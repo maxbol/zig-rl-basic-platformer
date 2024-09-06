@@ -301,6 +301,18 @@ pub fn writeBytes(self: *const Scene, writer: anytype, verbose: bool) !void {
     }
 }
 
+pub fn reset(self: *Scene) void {
+    for (0..self.mobs.len) |i| {
+        self.mobs[i].reset();
+    }
+
+    for (0..self.collectables.len) |i| {
+        self.collectables[i].reset();
+    }
+
+    self.player.reset();
+}
+
 pub fn spawnCollectable(self: *Scene, collectable_type: usize, pos: rl.Vector2) SpawnError!void {
     const collectable: Collectable = try Collectable.initCollectableByIndex(collectable_type, pos);
     self.collectables[self.collectables_amount] = collectable;

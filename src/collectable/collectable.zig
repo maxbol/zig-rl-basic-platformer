@@ -62,6 +62,15 @@ pub fn init(collectable_type: u8, hitbox: rl.Rectangle, sprite: Sprite, sprite_o
     };
 }
 
+pub fn reset(self: *Collectable) void {
+    if (self.is_deleted) {
+        return;
+    }
+
+    self.* = Collectable.init(self.collectable_type, self.initial_hitbox, self.sprite, self.sprite_offset, self.onCollected);
+    self.sprite.reset();
+}
+
 pub fn getHitboxRect(self: *const Collectable) rl.Rectangle {
     return self.hitbox;
 }

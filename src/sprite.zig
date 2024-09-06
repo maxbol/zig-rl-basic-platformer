@@ -13,14 +13,28 @@ texture: rl.Texture2D,
 sprite_texture_map_r: SpriteTextureMap,
 sprite_texture_map_l: SpriteTextureMap,
 animation_buffer: an.AnimationBufferReader,
-current_animation: an.AnimationType = .Idle,
+initial_animation: an.AnimationType,
+current_animation: an.AnimationType,
 queued_animation: ?an.AnimationType = null,
 freeze_animation_on_last_frame: bool = false,
+on_animation_finished: ?Callback = null,
 animation_speed: f32 = 1,
 animation_clock: f32 = 0,
 current_display_frame: u8 = 0,
 
 pub const SpriteTextureMap = [128]?rl.Rectangle;
+
+pub const Callback = struct {
+    context: *anyopaque,
+    call: *const fn (*anyopaque, *Sprite, *Scene) void,
+};
+
+pub const SetAnimationParam = struct {
+    animation: an.AnimationType,
+    animation_speed: f32 = 1,
+    on_animation_finished: ?Callback = null,
+    freeze_animation_on_last_frame: bool = false,
+};
 
 pub const FlipState = enum(u2) {
     XFlip = 0b01,
@@ -61,21 +75,32 @@ pub fn init(
         .sprite_texture_map_r = sprite_texture_map_r,
         .sprite_texture_map_l = sprite_texture_map_l,
         .texture = texture,
+        .initial_animation = initial_animation,
         .current_animation = initial_animation,
     };
 }
 
-pub fn setAnimation(self: *Sprite, animation: an.AnimationType, queued: ?an.AnimationType, freeze_animation_on_last_frame: bool) void {
-    if (self.current_animation != animation) {
-        self.current_animation = animation;
-        self.animation_clock = 0;
-    }
-    self.queued_animation = queued;
-    self.freeze_animation_on_last_frame = freeze_animation_on_last_frame;
+pub fn reset(self: *Sprite) void {
+    self.* = .{
+        .animation_buffer = self.animation_buffer,
+        .size = self.size,
+        .sprite_texture_map_r = self.sprite_texture_map_r,
+        .sprite_texture_map_l = self.sprite_texture_map_l,
+        .texture = self.texture,
+        .current_animation = self.initial_animation,
+        .initial_animation = self.initial_animation,
+    };
 }
 
-pub fn setAnimationSpeed(self: *Sprite, speed: f32) void {
-    self.animation_speed = speed;
+pub fn setAnimation(self: *Sprite, param: SetAnimationParam) void {
+    if (self.current_animation != param.animation) {
+        self.current_animation = param.animation;
+        self.animation_clock = 0;
+    }
+    self.animation_speed = param.animation_speed;
+    if (param.on_animation_finished) |cb| {
+        self.on_animation_finished = cb;
+    }
 }
 
 pub fn setFlip(self: *Sprite, flip: FlipState, state: bool) void {
@@ -90,7 +115,7 @@ pub fn getSourceRect(self: *const Sprite) ?rl.Rectangle {
     }
 }
 
-pub fn update(self: *Sprite, _: *Scene, delta_time: f32) !void {
+pub fn update(self: *Sprite, scene: *Scene, delta_time: f32) !void {
     // Animation
     const current_animation = try self.animation_buffer.readAnimation(self.current_animation);
     const current_animation_duration: f32 = @floatCast(current_animation.duration);
@@ -105,8 +130,8 @@ pub fn update(self: *Sprite, _: *Scene, delta_time: f32) !void {
     self.animation_clock += delta_time * self.animation_speed;
 
     if (self.animation_clock > current_animation.duration) {
-        if (self.queued_animation) |queued_animation| {
-            self.setAnimation(queued_animation, null, false);
+        if (self.on_animation_finished) |callback| {
+            callback.call(callback.context, self, scene);
         } else if (self.freeze_animation_on_last_frame) {
             self.animation_clock = current_animation.duration;
         } else {

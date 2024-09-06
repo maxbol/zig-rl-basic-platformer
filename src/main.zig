@@ -147,6 +147,10 @@ pub fn main() anyerror!void {
             debug.togglePause();
         }
 
+        if (rl.isKeyPressed(rl.KeyboardKey.key_r)) {
+            scene.reset();
+        }
+
         if (rl.isKeyPressed(rl.KeyboardKey.key_o)) {
             if (debug.isDebugFlagSet(globals.debug_flags[0])) {
                 debug.clearDebugFlags();
