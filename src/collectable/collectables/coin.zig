@@ -58,6 +58,7 @@ pub const Coin = Collectable.Prefab(
         loadTexture,
         getAnimationBuffer(),
         .Idle,
+        rl.Vector2{ .x = 0, .y = 0 },
     ),
     onCollected,
 );

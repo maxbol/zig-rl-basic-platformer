@@ -3,6 +3,7 @@ const Collectable = @import("collectable/collectable.zig");
 const Entity = @import("entity.zig");
 const Scene = @This();
 const Sprite = @import("sprite.zig");
+const Solid = @import("solid/solid.zig");
 const Tileset = @import("tileset/tileset.zig");
 const Viewport = @import("viewport.zig");
 const constants = @import("constants.zig");
@@ -26,6 +27,8 @@ player_starting_pos: rl.Vector2,
 mobs: [constants.MAX_AMOUNT_OF_MOBS]Actor.Mob,
 mobs_starting_pos: [constants.MAX_AMOUNT_OF_MOBS]rl.Vector2,
 mobs_amount: usize,
+platforms: [constants.MAX_AMOUNT_OF_PLATFORMS]Solid.Platform,
+platforms_amount: usize,
 gravity: f32 = 13 * 60,
 first_frame_initialization_done: bool = false,
 collectables: [constants.MAX_AMOUNT_OF_COLLECTABLES]Collectable = undefined,
@@ -39,7 +42,44 @@ viewport_y_offset: f32 = 0,
 viewport_x_limit: f32 = 0,
 viewport_y_limit: f32 = 0,
 
-pub const data_format_version = 1;
+pub const SceneSolidIterator = struct {
+    scene: *Scene,
+    idx: usize = 0,
+
+    pub fn next(self: *SceneSolidIterator) ?Solid {
+        for (self.idx..self.scene.platforms_amount) |i| {
+            self.idx += 1;
+            if (!self.scene.platforms[i].is_deleted) {
+                return self.scene.platforms[i].solid();
+            }
+        }
+
+        return null;
+    }
+};
+
+pub const SceneActorIterator = struct {
+    scene: *Scene,
+    idx: usize = 0,
+
+    pub fn next(self: *SceneActorIterator) ?Actor {
+        if (self.idx == 0) {
+            self.idx += 1;
+            return self.scene.player.actor();
+        }
+
+        const mob_idx = self.idx - 1;
+
+        for (mob_idx..self.scene.mobs_amount) |i| {
+            self.idx += 1;
+            if (!self.scene.mobs[i].is_deleted and !self.scene.mobs[i].is_dead) {
+                return self.scene.mobs[i].actor();
+            }
+        }
+
+        return null;
+    }
+};
 
 pub fn create(
     allocator: std.mem.Allocator,
@@ -80,6 +120,8 @@ pub fn create(
         .mobs_amount = mobs_amount,
         .player = player,
         .player_starting_pos = player_starting_pos,
+        .platforms = undefined,
+        .platforms_amount = 0,
         .collectables_amount = collectables_amount,
         .collectables = collectables,
     };
@@ -186,16 +228,6 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
         collectables_amount,
     );
 }
-
-const BYTE_NO_BG_LAYERS_HEADER = "\nNO_BG_LAYERS\n";
-const BYTE_NO_FG_LAYERS_HEADER = "\nNO_FG_LAYERS\n";
-const BYTE_NO_MOBS_HEADER = "\nNO_MOBS\n";
-const BYTE_NO_COLLECTABLES_HEADER = "\nNO_COLLECTABLES\n";
-const BYTE_MAIN_LAYER_HEADER = "\nMAIN_LAYER\n";
-const BYTE_BG_LAYERS_HEADER = "\nBG_LAYERS\n";
-const BYTE_FG_LAYERS_HEADER = "\nFG_LAYERS\n";
-const BYTE_MOB_HEADER = "\nMOBS\n";
-const BYTE_COLLECTABLE_HEADER = "\nCOLLECTABLES\n";
 
 pub fn writeBytes(self: *const Scene, writer: anytype, verbose: bool) !void {
     // Write version
@@ -313,6 +345,14 @@ pub fn reset(self: *Scene) void {
     self.player.reset();
 }
 
+pub fn getActorIterator(self: *Scene) SceneActorIterator {
+    return SceneActorIterator{ .scene = self };
+}
+
+pub fn getSolidIterator(self: *Scene) SceneSolidIterator {
+    return SceneSolidIterator{ .scene = self };
+}
+
 pub fn spawnCollectable(self: *Scene, collectable_type: usize, pos: rl.Vector2) SpawnError!void {
     const collectable: Collectable = try Collectable.initCollectableByIndex(collectable_type, pos);
     self.collectables[self.collectables_amount] = collectable;
@@ -325,6 +365,13 @@ pub fn spawnMob(self: *Scene, mob_type: usize, pos: rl.Vector2) SpawnError!void 
     self.mobs[self.mobs_amount] = mob;
     self.mobs_starting_pos[self.mobs_amount] = pos;
     self.mobs_amount += 1;
+}
+
+pub fn spawnPlatform(self: *Scene, platform_type: usize, pos: rl.Vector2) SpawnError!void {
+    const platform: Solid.Platform = try Solid.Platform.initPlatformByIndex(platform_type, pos);
+
+    self.platforms[self.platforms_amount] = platform;
+    self.platforms_amount += 1;
 }
 
 pub fn removeMob(self: *Scene, mob_idx: usize) void {
@@ -361,6 +408,10 @@ pub fn update(self: *Scene, delta_time: f32) !void {
         for (0..self.mobs_amount) |i| {
             try self.mobs[i].update(self, delta_time);
         }
+
+        for (0..self.platforms_amount) |i| {
+            try self.platforms[i].update(self, delta_time);
+        }
     }
 
     for (0..self.collectables_amount) |i| {
@@ -389,6 +440,10 @@ pub fn draw(self: *const Scene) void {
 
     for (0..self.collectables_amount) |i| {
         self.collectables[i].draw(self);
+    }
+
+    for (0..self.platforms_amount) |i| {
+        self.platforms[i].draw(self);
     }
 
     self.player.entity().draw(self);
@@ -506,12 +561,22 @@ pub fn centerViewportOnPos(self: *Scene, pos: anytype) void {
     );
 }
 
-pub fn collideAt(self: *const Scene, rect: shapes.IRect, grid_rect: shapes.IRect) ?u8 {
+pub fn collideAt(self: *Scene, rect: shapes.IRect, grid_rect: shapes.IRect) ?u8 {
+    // Collide with world tiles
     const tile_flags = self.main_layer.collideAt(rect, grid_rect);
     if (tile_flags) |flags| {
         return flags;
     }
 
+    // Collide with solids
+    var solid_it = self.getSolidIterator();
+    while (solid_it.next()) |solid| {
+        if (solid.collideAt(rect)) {
+            return @intFromEnum(Tileset.TileFlag.Collidable);
+        }
+    }
+
+    // Collide with scene boundary
     if (rect.x < 0 or rect.y < 0) {
         return @intFromEnum(Tileset.TileFlag.Collidable);
     }
@@ -532,3 +597,15 @@ pub fn loadSceneFromFile(allocator: std.mem.Allocator, file_path: []const u8) !*
 pub const SpawnError = error{
     NoSuchItem,
 };
+
+const BYTE_NO_BG_LAYERS_HEADER = "\nNO_BG_LAYERS\n";
+const BYTE_NO_FG_LAYERS_HEADER = "\nNO_FG_LAYERS\n";
+const BYTE_NO_MOBS_HEADER = "\nNO_MOBS\n";
+const BYTE_NO_COLLECTABLES_HEADER = "\nNO_COLLECTABLES\n";
+const BYTE_MAIN_LAYER_HEADER = "\nMAIN_LAYER\n";
+const BYTE_BG_LAYERS_HEADER = "\nBG_LAYERS\n";
+const BYTE_FG_LAYERS_HEADER = "\nFG_LAYERS\n";
+const BYTE_MOB_HEADER = "\nMOBS\n";
+const BYTE_COLLECTABLE_HEADER = "\nCOLLECTABLES\n";
+
+pub const data_format_version = 1;

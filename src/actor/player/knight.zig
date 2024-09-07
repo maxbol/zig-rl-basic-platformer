@@ -67,5 +67,6 @@ pub const Knight = Player.Prefab(
         loadTexture,
         getAnimations(),
         .Idle,
+        rl.Vector2{ .x = 0, .y = 0 },
     ),
 );

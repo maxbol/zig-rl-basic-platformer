@@ -131,11 +131,13 @@ pub fn FixedSizeTileLayer(comptime size: usize) type {
                     .getFlags = getFlags,
                     .getPixelSize = getPixelSize,
                     .getLayerPosition = getLayerPosition,
+                    .getRowSize = getRowSize,
                     .getSize = getSize,
                     .getScrollState = getScrollState,
                     .getTileset = getTileset,
                     .getTileIdxFromRowAndCol = getTileIdxFromRowAndCol,
                     .getTileFromRowAndCol = getTileFromRowAndCol,
+                    .resizeLayer = resizeLayer,
                     .storeCollisionData = storeCollisionData,
                     .update = update,
                     .wasTestedThisFrame = wasTestedThisFrame,
@@ -181,6 +183,11 @@ pub fn FixedSizeTileLayer(comptime size: usize) type {
             return self.size;
         }
 
+        fn getRowSize(ctx: *anyopaque) usize {
+            const self: *const @This() = @ptrCast(@alignCast(ctx));
+            return self.row_size;
+        }
+
         fn getScrollState(ctx: *anyopaque) *const Scrollable {
             const self: *const @This() = @ptrCast(@alignCast(ctx));
             return &self.scrollable;
@@ -212,6 +219,23 @@ pub fn FixedSizeTileLayer(comptime size: usize) type {
             }
 
             return tile;
+        }
+
+        fn resizeLayer(ctx: *anyopaque, new_size: rl.Vector2, row_size: usize) void {
+            const self: *@This() = @ptrCast(@alignCast(ctx));
+            const tile_size = self.tileset.getTileSize();
+
+            if (@as(usize, @intFromFloat(new_size.y)) * row_size > size) {
+                std.log.err("New layer size {d} exceeds maximum size {d}\n", .{ @as(usize, @intFromFloat(new_size.y)) * row_size, size });
+                return;
+            }
+
+            self.row_size = row_size;
+            self.size = new_size;
+            self.pixel_size = .{
+                .x = new_size.x * tile_size.x,
+                .y = new_size.y * tile_size.y,
+            };
         }
 
         fn storeCollisionData(ctx: *anyopaque, tile_idx: usize, did_collide: bool) void {

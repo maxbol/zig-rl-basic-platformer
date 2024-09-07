@@ -57,6 +57,7 @@ pub fn Fruit(offset: usize, on_collected: fn (*Collectable, *Player) void) type 
             loadTexture,
             getAnimationBuffer(offset),
             .Idle,
+            rl.Vector2{ .x = 0, .y = 0 },
         ),
         on_collected,
     );

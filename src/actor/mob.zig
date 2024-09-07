@@ -11,6 +11,7 @@ const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const std = @import("std");
 const shapes = @import("../shapes.zig");
+const types = @import("../types.zig");
 
 const approach = helpers.approach;
 
@@ -75,6 +76,36 @@ pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2, mob
     return mob;
 }
 
+pub fn actor(self: *Mob) Actor {
+    return .{ .ptr = self, .impl = &.{
+        .getCollidableBody = getCollidableBodyCast,
+        .getHitboxRect = getHitboxRectCast,
+        .getGridRect = getGridRectCast,
+        .setPos = setPosCast,
+        .squish = handleSquish,
+    } };
+}
+
+fn getCollidableBodyCast(ctx: *const anyopaque) CollidableBody {
+    const self: *const Mob = @ptrCast(@alignCast(ctx));
+    return self.getCollidableBody();
+}
+
+fn getGridRectCast(ctx: *const anyopaque) shapes.IRect {
+    const self: *const Mob = @ptrCast(@alignCast(ctx));
+    return self.getGridRect();
+}
+
+fn getHitboxRectCast(ctx: *const anyopaque) rl.Rectangle {
+    const self: *const Mob = @ptrCast(@alignCast(ctx));
+    return self.getHitboxRect();
+}
+
+fn setPosCast(ctx: *anyopaque, pos: rl.Vector2) void {
+    const self: *Mob = @ptrCast(@alignCast(ctx));
+    self.setPos(pos);
+}
+
 pub fn reset(self: *Mob) void {
     if (self.is_deleted) {
         return;
@@ -84,9 +115,12 @@ pub fn reset(self: *Mob) void {
     self.sprite.reset();
 }
 
-pub fn handleCollision(self: *Mob, axis: CollidableBody.MoveAxis, sign: i8, flags: u8) void {
-    _ = flags; // autofix
-    if (axis == CollidableBody.MoveAxis.X) {
+fn handleSquish(_: *anyopaque, _: types.Axis, _: i8, _: u8) void {
+    // TODO 07/09/2024: Implement squish
+}
+
+pub fn handleCollision(self: *Mob, axis: types.Axis, sign: i8, _: u8) void {
+    if (axis == types.Axis.X) {
         // Reverse direction when hitting an obstacle (unless we are hunting the player)
         if (!self.is_hunting) {
             self.speed.x = -@as(f32, @floatFromInt(sign)) * self.behavior.walk_speed;
@@ -100,11 +134,15 @@ pub fn handleCollision(self: *Mob, axis: CollidableBody.MoveAxis, sign: i8, flag
     }
 }
 
-pub fn getGridRect(self: *const Mob) shapes.IRect {
+pub inline fn getCollidableBody(self: *const Mob) CollidableBody {
+    return self.collidable;
+}
+
+pub inline fn getGridRect(self: *const Mob) shapes.IRect {
     return self.collidable.grid_rect;
 }
 
-pub fn getHitboxRect(self: *const Mob) rl.Rectangle {
+pub inline fn getHitboxRect(self: *const Mob) rl.Rectangle {
     return self.collidable.hitbox;
 }
 
@@ -115,11 +153,11 @@ pub fn getInitialPos(self: *const Mob) rl.Vector2 {
     };
 }
 
-fn move(self: *Mob, scene: *const Scene, comptime axis: CollidableBody.MoveAxis, amount: f32) void {
+fn move(self: *Mob, scene: *Scene, comptime axis: types.Axis, amount: f32) void {
     self.collidable.move(scene, axis, amount, self);
 }
 
-fn detectGapOnNextTile(self: *Mob, scene: *const Scene, _: f32) bool {
+fn detectGapOnNextTile(self: *Mob, scene: *Scene, _: f32) bool {
     const hitbox = self.getHitboxRect();
     const sign = std.math.sign(self.speed.x);
     const next_x = hitbox.x + (hitbox.width * sign);
@@ -168,7 +206,7 @@ fn randomlyAcquireNextHuntjumpDistance(self: *Mob) void {
     self.next_huntjump_distance = @floatFromInt(globals.rand.intRangeAtMostBiased(u8, 80, 160));
 }
 
-pub fn setPos(self: *Mob, pos: rl.Vector2) void {
+pub inline fn setPos(self: *Mob, pos: rl.Vector2) void {
     self.collidable.hitbox.x = pos.x;
     self.collidable.hitbox.y = pos.y;
 }
@@ -239,8 +277,8 @@ pub fn update(self: *Mob, scene: *Scene, delta_time: f32) Entity.UpdateError!voi
     }
 
     // Move the mob
-    self.move(scene, CollidableBody.MoveAxis.X, self.speed.x * delta_time);
-    self.move(scene, CollidableBody.MoveAxis.Y, self.speed.y * delta_time);
+    self.move(scene, types.Axis.X, self.speed.x * delta_time);
+    self.move(scene, types.Axis.Y, self.speed.y * delta_time);
 
     try self.sprite.update(scene, delta_time);
 }
@@ -275,14 +313,4 @@ pub fn initMobByIndex(index: usize, pos: rl.Vector2) Scene.SpawnError!Mob {
         }
     }
     return Scene.SpawnError.NoSuchItem;
-}
-
-pub inline fn getBiggestMobSpriteSize() f32 {
-    var max: f32 = 0;
-    inline for (prefabs) |MobPrefab| {
-        const SpritePrefab = MobPrefab.Sprite;
-        const biggest_size_dim = @max(SpritePrefab.SIZE_X, SpritePrefab.SIZE_Y);
-        max = @max(max, biggest_size_dim);
-    }
-    return max;
 }

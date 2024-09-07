@@ -62,5 +62,6 @@ pub const GreenSlime = Mob.Prefab(
         getAnimations(),
         // Initial animation
         .Walk,
+        rl.Vector2{ .x = 0, .y = 0 },
     ),
 );

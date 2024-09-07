@@ -177,4 +177,5 @@ const EraserSprite = Sprite.Prefab(
     loadEraserTexture,
     an.getNoAnimationsBuffer(),
     .Idle,
+    rl.Vector2{ .x = 0, .y = 0 },
 );

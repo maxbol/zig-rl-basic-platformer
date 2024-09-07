@@ -26,11 +26,13 @@ active_palette: Palette.ActivePaletteType,
 
 palette_collectables: *Palette.CollectablePalette,
 palette_mob: *Palette.MobPalette,
+palette_platform: *Palette.PlatformPalette,
 palette_tiles: *Palette.TilePalette,
 
-overlay_collectables: *Overlay.CollectableOverlay,
-overlay_mob: *Overlay.MobOverlay,
-overlay_tiles: *Overlay.TileOverlay,
+overlay_collectables: Overlay.CollectableOverlay,
+overlay_mob: Overlay.MobOverlay,
+overlay_platform: Overlay.PlatformOverlay,
+overlay_tiles: Overlay.TileOverlay,
 
 save_btn_rect: rl.Rectangle = undefined,
 save_btn_hover: bool = false,
@@ -40,10 +42,8 @@ const tile_palette_cols_per_row = 9;
 pub fn create(allocator: std.mem.Allocator, scene: *Scene, vmouse: *controls.VirtualMouse) !*Editor {
     const palette_mob = try allocator.create(Palette.MobPalette);
     const palette_collectables = try allocator.create(Palette.CollectablePalette);
+    const palette_platform = try allocator.create(Palette.PlatformPalette);
     const palette_tiles = try allocator.create(Palette.TilePalette);
-    const overlay_collectables = try allocator.create(Overlay.CollectableOverlay);
-    const overlay_mob = try allocator.create(Overlay.MobOverlay);
-    const overlay_tiles = try allocator.create(Overlay.TileOverlay);
     const editor = try allocator.create(Editor);
 
     palette_mob.* = Palette.MobPalette.init(
@@ -54,26 +54,34 @@ pub fn create(allocator: std.mem.Allocator, scene: *Scene, vmouse: *controls.Vir
     palette_collectables.* = Palette.CollectablePalette.init(
         onFocus,
         constants.VIEWPORT_PADDING_X + (palette_mob.window.width) + 10,
-        constants.GAME_SIZE_Y - (Palette.CollectablePalette.window_height) - constants.VIEWPORT_PADDING_X,
+        constants.GAME_SIZE_Y - Palette.CollectablePalette.window_height - constants.VIEWPORT_PADDING_X,
+    );
+    palette_platform.* = Palette.PlatformPalette.init(
+        onFocus,
+        constants.VIEWPORT_PADDING_X + palette_mob.window.width + palette_collectables.window.width + 10 + 10,
+        constants.GAME_SIZE_Y - Palette.PlatformPalette.window_height - constants.VIEWPORT_PADDING_Y,
     );
     palette_tiles.* = Palette.TilePalette.init(onFocus);
 
-    overlay_mob.* = Overlay.MobOverlay.init(palette_mob, &scene.mobs);
-    overlay_collectables.* = Overlay.CollectableOverlay.init(palette_collectables, &scene.collectables);
-    overlay_tiles.* = Overlay.TileOverlay.init(palette_tiles);
+    const overlay_mob = Overlay.MobOverlay.init(palette_mob, &scene.mobs);
+    const overlay_collectables = Overlay.CollectableOverlay.init(palette_collectables, &scene.collectables);
+    const overlay_platform = Overlay.PlatformOverlay.init(palette_platform, &scene.platforms);
+    const overlay_tiles = Overlay.TileOverlay.init(palette_tiles);
 
     editor.* = Editor{
         .active_layer_idx = 0,
-        .allocator = allocator,
         .active_palette = .None,
-        .palette_mob = palette_mob,
+        .allocator = allocator,
+        .overlay_collectables = overlay_collectables,
+        .overlay_mob = overlay_mob,
+        .overlay_platform = overlay_platform,
+        .overlay_tiles = overlay_tiles,
         .palette_collectables = palette_collectables,
+        .palette_mob = palette_mob,
+        .palette_platform = palette_platform,
         .palette_tiles = palette_tiles,
         .scene = scene,
         .vmouse = vmouse,
-        .overlay_mob = overlay_mob,
-        .overlay_collectables = overlay_collectables,
-        .overlay_tiles = overlay_tiles,
     };
 
     editor.initSaveButton();
@@ -82,9 +90,6 @@ pub fn create(allocator: std.mem.Allocator, scene: *Scene, vmouse: *controls.Vir
 }
 
 pub fn destroy(self: *Editor) void {
-    self.allocator.destroy(self.overlay_mob);
-    self.allocator.destroy(self.overlay_collectables);
-    self.allocator.destroy(self.overlay_tiles);
     self.allocator.destroy(self.palette_mob);
     self.allocator.destroy(self.palette_collectables);
     self.allocator.destroy(self.palette_tiles);
@@ -147,9 +152,34 @@ pub fn update(self: *Editor, delta_time: f32) !void {
         self.active_layer_idx += 1;
     }
 
+    if (rl.isKeyPressed(rl.KeyboardKey.key_left_bracket)) {
+        const active_layer = self.getActiveLayer();
+        const shift = rl.isKeyDown(rl.KeyboardKey.key_left_shift);
+        const change = if (shift) rl.Vector2.init(0, 1) else rl.Vector2.init(1, 0);
+        const new_size = active_layer.getSize().subtract(change);
+        var row_size = active_layer.getRowSize();
+        if (!shift) {
+            row_size -= 1;
+        }
+        active_layer.resizeLayer(new_size, row_size);
+    }
+
+    if (rl.isKeyPressed(rl.KeyboardKey.key_right_bracket)) {
+        const active_layer = self.getActiveLayer();
+        const shift = rl.isKeyDown(rl.KeyboardKey.key_left_shift);
+        const change = if (shift) rl.Vector2.init(0, 1) else rl.Vector2.init(1, 0);
+        const new_size = active_layer.getSize().add(change);
+        var row_size = active_layer.getRowSize();
+        if (!shift) {
+            row_size += 1;
+        }
+        active_layer.resizeLayer(new_size, row_size);
+    }
+
     self.palette_tiles.update(self, delta_time);
     try self.palette_mob.update(self, delta_time);
     try self.palette_collectables.update(self, delta_time);
+    try self.palette_platform.update(self, delta_time);
 
     switch (self.active_palette) {
         .None => {},
@@ -162,6 +192,9 @@ pub fn update(self: *Editor, delta_time: f32) !void {
         .Mob => {
             try self.overlay_mob.update(self, delta_time);
         },
+        .Platform => {
+            try self.overlay_platform.update(self, delta_time);
+        },
     }
 
     self.updateSaveButton();
@@ -171,6 +204,7 @@ pub fn draw(self: *const Editor) void {
     self.palette_tiles.draw(self, self.active_palette == .Tile);
     self.palette_mob.draw(self, self.active_palette == .Mob);
     self.palette_collectables.draw(self, self.active_palette == .Collectable);
+    self.palette_platform.draw(self, self.active_palette == .Platform);
 
     switch (self.active_palette) {
         .None => {},
@@ -182,6 +216,9 @@ pub fn draw(self: *const Editor) void {
         },
         .Mob => {
             self.overlay_mob.draw(self);
+        },
+        .Platform => {
+            self.overlay_platform.draw(self);
         },
     }
     self.drawSaveButton();

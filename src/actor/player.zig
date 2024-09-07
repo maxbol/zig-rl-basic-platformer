@@ -13,6 +13,7 @@ const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
 const std = @import("std");
+const types = @import("../types.zig");
 
 const approach = helpers.approach;
 
@@ -95,9 +96,10 @@ pub fn reset(self: *Player) void {
 
 pub fn actor(self: *Player) Actor {
     return .{ .ptr = self, .impl = &.{
-        .entity = entityCast,
+        .getCollidableBody = getCollidableBody,
         .getHitboxRect = getHitboxRect,
         .getGridRect = getGridRect,
+        .squish = handleSquish,
         .setPos = setPos,
     } };
 }
@@ -113,26 +115,30 @@ pub fn entity(self: *Player) Entity {
     };
 }
 
-fn entityCast(ctx: *anyopaque) Entity {
-    const self: *Player = @ptrCast(@alignCast(ctx));
-    return self.entity();
+fn getCollidableBody(ctx: *const anyopaque) CollidableBody {
+    const self: *const Player = @ptrCast(@alignCast(ctx));
+    return self.collidable;
 }
 
-fn getHitboxRect(ctx: *anyopaque) rl.Rectangle {
-    const self: *Player = @ptrCast(@alignCast(ctx));
+fn getHitboxRect(ctx: *const anyopaque) rl.Rectangle {
+    const self: *const Player = @ptrCast(@alignCast(ctx));
     return self.collidable.hitbox;
 }
 
-fn getGridRect(ctx: *anyopaque) shapes.IRect {
-    const self: *Player = @ptrCast(@alignCast(ctx));
+fn getGridRect(ctx: *const anyopaque) shapes.IRect {
+    const self: *const Player = @ptrCast(@alignCast(ctx));
     return self.collidable.grid_rect;
 }
 
-fn move(self: *Player, scene: *const Scene, comptime axis: CollidableBody.MoveAxis, amount: f32) void {
+fn move(self: *Player, scene: *Scene, comptime axis: types.Axis, amount: f32) void {
     self.collidable.move(scene, axis, amount, self);
 }
 
-pub fn handleCollision(self: *Player, axis: CollidableBody.MoveAxis, sign: i8, tile_flags: u8) void {
+fn handleSquish(_: *anyopaque, _: types.Axis, _: i8, _: u8) void {
+    // TODO 07/09/2024: Implement squish handling-
+}
+
+pub fn handleCollision(self: *Player, axis: types.Axis, sign: i8, tile_flags: u8) void {
     if (tile_flags & @intFromEnum(Tileset.TileFlag.Deadly) != 0) {
         self.lives = 0;
         self.sprite.setAnimation(.{
@@ -140,7 +146,7 @@ pub fn handleCollision(self: *Player, axis: CollidableBody.MoveAxis, sign: i8, t
             .on_animation_finished = .{ .context = self, .call = handleGameOver },
         });
     }
-    if (axis == CollidableBody.MoveAxis.X) {
+    if (axis == types.Axis.X) {
         self.speed.x = 0;
     } else {
         self.speed.y = 0;
@@ -250,27 +256,31 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
         self.sprite.setFlip(Sprite.FlipState.XFlip, self.face_dir == 0);
     }
 
-    // Collision with mobs
+    // Collision with other actors
     if (!self.is_stunlocked and !debug.isPaused()) {
-        for (0..scene.mobs_amount) |mob_idx| {
-            const mob = scene.mobs[mob_idx];
-
-            if (mob.is_dead or mob.is_deleted) {
+        var actor_iter = scene.getActorIterator();
+        const player_actor = self.actor();
+        while (actor_iter.next()) |a| {
+            if (a.is(self)) {
                 continue;
             }
 
-            var player_hitbox = getHitboxRect(ctx);
-            const mob_hitbox = mob.getHitboxRect();
+            // TODO 07/09/2024: Actually change the hitbox of the
+            // actor collidable when rolling, instead of patching it
+            // in to the collision calc like this
+            //
+            // if (is_rolling) {
+            //     player_hitbox.height /= 2;
+            //     player_hitbox.y += player_hitbox.height;
+            // }
 
-            if (is_rolling) {
-                player_hitbox.height /= 2;
-                player_hitbox.y += player_hitbox.height;
-            }
-
-            if (player_hitbox.checkCollision(mob_hitbox)) {
+            if (player_actor.overlapsActor(a)) {
                 rl.playSound(self.sfx_hurt);
 
-                const knockback_direction = std.math.sign((player_hitbox.x + player_hitbox.width / 2) - mob_hitbox.x);
+                const player_hitbox = getHitboxRect(ctx);
+                const actor_hitbox = a.getHitboxRect();
+
+                const knockback_direction = std.math.sign((player_hitbox.x + player_hitbox.width / 2) - actor_hitbox.x);
                 self.is_stunlocked = true;
                 self.speed.x = knockback_direction * knockback_x_speed;
                 self.speed.y = knockback_y_speed;
@@ -279,15 +289,15 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
                 }
 
                 // Break out of loop to avoid registering collisions with
-                // multiple mobs in a single frame
+                // multiple actors in a single frame
                 break;
             }
         }
     }
 
     // Move the player hitbox
-    self.move(scene, CollidableBody.MoveAxis.X, self.speed.x * delta_time);
-    self.move(scene, CollidableBody.MoveAxis.Y, self.speed.y * delta_time);
+    self.move(scene, types.Axis.X, self.speed.x * delta_time);
+    self.move(scene, types.Axis.Y, self.speed.y * delta_time);
 
     scene.centerViewportOnPos(self.collidable.hitbox);
 

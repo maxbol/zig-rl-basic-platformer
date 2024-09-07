@@ -20,11 +20,26 @@ pub fn FixedSizeTileset(size: usize) type {
         pub const data_format_version = 1;
         pub const serialized_size = 1 + 8 + (size / 8) + (1024 * 30);
 
-        pub fn create(image_data: []const u8, tile_size: rl.Vector2, flag_map: []const u8, allocator: std.mem.Allocator) !*@This() {
+        pub fn create(
+            image_data: []const u8,
+            tile_size: rl.Vector2,
+            flag_map: []const u8,
+            allocator: std.mem.Allocator,
+        ) !*@This() {
             const new = try allocator.create(@This());
             const image = rl.loadImageFromMemory(".png", image_data);
             const texture = rl.loadTextureFromImage(image);
-            const rect_map = helpers.buildRectMap(size, texture.width, texture.height, tile_size.x, tile_size.y, 1, 1);
+            const rect_map = helpers.buildRectMap(
+                size,
+                @floatFromInt(texture.width),
+                @floatFromInt(texture.height),
+                tile_size.x,
+                tile_size.y,
+                1,
+                1,
+                0,
+                0,
+            );
 
             var flag_map_owned: FlagMap = std.mem.zeroes([size]u8);
             std.mem.copyForwards(u8, &flag_map_owned, flag_map);

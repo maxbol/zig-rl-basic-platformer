@@ -6,6 +6,7 @@ const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
 const std = @import("std");
+const types = @import("../types.zig");
 
 hitbox: rl.Rectangle,
 x_remainder: f32 = 0,
@@ -20,12 +21,12 @@ pub fn init(hitbox: rl.Rectangle) CollidableBody {
 
 pub fn move(
     self: *CollidableBody,
-    scene: *const Scene,
-    comptime axis: MoveAxis,
+    scene: *Scene,
+    comptime axis: types.Axis,
     amount: f32,
     collider: anytype,
 ) void {
-    const remainder = if (axis == MoveAxis.X) &self.x_remainder else &self.y_remainder;
+    const remainder = if (axis == types.Axis.X) &self.x_remainder else &self.y_remainder;
 
     remainder.* += amount;
 
@@ -44,7 +45,7 @@ pub fn move(
     while (mov != 0) {
         var next_hitbox = shapes.IRect.fromRect(self.hitbox);
 
-        if (axis == MoveAxis.X) {
+        if (axis == types.Axis.X) {
             next_hitbox.x += sign;
         } else {
             next_hitbox.y += sign;
@@ -59,7 +60,7 @@ pub fn move(
             collider.handleCollision(axis, sign, tile_flags);
             break;
         } else {
-            if (axis == MoveAxis.X) {
+            if (axis == types.Axis.X) {
                 self.hitbox.x += @floatFromInt(sign);
             } else {
                 self.hitbox.y += @floatFromInt(sign);
@@ -87,8 +88,3 @@ pub fn drawDebug(self: *const CollidableBody, scene: *const Scene) void {
         rl.drawRectangleLinesEx(rect, 1, rl.Color.gray);
     }
 }
-
-pub const MoveAxis = enum {
-    X,
-    Y,
-};

@@ -2,18 +2,18 @@ const rl = @import("raylib");
 const std = @import("std");
 const shapes = @import("shapes.zig");
 
-pub fn buildRectMap(comptime size: usize, source_width: i32, source_height: i32, rec_width: f32, rec_height: f32, x_dir: i2, y_dir: i2) [size]?rl.Rectangle {
-    const source_read_max_x: f32 = @floor(@as(f32, @floatFromInt(source_width)) / rec_width);
-    const source_read_max_y: f32 = @floor(@as(f32, @floatFromInt(source_height)) / rec_height);
+pub fn buildRectMap(comptime size: usize, source_width: f32, source_height: f32, rec_width: f32, rec_height: f32, x_dir: i2, y_dir: i2, offset_x: f32, offset_y: f32) [size]?rl.Rectangle {
+    const read_width = source_width - offset_x;
+    const read_height = source_height - offset_y;
 
-    const source_width_f: f32 = @floatFromInt(source_width);
-    const source_height_f: f32 = @floatFromInt(source_height);
+    const source_read_max_x: f32 = @floor(read_width / rec_width);
+    const source_read_max_y: f32 = @floor(read_height / rec_height);
 
-    if (source_read_max_x * rec_width != source_width_f) {
+    if (source_read_max_x * rec_width != read_width) {
         std.log.warn("Warning: source width is not a multiple of rec width\n", .{});
     }
 
-    if (source_read_max_y * rec_height != source_height_f) {
+    if (source_read_max_y * rec_height != read_height) {
         std.log.warn("Warning: source height is not a multiple of rec height\n", .{});
     }
 
@@ -29,7 +29,12 @@ pub fn buildRectMap(comptime size: usize, source_width: i32, source_height: i32,
             x_cursor += 1;
             tile_index += 1;
         }) {
-            map[tile_index] = rl.Rectangle.init(x_cursor * rec_width, y_cursor * rec_height, rec_width * @as(f32, @floatFromInt(x_dir)), rec_height * @as(f32, @floatFromInt(y_dir)));
+            map[tile_index] = rl.Rectangle.init(
+                x_cursor * rec_width + offset_x,
+                y_cursor * rec_height + offset_y,
+                rec_width * @as(f32, @floatFromInt(x_dir)),
+                rec_height * @as(f32, @floatFromInt(y_dir)),
+            );
         }
     }
 

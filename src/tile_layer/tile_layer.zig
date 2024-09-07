@@ -17,11 +17,13 @@ pub const Interface = struct {
     getFlags: *const fn (ctx: *anyopaque) u8,
     getPixelSize: *const fn (ctx: *anyopaque) rl.Vector2,
     getLayerPosition: *const fn (ctx: *anyopaque, pos: rl.Vector2) rl.Vector2,
+    getRowSize: *const fn (ctx: *anyopaque) usize,
     getScrollState: *const fn (ctx: *anyopaque) *const Scrollable,
     getSize: *const fn (ctx: *anyopaque) rl.Vector2,
     getTileFromRowAndCol: *const fn (ctx: *anyopaque, row_idx: usize, col_idx: usize) ?u8,
     getTileIdxFromRowAndCol: *const fn (ctx: *anyopaque, row_idx: usize, col_idx: usize) usize,
     getTileset: *const fn (ctx: *anyopaque) Tileset,
+    resizeLayer: *const fn (ctx: *anyopaque, new_size: rl.Vector2, row_size: usize) void,
     storeCollisionData: *const fn (ctx: *anyopaque, tile_idx: usize, did_collide: bool) void,
     update: *const fn (ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.UpdateError!void,
     wasTestedThisFrame: *const fn (ctx: *anyopaque, tile_idx: usize) bool,
@@ -61,8 +63,16 @@ pub fn getTileFromRowAndCol(self: TileLayer, row_idx: usize, col_idx: usize) ?u8
     return self.impl.getTileFromRowAndCol(self.ptr, row_idx, col_idx);
 }
 
+pub fn getRowSize(self: TileLayer) usize {
+    return self.impl.getRowSize(self.ptr);
+}
+
 pub fn getScrollState(self: TileLayer) *const Scrollable {
     return self.impl.getScrollState(self.ptr);
+}
+
+pub fn resizeLayer(self: TileLayer, new_size: rl.Vector2, row_size: usize) void {
+    return self.impl.resizeLayer(self.ptr, new_size, row_size);
 }
 
 pub fn update(self: TileLayer, scene: *Scene, delta_time: f32) Entity.UpdateError!void {
@@ -248,14 +258,17 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !@This() {
     if (data_size > MAX_DATA_SIZE) {
         return error.LayerTooBig;
     }
+    std.debug.print("data_size={d}\n", .{data_size});
 
     // Layer size
     const size_bytes = try reader.readBytesNoEof(8);
     const layer_size = std.mem.bytesToValue(rl.Vector2, &size_bytes);
+    std.debug.print("layer_size.x={d}, .y={d}\n", .{ layer_size.x, layer_size.y });
 
     // Row size
     const row_size_bytes = try reader.readBytesNoEof(2);
     const row_size = std.mem.bytesToValue(u16, &row_size_bytes);
+    std.debug.print("row_size={d}\n", .{row_size});
 
     // Tileset file path length
     const len_bytes = try reader.readBytesNoEof(2);

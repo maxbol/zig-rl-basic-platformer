@@ -47,6 +47,7 @@ pub fn Prefab(
     loadTexture: fn () rl.Texture2D,
     animation_buffer: anytype,
     initial_animation: an.AnimationType,
+    sprite_map_offset: rl.Vector2,
 ) type {
     return struct {
         pub const SIZE_X = size_x;
@@ -55,7 +56,7 @@ pub fn Prefab(
         pub fn init() Sprite {
             const size = rl.Vector2.init(size_x, size_y);
             const texture = loadTexture();
-            return Sprite.init(texture, size, animation_buffer.reader(), initial_animation);
+            return Sprite.init(texture, size, animation_buffer.reader(), initial_animation, sprite_map_offset);
         }
     };
 }
@@ -65,9 +66,30 @@ pub fn init(
     size: rl.Vector2,
     animation_buffer: an.AnimationBufferReader,
     initial_animation: an.AnimationType,
+    sprite_map_offset: rl.Vector2,
 ) Sprite {
-    const sprite_texture_map_r = helpers.buildRectMap(128, texture.width, texture.height, size.x, size.y, 1, 1);
-    const sprite_texture_map_l = helpers.buildRectMap(128, texture.width, texture.height, size.x, size.y, -1, 1);
+    const sprite_texture_map_r = helpers.buildRectMap(
+        128,
+        @floatFromInt(texture.width),
+        @floatFromInt(texture.height),
+        size.x,
+        size.y,
+        1,
+        1,
+        sprite_map_offset.x,
+        sprite_map_offset.y,
+    );
+    const sprite_texture_map_l = helpers.buildRectMap(
+        128,
+        @floatFromInt(texture.width),
+        @floatFromInt(texture.height),
+        size.x,
+        size.y,
+        -1,
+        1,
+        sprite_map_offset.x,
+        sprite_map_offset.y,
+    );
 
     return .{
         .animation_buffer = animation_buffer,

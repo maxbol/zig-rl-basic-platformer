@@ -11,7 +11,6 @@ pub const GAME_SIZE_X = 640;
 pub const GAME_SIZE_Y = 360;
 
 pub const TILE_SIZE = 16;
-pub const BIGGEST_MOB_SPRITE_SIZE = Actor.Mob.getBiggestMobSpriteSize();
 
 pub const VIEWPORT_PADDING_X = TILE_SIZE + (GAME_SIZE_X % TILE_SIZE / 2);
 pub const VIEWPORT_PADDING_Y = TILE_SIZE + (GAME_SIZE_Y % TILE_SIZE / 2);
@@ -45,3 +44,4 @@ pub const MAX_AMOUNT_OF_FG_LAYERS = 1;
 
 pub const MAX_AMOUNT_OF_MOBS = 1000;
 pub const MAX_AMOUNT_OF_COLLECTABLES = 1000;
+pub const MAX_AMOUNT_OF_PLATFORMS = 100;
