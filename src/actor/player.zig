@@ -4,6 +4,7 @@ const Entity = @import("../entity.zig");
 const Player = @This();
 const Tileset = @import("../tileset/tileset.zig");
 const Scene = @import("../scene.zig");
+const Solid = @import("../solid/solid.zig");
 const Sprite = @import("../sprite.zig");
 const an = @import("../animation.zig");
 const constants = @import("../constants.zig");
@@ -28,6 +29,7 @@ score: u32 = 0,
 speed: rl.Vector2,
 sprite: Sprite,
 sprite_offset: rl.Vector2,
+riding_solid: ?Solid = null,
 
 sfx_hurt: rl.Sound,
 sfx_jump: rl.Sound,
@@ -48,12 +50,12 @@ pub fn Prefab(
     SpritePrefab: anytype,
 ) type {
     return struct {
-        pub fn init(pos: rl.Vector2) Player {
+        pub fn init(pos: shapes.IPos) Player {
             const sprite = SpritePrefab.init();
 
             var player_hitbox = hitbox;
-            player_hitbox.x = pos.x;
-            player_hitbox.y = pos.y;
+            player_hitbox.x = @floatFromInt(pos.x);
+            player_hitbox.y = @floatFromInt(pos.y);
 
             return Player.init(player_hitbox, sprite, sprite_offset);
         }
@@ -99,6 +101,7 @@ pub fn actor(self: *Player) Actor {
         .getCollidableBody = getCollidableBody,
         .getHitboxRect = getHitboxRect,
         .getGridRect = getGridRect,
+        .isRiding = isRiding,
         .squish = handleSquish,
         .setPos = setPos,
     } };
@@ -115,9 +118,9 @@ pub fn entity(self: *Player) Entity {
     };
 }
 
-fn getCollidableBody(ctx: *const anyopaque) CollidableBody {
-    const self: *const Player = @ptrCast(@alignCast(ctx));
-    return self.collidable;
+fn getCollidableBody(ctx: *anyopaque) *CollidableBody {
+    const self: *Player = @ptrCast(@alignCast(ctx));
+    return &self.collidable;
 }
 
 fn getHitboxRect(ctx: *const anyopaque) rl.Rectangle {
@@ -134,17 +137,50 @@ fn move(self: *Player, scene: *Scene, comptime axis: types.Axis, amount: f32) vo
     self.collidable.move(scene, axis, amount, self);
 }
 
-fn handleSquish(_: *anyopaque, _: types.Axis, _: i8, _: u8) void {
+fn isRiding(ctx: *anyopaque, solid: Solid) bool {
+    // const self: *Player = @ptrCast(@alignCast(ctx));
+    // if (self.riding_solid) |s| {
+    //     return s.ptr == solid.ptr;
+    // }
+    // return false;
+    const solid_hitbox = solid.getHitboxRect();
+    const hitbox = getHitboxRect(ctx);
+
+    if (hitbox.x > solid_hitbox.x + solid_hitbox.width) {
+        return false;
+    }
+
+    if (solid_hitbox.x > hitbox.x + hitbox.width) {
+        return false;
+    }
+
+    std.debug.print("Player feet={d}, Solid ground ={d}\n", .{ hitbox.y + hitbox.height, solid_hitbox.y });
+    if (hitbox.y + hitbox.height != solid_hitbox.y) {
+        return false;
+    }
+
+    return true;
+}
+
+fn handleSquish(ctx: *anyopaque, _: types.Axis, _: i8, _: u8) void {
+    const self: *Player = @ptrCast(@alignCast(ctx));
+    self.die();
+    std.debug.print("Player got squished!\n", .{});
+
     // TODO 07/09/2024: Implement squish handling-
 }
 
-pub fn handleCollision(self: *Player, axis: types.Axis, sign: i8, tile_flags: u8) void {
-    if (tile_flags & @intFromEnum(Tileset.TileFlag.Deadly) != 0) {
-        self.lives = 0;
-        self.sprite.setAnimation(.{
-            .animation = .Death,
-            .on_animation_finished = .{ .context = self, .call = handleGameOver },
-        });
+inline fn die(self: *Player) void {
+    self.lives = 0;
+    self.sprite.setAnimation(.{
+        .animation = .Death,
+        .on_animation_finished = .{ .context = self, .call = handleGameOver },
+    });
+}
+
+pub fn handleCollision(self: *Player, axis: types.Axis, sign: i8, flags: u8, solid: ?Solid) void {
+    if (flags & @intFromEnum(Tileset.TileFlag.Deadly) != 0) {
+        self.die();
     }
     if (axis == types.Axis.X) {
         self.speed.x = 0;
@@ -155,13 +191,17 @@ pub fn handleCollision(self: *Player, axis: types.Axis, sign: i8, tile_flags: u8
             // Only reset jump counter when colliding with something below player
             self.jump_counter = 0;
             self.is_stunlocked = false;
-            self.is_slipping = tile_flags & @intFromEnum(Tileset.TileFlag.Slippery) != 0;
+            self.is_slipping = flags & @intFromEnum(Tileset.TileFlag.Slippery) != 0;
+
+            if (solid != null) {
+                std.debug.print("Player collided with solid\n", .{});
+            } else {
+                std.debug.print("Clearing player riding status\n", .{});
+            }
+            self.riding_solid = solid;
 
             if (self.lives == 0) {
-                self.sprite.setAnimation(.{
-                    .animation = .Death,
-                    .on_animation_finished = .{ .context = self, .call = handleGameOver },
-                });
+                self.die();
             }
         }
     }
@@ -197,6 +237,10 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     }
     const is_grounded = self.jump_counter == 0;
     const is_slipping = self.is_slipping and is_grounded;
+
+    if (!is_grounded) {
+        self.riding_solid = null;
+    }
 
     // Rolling
     if (self.speed.x != 0 and self.sprite.current_animation != .Roll and !self.is_stunlocked and is_grounded and controls.isKeyboardControlPressed(controls.KBD_ROLL)) {
@@ -296,8 +340,16 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     }
 
     // Move the player hitbox
-    self.move(scene, types.Axis.X, self.speed.x * delta_time);
-    self.move(scene, types.Axis.Y, self.speed.y * delta_time);
+    if (self.speed.x != 0) {
+        self.move(scene, types.Axis.X, self.speed.x * delta_time);
+    } else {
+        self.collidable.clear(.X);
+    }
+    if (self.speed.y != 0) {
+        self.move(scene, types.Axis.Y, self.speed.y * delta_time);
+    } else {
+        self.collidable.clear(.Y);
+    }
 
     scene.centerViewportOnPos(self.collidable.hitbox);
 

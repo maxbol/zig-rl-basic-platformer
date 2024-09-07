@@ -368,7 +368,10 @@ pub fn spawnMob(self: *Scene, mob_type: usize, pos: rl.Vector2) SpawnError!void 
 }
 
 pub fn spawnPlatform(self: *Scene, platform_type: usize, pos: rl.Vector2) SpawnError!void {
-    const platform: Solid.Platform = try Solid.Platform.initPlatformByIndex(platform_type, pos);
+    const platform: Solid.Platform = try Solid.Platform.initPlatformByIndex(
+        platform_type,
+        shapes.IPos.fromVec2(pos),
+    );
 
     self.platforms[self.platforms_amount] = platform;
     self.platforms_amount += 1;
@@ -561,28 +564,37 @@ pub fn centerViewportOnPos(self: *Scene, pos: anytype) void {
     );
 }
 
-pub fn collideAt(self: *Scene, rect: shapes.IRect, grid_rect: shapes.IRect) ?u8 {
+pub const Collision = struct {
+    flags: u8,
+    solid: ?Solid = null,
+};
+
+pub fn collideAt(self: *Scene, rect: shapes.IRect, grid_rect: shapes.IRect) ?Collision {
     // Collide with world tiles
     const tile_flags = self.main_layer.collideAt(rect, grid_rect);
     if (tile_flags) |flags| {
-        return flags;
+        return .{ .flags = flags };
     }
 
     // Collide with solids
     var solid_it = self.getSolidIterator();
     while (solid_it.next()) |solid| {
         if (solid.collideAt(rect)) {
-            return @intFromEnum(Tileset.TileFlag.Collidable);
+            std.debug.print("Collided with solid! Solid.collidable={any}\n", .{solid.getCollidable().collidable});
+            return .{
+                .flags = @intFromEnum(Tileset.TileFlag.Collidable),
+                .solid = solid,
+            };
         }
     }
 
     // Collide with scene boundary
     if (rect.x < 0 or rect.y < 0) {
-        return @intFromEnum(Tileset.TileFlag.Collidable);
+        return .{ .flags = @intFromEnum(Tileset.TileFlag.Collidable) };
     }
 
     if (@as(f32, @floatFromInt(rect.x + rect.width)) > self.main_layer.getPixelSize().x or @as(f32, @floatFromInt(rect.y + rect.height)) > self.main_layer.getPixelSize().y) {
-        return @intFromEnum(Tileset.TileFlag.Collidable);
+        return .{ .flags = @intFromEnum(Tileset.TileFlag.Collidable) };
     }
 
     return null;

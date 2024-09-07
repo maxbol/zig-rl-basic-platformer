@@ -6,8 +6,12 @@ const Sprite = @import("../sprite.zig");
 const Behavior = @import("platform_behaviors.zig");
 const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
+const shapes = @import("../shapes.zig");
 
-behaviors: []Behavior,
+pub const MAX_NO_OF_BEHAVIORS = 5;
+
+behaviors: [MAX_NO_OF_BEHAVIORS]Behavior,
+behaviors_amount: usize,
 collidable: SolidCollidable,
 initial_hitbox: rl.Rectangle,
 is_deleted: bool = false,
@@ -15,33 +19,41 @@ sprite: Sprite,
 sprite_offset: rl.Vector2,
 speed: rl.Vector2 = .{ .x = 0, .y = 0 },
 
-pub fn Prefab(hitbox: rl.Rectangle, sprite_offset: rl.Vector2, SpritePrefab: anytype, behaviors: []Behavior) type {
+pub fn Prefab(hitbox: rl.Rectangle, sprite_offset: rl.Vector2, SpritePrefab: anytype, behaviors: anytype) type {
     return struct {
         pub const Sprite = SpritePrefab;
         pub const hitbox_static = hitbox;
         pub const spr_offset = sprite_offset;
 
-        pub fn init(pos: rl.Vector2) Platform {
+        pub fn init(pos: shapes.IPos) Platform {
             const sprite = SpritePrefab.init();
 
             var platform_hitbox = hitbox;
-            platform_hitbox.x += pos.x;
-            platform_hitbox.y += pos.y;
+            platform_hitbox.x += @floatFromInt(pos.x);
+            platform_hitbox.y += @floatFromInt(pos.y);
 
-            const behaviors_any: [behaviors.len]behavior.AnyBehavior = undefined;
-            for (behaviors, 0..) |Behavior, i| {
-                _ = b; // autofix
-                behaviors_any[i] = behaviors[i].any();
+            var behaviors_any: [Platform.MAX_NO_OF_BEHAVIORS]Behavior = undefined;
+            const behaviors_amount = behaviors.len;
+            inline for (behaviors, 0..) |B, i| {
+                behaviors_any[i] = B.init();
+                behaviors_any[i].setup();
             }
 
-            return Platform.init(platform_hitbox, sprite, sprite_offset, behaviors_any);
+            return Platform.init(platform_hitbox, sprite, sprite_offset, behaviors_any, behaviors_amount);
         }
     };
 }
 
-pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2, behaviors: []behavior.AnyBehavior) Platform {
-    _ = behaviors; // autofix
+pub fn init(
+    hitbox: rl.Rectangle,
+    sprite: Sprite,
+    sprite_offset: rl.Vector2,
+    behaviors: [MAX_NO_OF_BEHAVIORS]Behavior,
+    behaviors_amount: usize,
+) Platform {
     return .{
+        .behaviors = behaviors,
+        .behaviors_amount = behaviors_amount,
         .collidable = SolidCollidable.init(hitbox),
         .initial_hitbox = hitbox,
         .sprite = sprite,
@@ -92,6 +104,14 @@ fn getHitboxRectCast(ctx: *const anyopaque) rl.Rectangle {
 
 pub fn update(self: *Platform, scene: *Scene, delta_time: f32) !void {
     try self.sprite.update(scene, delta_time);
+
+    for (0..self.behaviors_amount) |i| {
+        self.behaviors[i].update(self, delta_time);
+    }
+
+    if (self.speed.x != 0 or self.speed.y != 0) {
+        self.collidable.move(scene, self.solid(), self.speed.x, self.speed.y);
+    }
 }
 
 pub fn draw(self: *const Platform, scene: *const Scene) void {
@@ -118,7 +138,7 @@ pub const prefabs: [8]type = .{
     Platform7,
     Platform8,
 };
-pub fn initPlatformByIndex(index: usize, pos: rl.Vector2) !Platform {
+pub fn initPlatformByIndex(index: usize, pos: shapes.IPos) !Platform {
     inline for (prefabs, 0..) |PlatformPrefab, i| {
         if (i == index) {
             return PlatformPrefab.init(pos);

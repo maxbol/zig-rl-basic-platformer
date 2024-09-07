@@ -83,7 +83,7 @@ pub fn initGameData() void {
     globals.viewport = Viewport.init(constants.VIEWPORT_BIG_RECT);
 
     // Init player actor
-    globals.player = Actor.Player.Knight.init(rl.Vector2{ .x = 0, .y = 0 });
+    globals.player = Actor.Player.Knight.init(.{ .x = 0, .y = 0 });
 
     // Init virtual mouse
     globals.vmouse = controls.VirtualMouse{};

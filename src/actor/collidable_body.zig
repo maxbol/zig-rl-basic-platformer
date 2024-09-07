@@ -19,6 +19,14 @@ pub fn init(hitbox: rl.Rectangle) CollidableBody {
     };
 }
 
+pub fn clear(self: *CollidableBody, comptime axis: types.Axis) void {
+    if (axis == .X) {
+        self.x_remainder = 0;
+    } else if (axis == .Y) {
+        self.y_remainder = 0;
+    }
+}
+
 pub fn move(
     self: *CollidableBody,
     scene: *Scene,
@@ -28,9 +36,17 @@ pub fn move(
 ) void {
     const remainder = if (axis == types.Axis.X) &self.x_remainder else &self.y_remainder;
 
+    if (&scene.player.collidable == self) {
+        std.debug.print("axis={d}, amount={d}, BEFORE remainder={d}\n", .{ @tagName(axis), amount, remainder.* });
+    }
+
     remainder.* += amount;
 
     var mov: i32 = @intFromFloat(remainder.*);
+
+    if (&scene.player.collidable == self) {
+        std.debug.print("axis={d}, mov={d}, AFTER remainder={d}\n", .{ @tagName(axis), mov, remainder.* });
+    }
 
     if (mov == 0) {
         return;
@@ -56,14 +72,31 @@ pub fn move(
             next_hitbox,
         );
 
-        if (scene.collideAt(next_hitbox, grid_rect)) |tile_flags| {
-            collider.handleCollision(axis, sign, tile_flags);
+        std.debug.print("Next player feet={d}\n", .{next_hitbox.y + next_hitbox.height});
+
+        if (scene.collideAt(next_hitbox, grid_rect)) |c| {
+            std.debug.print("Actor collided with something, no movement!\n", .{});
+            switch (@typeInfo(@TypeOf(collider))) {
+                .Null => {},
+                inline else => {
+                    if (c.solid != null) {
+                        std.debug.print("Actor colliding with solid!\n", .{});
+                    }
+                    collider.handleCollision(axis, sign, c.flags, c.solid);
+                },
+            }
             break;
         } else {
             if (axis == types.Axis.X) {
                 self.hitbox.x += @floatFromInt(sign);
+                if (self == &scene.player.collidable) {
+                    std.debug.print("Player new x={d}\n", .{self.hitbox.x});
+                }
             } else {
                 self.hitbox.y += @floatFromInt(sign);
+                if (self == &scene.player.collidable) {
+                    std.debug.print("Actor new y={d}\n", .{self.hitbox.y});
+                }
             }
 
             mov -= sign;

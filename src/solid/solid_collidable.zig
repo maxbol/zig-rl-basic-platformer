@@ -1,3 +1,4 @@
+const Actor = @import("../actor/actor.zig");
 const Scene = @import("../scene.zig");
 const Solid = @import("solid.zig");
 const SolidCollidable = @This();
@@ -16,17 +17,18 @@ pub fn init(hitbox: rl.Rectangle) SolidCollidable {
     };
 }
 
-inline fn moveOnAxis(self: *SolidCollidable, riding_it: Solid.RidingActorIterator, scene: *const Scene, solid: *Solid, axis: types.Axis, amount: i32) void {
+inline fn moveOnAxis(self: *SolidCollidable, all_actors: []Actor, riding_actors: []usize, scene: *Scene, solid: Solid, axis: types.Axis, amount: i32) void {
     const remainder = if (axis == .X) &self.x_remainder else &self.y_remainder;
     const hitbox_loc = if (axis == .X) &self.hitbox.x else &self.hitbox.y;
     const hitbox_size = if (axis == .X) &self.hitbox.width else &self.hitbox.height;
 
     remainder.* -= @floatFromInt(amount);
-    hitbox_loc.* += amount;
+    std.debug.print("Adding {d} to {s} axis\n", .{ @as(f32, @floatFromInt(amount)), @tagName(axis) });
+    hitbox_loc.* += @floatFromInt(amount);
 
     const mov_dir = std.math.sign(amount);
 
-    while (riding_it.next()) |actor| {
+    for (all_actors, 0..) |actor, i| {
         if (solid.overlapsActor(actor)) {
             // Push the actor out of the way
 
@@ -34,37 +36,79 @@ inline fn moveOnAxis(self: *SolidCollidable, riding_it: Solid.RidingActorIterato
             const mov_amount = if (mov_dir == 1)
                 hitbox_loc.* + hitbox_size.* - (if (axis == .X) actor_hitbox.x else actor_hitbox.y)
             else
-                hitbox_loc.* - hitbox_size.* - (if (axis == .X) actor_hitbox.width else actor_hitbox.height);
+                hitbox_loc.* - if (axis == .X) (actor_hitbox.x + actor_hitbox.width) else (actor_hitbox.y + actor_hitbox.height);
+
+            std.debug.print("Pushing actor! axis={s} mov_amount={d}, riding_actors={any}\n", .{ @tagName(axis), mov_amount, riding_actors });
 
             actor.getCollidableBody().move(
                 scene,
-                scene,
                 axis,
                 mov_amount,
+                actor.squishCollider(),
             );
+
+            std.debug.print("Done pusing actor\n", .{});
+
+            continue;
         }
-        if (actor.isRiding(solid)) {
-            actor.getCollidableBody().move(scene, axis, amount, null);
+
+        for (riding_actors) |idx| {
+            if (idx == i) {
+                std.debug.print("Transporting riding actor!\n", .{});
+                actor.getCollidableBody().move(scene, axis, @floatFromInt(amount), null);
+                break;
+            }
         }
     }
 }
 
-pub fn move(self: *SolidCollidable, scene: *const Scene, solid: *Solid, x: f32, y: f32) void {
+pub fn move(self: *SolidCollidable, scene: *Scene, solid: Solid, x: f32, y: f32) void {
     self.x_remainder += x;
     self.y_remainder += y;
 
     const x_mov: i32 = @intFromFloat(@round(self.x_remainder));
     const y_mov: i32 = @intFromFloat(@round(self.y_remainder));
-    const riding_it = solid.getRidingActorsIterator();
+
+    var actor_it = scene.getActorIterator();
+    var all_actors: [1000]Actor = undefined;
+    var riding_actors: [10]usize = undefined;
+    var actors_idx: usize = 0;
+    var riding_idx: usize = 0;
+
+    while (actor_it.next()) |actor| {
+        all_actors[actors_idx] = actor;
+        if (actor.isRiding(solid)) {
+            riding_actors[riding_idx] = actors_idx;
+            riding_idx += 1;
+        }
+        actors_idx += 1;
+    }
+
+    const all_actors_slice = all_actors[0..actors_idx];
+    const riding_actors_slice = riding_actors[0..riding_idx];
 
     self.collidable = false;
 
     if (x_mov != 0) {
-        self.moveOnAxis(riding_it, scene, solid, .X, x_mov);
+        self.moveOnAxis(
+            all_actors_slice,
+            riding_actors_slice,
+            scene,
+            solid,
+            .X,
+            x_mov,
+        );
     }
 
     if (y_mov != 0) {
-        self.moveOnAxis(riding_it, scene, solid, .Y, y_mov);
+        self.moveOnAxis(
+            all_actors_slice,
+            riding_actors_slice,
+            scene,
+            solid,
+            .Y,
+            y_mov,
+        );
     }
 
     self.collidable = true;

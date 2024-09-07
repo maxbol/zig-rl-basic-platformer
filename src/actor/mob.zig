@@ -3,6 +3,7 @@ const CollidableBody = @import("collidable_body.zig");
 const Entity = @import("../entity.zig");
 const Mob = @This();
 const Scene = @import("../scene.zig");
+const Solid = @import("../solid/solid.zig");
 const Sprite = @import("../sprite.zig");
 const Tileset = @import("../tileset/tileset.zig");
 const an = @import("../animation.zig");
@@ -25,6 +26,7 @@ is_jumping: bool = false,
 did_huntjump: bool = false,
 next_huntjump_distance: f32 = 80,
 behavior: MobBehavior,
+riding_solid: ?Solid = null,
 
 is_deleted: bool = false,
 is_dead: bool = false,
@@ -49,12 +51,12 @@ pub fn Prefab(
         pub const Hitbox = hitbox;
         pub const spr_offset = sprite_offset;
 
-        pub fn init(pos: rl.Vector2) Mob {
+        pub fn init(pos: shapes.IPos) Mob {
             const sprite = SpritePrefab.init();
 
             var mob_hitbox = hitbox;
-            mob_hitbox.x = pos.x;
-            mob_hitbox.y = pos.y;
+            mob_hitbox.x = @floatFromInt(pos.x);
+            mob_hitbox.y = @floatFromInt(pos.y);
 
             return Mob.init(mob_hitbox, sprite, sprite_offset, behavior);
         }
@@ -81,13 +83,14 @@ pub fn actor(self: *Mob) Actor {
         .getCollidableBody = getCollidableBodyCast,
         .getHitboxRect = getHitboxRectCast,
         .getGridRect = getGridRectCast,
+        .isRiding = isRiding,
         .setPos = setPosCast,
         .squish = handleSquish,
     } };
 }
 
-fn getCollidableBodyCast(ctx: *const anyopaque) CollidableBody {
-    const self: *const Mob = @ptrCast(@alignCast(ctx));
+fn getCollidableBodyCast(ctx: *anyopaque) *CollidableBody {
+    const self: *Mob = @ptrCast(@alignCast(ctx));
     return self.getCollidableBody();
 }
 
@@ -119,7 +122,7 @@ fn handleSquish(_: *anyopaque, _: types.Axis, _: i8, _: u8) void {
     // TODO 07/09/2024: Implement squish
 }
 
-pub fn handleCollision(self: *Mob, axis: types.Axis, sign: i8, _: u8) void {
+pub fn handleCollision(self: *Mob, axis: types.Axis, sign: i8, _: u8, solid: ?Solid) void {
     if (axis == types.Axis.X) {
         // Reverse direction when hitting an obstacle (unless we are hunting the player)
         if (!self.is_hunting) {
@@ -128,14 +131,15 @@ pub fn handleCollision(self: *Mob, axis: types.Axis, sign: i8, _: u8) void {
     } else {
         if (sign == 1) {
             // Stop falling when hitting the ground
+            self.riding_solid = solid;
             self.is_jumping = false;
         }
         self.speed.y = 0;
     }
 }
 
-pub inline fn getCollidableBody(self: *const Mob) CollidableBody {
-    return self.collidable;
+pub inline fn getCollidableBody(self: *Mob) *CollidableBody {
+    return &self.collidable;
 }
 
 pub inline fn getGridRect(self: *const Mob) shapes.IRect {
@@ -157,6 +161,14 @@ fn move(self: *Mob, scene: *Scene, comptime axis: types.Axis, amount: f32) void 
     self.collidable.move(scene, axis, amount, self);
 }
 
+fn isRiding(ctx: *anyopaque, solid: Solid) bool {
+    const self: *Mob = @ptrCast(@alignCast(ctx));
+    if (self.riding_solid) |s| {
+        return s.ptr == solid.ptr;
+    }
+    return false;
+}
+
 fn detectGapOnNextTile(self: *Mob, scene: *Scene, _: f32) bool {
     const hitbox = self.getHitboxRect();
     const sign = std.math.sign(self.speed.x);
@@ -167,9 +179,9 @@ fn detectGapOnNextTile(self: *Mob, scene: *Scene, _: f32) bool {
         shapes.IPos.fromVec2(scene.main_layer.getTileset().getTileSize()),
         next,
     );
-    const collision_flags = scene.collideAt(next, grid_rect);
-    if (collision_flags) |flags| {
-        return flags & @intFromEnum(Tileset.TileFlag.Collidable) == 0;
+    const collision = scene.collideAt(next, grid_rect);
+    if (collision) |c| {
+        return c.flags & @intFromEnum(Tileset.TileFlag.Collidable) == 0;
     }
     return true;
 }
@@ -255,6 +267,10 @@ pub fn update(self: *Mob, scene: *Scene, delta_time: f32) Entity.UpdateError!voi
         }
     }
 
+    if (self.is_jumping) {
+        self.riding_solid = null;
+    }
+
     // Slow down when hunt is over
     if (!self.is_hunting) {
         self.speed.x = std.math.sign(self.speed.x) * self.behavior.walk_speed;
@@ -309,7 +325,7 @@ pub const prefabs: [1]type = .{
 pub fn initMobByIndex(index: usize, pos: rl.Vector2) Scene.SpawnError!Mob {
     inline for (prefabs, 0..) |MobPrefab, i| {
         if (i == index) {
-            return MobPrefab.init(pos);
+            return MobPrefab.init(shapes.IPos.fromVec2(pos));
         }
     }
     return Scene.SpawnError.NoSuchItem;
