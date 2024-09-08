@@ -13,7 +13,6 @@ pub const Interface = struct {
     getCollidableBody: *const fn (ctx: *anyopaque) *CollidableBody,
     getHitboxRect: *const fn (ctx: *const anyopaque) rl.Rectangle,
     getGridRect: *const fn (ctx: *const anyopaque) shapes.IRect,
-    isRiding: *const fn (*anyopaque, Solid) bool,
     setPos: *const fn (ctx: *anyopaque, pos: rl.Vector2) void,
     squish: *const fn (*anyopaque, types.Axis, i8, u8) void,
 };
@@ -30,7 +29,22 @@ pub fn is(self: Actor, ptr: *const anyopaque) bool {
 }
 
 pub fn isRiding(self: Actor, solid: Solid) bool {
-    return self.impl.isRiding(self.ptr, solid);
+    const solid_hitbox = solid.getHitboxRect();
+    const hitbox = self.getHitboxRect();
+
+    if (hitbox.x > solid_hitbox.x + solid_hitbox.width) {
+        return false;
+    }
+
+    if (solid_hitbox.x > hitbox.x + hitbox.width) {
+        return false;
+    }
+
+    if (hitbox.y + hitbox.height != solid_hitbox.y) {
+        return false;
+    }
+
+    return true;
 }
 
 pub fn squish(self: Actor, axis: types.Axis, sign: i8, flags: u8) void {

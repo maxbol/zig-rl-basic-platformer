@@ -91,21 +91,28 @@ pub fn KeyframedMovement(keyframes: []const shapes.IPos, speed: f32) type {
             setKeyframeIdx(b, 0);
         }
 
+        inline fn getAbsKeyframe(keyframe: shapes.IPos, platform: *Platform) shapes.IPos {
+            var new = keyframe;
+            new.x += @as(i32, @intFromFloat(@round(platform.initial_hitbox.x)));
+            new.y += @as(i32, @intFromFloat(@round(platform.initial_hitbox.y)));
+            return new;
+        }
+
         pub fn updateFn(b: *Behavior, platform: *Platform, _: f32) void {
             var keyframe_idx = getKeyframeIdx(b);
-            var current_keyframe = keyframes[keyframe_idx];
             const platform_rect = platform.getHitboxRect();
+            var abs_keyframe = getAbsKeyframe(keyframes[keyframe_idx], platform);
 
-            if (@as(i32, @intFromFloat(platform_rect.x)) == current_keyframe.x and @as(i32, @intFromFloat(platform_rect.y)) == current_keyframe.y) {
+            if (@as(i32, @intFromFloat(platform_rect.x)) == abs_keyframe.x and @as(i32, @intFromFloat(platform_rect.y)) == abs_keyframe.y) {
                 keyframe_idx = (keyframe_idx + 1) % keyframes.len;
-                current_keyframe = keyframes[keyframe_idx];
+                abs_keyframe = getAbsKeyframe(keyframes[keyframe_idx], platform);
                 setKeyframeIdx(b, keyframe_idx);
             }
 
             const platform_pos = rl.Vector2{ .x = platform_rect.x, .y = platform_rect.y };
             platform.speed = (rl.Vector2{
-                .x = @floatFromInt(current_keyframe.x),
-                .y = @floatFromInt(current_keyframe.y),
+                .x = @floatFromInt(abs_keyframe.x),
+                .y = @floatFromInt(abs_keyframe.y),
             }).subtract(platform_pos).normalize().scale(speed);
         }
     };

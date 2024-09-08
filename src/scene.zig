@@ -84,8 +84,8 @@ pub const SceneActorIterator = struct {
 pub fn create(
     allocator: std.mem.Allocator,
     main_layer: TileLayer,
-    bg_layers: []const TileLayer,
-    fg_layers: []const TileLayer,
+    bg_layers: ?std.ArrayList(TileLayer),
+    fg_layers: ?std.ArrayList(TileLayer),
     viewport: *Viewport,
     player: *Actor.Player,
     player_starting_pos: rl.Vector2,
@@ -95,24 +95,13 @@ pub fn create(
     collectables: [constants.MAX_AMOUNT_OF_COLLECTABLES]Collectable,
     collectables_amount: usize,
 ) !*Scene {
-    var bg_layer_list = std.ArrayList(TileLayer).init(allocator);
-    var fg_layer_list = std.ArrayList(TileLayer).init(allocator);
-
-    for (bg_layers) |layer| {
-        try bg_layer_list.append(layer);
-    }
-
-    for (fg_layers) |layer| {
-        try fg_layer_list.append(layer);
-    }
-
     const new = try allocator.create(Scene);
 
     new.* = .{
         .allocator = allocator,
         .main_layer = main_layer,
-        .bg_layers = bg_layer_list,
-        .fg_layers = fg_layer_list,
+        .bg_layers = bg_layers orelse std.ArrayList(TileLayer).init(allocator),
+        .fg_layers = fg_layers orelse std.ArrayList(TileLayer).init(allocator),
         .scroll_state = rl.Vector2.init(0, 0),
         .viewport = viewport,
         .mobs = mobs,
@@ -134,9 +123,11 @@ pub fn destroy(self: *const Scene) void {
     for (self.bg_layers.items) |layer| {
         layer.destroy();
     }
+    self.bg_layers.deinit();
     for (self.fg_layers.items) |layer| {
         layer.destroy();
     }
+    self.fg_layers.deinit();
     self.allocator.destroy(self);
 }
 
@@ -175,18 +166,24 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
 
     // Read bg layers
     if (verbose > 0) try reader.skipBytes(BYTE_BG_LAYERS_HEADER.len, .{});
-    var bg_layers = std.ArrayList(TileLayer).init(allocator);
-    for (0..bg_layers_len) |_| {
-        const layer = try TileLayer.readBytes(allocator, reader);
-        try bg_layers.append(layer);
+    var bg_layers: ?std.ArrayList(TileLayer) = null;
+    if (bg_layers_len > 0) {
+        bg_layers = std.ArrayList(TileLayer).init(allocator);
+        for (0..bg_layers_len) |_| {
+            const layer = try TileLayer.readBytes(allocator, reader);
+            try bg_layers.?.append(layer);
+        }
     }
 
     // Read fg layers
     if (verbose > 0) try reader.skipBytes(BYTE_FG_LAYERS_HEADER.len, .{});
-    var fg_layers = std.ArrayList(TileLayer).init(allocator);
-    for (0..fg_layers_len) |_| {
-        const layer = try TileLayer.readBytes(allocator, reader);
-        try fg_layers.append(layer);
+    var fg_layers: ?std.ArrayList(TileLayer) = null;
+    if (fg_layers_len > 0) {
+        fg_layers = std.ArrayList(TileLayer).init(allocator);
+        for (0..fg_layers_len) |_| {
+            const layer = try TileLayer.readBytes(allocator, reader);
+            try fg_layers.?.append(layer);
+        }
     }
 
     // Read mobs
@@ -216,8 +213,8 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
     return Scene.create(
         allocator,
         main_layer,
-        try bg_layers.toOwnedSlice(),
-        try fg_layers.toOwnedSlice(),
+        bg_layers,
+        fg_layers,
         &globals.viewport,
         &globals.player,
         rl.Vector2.init(0, 0),
@@ -334,11 +331,11 @@ pub fn writeBytes(self: *const Scene, writer: anytype, verbose: bool) !void {
 }
 
 pub fn reset(self: *Scene) void {
-    for (0..self.mobs.len) |i| {
+    for (0..self.mobs_amount) |i| {
         self.mobs[i].reset();
     }
 
-    for (0..self.collectables.len) |i| {
+    for (0..self.collectables_amount) |i| {
         self.collectables[i].reset();
     }
 

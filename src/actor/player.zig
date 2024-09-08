@@ -100,7 +100,6 @@ pub fn actor(self: *Player) Actor {
         .getCollidableBody = getCollidableBody,
         .getHitboxRect = getHitboxRect,
         .getGridRect = getGridRect,
-        .isRiding = isRiding,
         .squish = handleSquish,
         .setPos = setPos,
     } };
@@ -136,30 +135,9 @@ fn move(self: *Player, scene: *Scene, comptime axis: types.Axis, amount: f32) vo
     self.collidable.move(scene, axis, amount, self);
 }
 
-fn isRiding(ctx: *anyopaque, solid: Solid) bool {
-    const solid_hitbox = solid.getHitboxRect();
-    const hitbox = getHitboxRect(ctx);
-
-    if (hitbox.x > solid_hitbox.x + solid_hitbox.width) {
-        return false;
-    }
-
-    if (solid_hitbox.x > hitbox.x + hitbox.width) {
-        return false;
-    }
-
-    if (hitbox.y + hitbox.height != solid_hitbox.y) {
-        return false;
-    }
-
-    return true;
-}
-
 fn handleSquish(ctx: *anyopaque, _: types.Axis, _: i8, _: u8) void {
     const self: *Player = @ptrCast(@alignCast(ctx));
     self.die();
-
-    // TODO 07/09/2024: Implement squish handling-
 }
 
 inline fn die(self: *Player) void {
@@ -209,7 +187,7 @@ fn handleGameOver(_: *anyopaque, _: *Sprite, scene: *Scene) void {
 fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     const self: *Player = @ptrCast(@alignCast(ctx));
 
-    if (self.sprite.current_animation == .Death) {
+    if (self.sprite.current_animation.type == .Death) {
         try self.sprite.update(scene, delta_time);
         return;
     }
@@ -224,11 +202,11 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     const is_slipping = self.is_slipping and is_grounded;
 
     // Rolling
-    if (self.speed.x != 0 and self.sprite.current_animation != .Roll and !self.is_stunlocked and is_grounded and controls.isKeyboardControlPressed(controls.KBD_ROLL)) {
+    if (self.speed.x != 0 and self.sprite.current_animation.type != .Roll and !self.is_stunlocked and is_grounded and controls.isKeyboardControlPressed(controls.KBD_ROLL)) {
         self.sprite.setAnimation(.{ .animation = .Roll, .on_animation_finished = .{ .context = self, .call = revertToIdle } });
         self.speed.x = std.math.sign(self.speed.x) * roll_speed;
     }
-    const is_rolling = self.sprite.current_animation == .Roll;
+    const is_rolling = self.sprite.current_animation.type == .Roll;
 
     // Left/right movement
     if (self.is_stunlocked) {

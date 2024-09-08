@@ -91,6 +91,7 @@ pub fn initGameData() void {
 
 pub fn main() anyerror!void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
     rl.setConfigFlags(.{
@@ -224,6 +225,7 @@ pub fn rebuildAndStoreDefaultTileset(allocator: std.mem.Allocator, tileset_path:
         std.log.err("Error storing tileset to file: {!}\n", .{err});
         std.process.exit(1);
     };
+    defer tileset.tileset().destroy();
     const tileset_file = helpers.openFile(tileset_path, .{ .mode = .write_only }) catch {
         std.log.err("Error opening file for writing: {s}\n", .{tileset_path});
         std.process.exit(1);

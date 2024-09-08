@@ -96,7 +96,7 @@ pub fn AnimationBuffer(animation_index: []const AnimationType, max_no_of_frames:
 
             const duration: f16 = std.mem.bytesToValue(f16, duration_bytes);
 
-            return .{ .duration = duration, .frames = frames };
+            return .{ .duration = duration, .frames = frames, .type = animation_type };
         }
     };
 }
@@ -104,6 +104,7 @@ pub fn AnimationBuffer(animation_index: []const AnimationType, max_no_of_frames:
 pub const AnimationData = struct {
     duration: f16,
     frames: []const u8,
+    type: AnimationType,
 };
 
 pub const AnimationType = enum(usize) {

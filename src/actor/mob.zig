@@ -26,7 +26,6 @@ is_jumping: bool = false,
 did_huntjump: bool = false,
 next_huntjump_distance: f32 = 80,
 behavior: MobBehavior,
-riding_solid: ?Solid = null,
 
 is_deleted: bool = false,
 is_dead: bool = false,
@@ -83,7 +82,6 @@ pub fn actor(self: *Mob) Actor {
         .getCollidableBody = getCollidableBodyCast,
         .getHitboxRect = getHitboxRectCast,
         .getGridRect = getGridRectCast,
-        .isRiding = isRiding,
         .setPos = setPosCast,
         .squish = handleSquish,
     } };
@@ -122,7 +120,7 @@ fn handleSquish(_: *anyopaque, _: types.Axis, _: i8, _: u8) void {
     // TODO 07/09/2024: Implement squish
 }
 
-pub fn handleCollision(self: *Mob, axis: types.Axis, sign: i8, _: u8, solid: ?Solid) void {
+pub fn handleCollision(self: *Mob, axis: types.Axis, sign: i8, _: u8, _: ?Solid) void {
     if (axis == types.Axis.X) {
         // Reverse direction when hitting an obstacle (unless we are hunting the player)
         if (!self.is_hunting) {
@@ -131,7 +129,6 @@ pub fn handleCollision(self: *Mob, axis: types.Axis, sign: i8, _: u8, solid: ?So
     } else {
         if (sign == 1) {
             // Stop falling when hitting the ground
-            self.riding_solid = solid;
             self.is_jumping = false;
         }
         self.speed.y = 0;
@@ -159,14 +156,6 @@ pub fn getInitialPos(self: *const Mob) rl.Vector2 {
 
 fn move(self: *Mob, scene: *Scene, comptime axis: types.Axis, amount: f32) void {
     self.collidable.move(scene, axis, amount, self);
-}
-
-fn isRiding(ctx: *anyopaque, solid: Solid) bool {
-    const self: *Mob = @ptrCast(@alignCast(ctx));
-    if (self.riding_solid) |s| {
-        return s.ptr == solid.ptr;
-    }
-    return false;
 }
 
 fn detectGapOnNextTile(self: *Mob, scene: *Scene, _: f32) bool {
@@ -265,10 +254,6 @@ pub fn update(self: *Mob, scene: *Scene, delta_time: f32) Entity.UpdateError!voi
                 self.randomlyAcquireNextHuntjumpDistance();
             }
         }
-    }
-
-    if (self.is_jumping) {
-        self.riding_solid = null;
     }
 
     // Slow down when hunt is over

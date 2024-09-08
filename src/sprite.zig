@@ -14,7 +14,7 @@ sprite_texture_map_r: SpriteTextureMap,
 sprite_texture_map_l: SpriteTextureMap,
 animation_buffer: an.AnimationBufferReader,
 initial_animation: an.AnimationType,
-current_animation: an.AnimationType,
+current_animation: an.AnimationData,
 queued_animation: ?an.AnimationType = null,
 freeze_animation_on_last_frame: bool = false,
 on_animation_finished: ?Callback = null,
@@ -56,7 +56,10 @@ pub fn Prefab(
         pub fn init() Sprite {
             const size = rl.Vector2.init(size_x, size_y);
             const texture = loadTexture();
-            return Sprite.init(texture, size, animation_buffer.reader(), initial_animation, sprite_map_offset);
+            return Sprite.init(texture, size, animation_buffer.reader(), initial_animation, sprite_map_offset) catch |err| {
+                std.log.err("Error initializing sprite: {!}\n", .{err});
+                std.process.exit(1);
+            };
         }
     };
 }
@@ -67,7 +70,7 @@ pub fn init(
     animation_buffer: an.AnimationBufferReader,
     initial_animation: an.AnimationType,
     sprite_map_offset: rl.Vector2,
-) Sprite {
+) !Sprite {
     const sprite_texture_map_r = helpers.buildRectMap(
         128,
         @floatFromInt(texture.width),
@@ -98,25 +101,32 @@ pub fn init(
         .sprite_texture_map_l = sprite_texture_map_l,
         .texture = texture,
         .initial_animation = initial_animation,
-        .current_animation = initial_animation,
+        .current_animation = try animation_buffer.readAnimation(initial_animation),
     };
 }
 
 pub fn reset(self: *Sprite) void {
+    const current_animation = self.animation_buffer.readAnimation(self.initial_animation) catch |err| {
+        std.log.err("Error resetting sprite: {!}\n", .{err});
+        std.process.exit(1);
+    };
     self.* = .{
         .animation_buffer = self.animation_buffer,
         .size = self.size,
         .sprite_texture_map_r = self.sprite_texture_map_r,
         .sprite_texture_map_l = self.sprite_texture_map_l,
         .texture = self.texture,
-        .current_animation = self.initial_animation,
+        .current_animation = current_animation,
         .initial_animation = self.initial_animation,
     };
 }
 
 pub fn setAnimation(self: *Sprite, param: SetAnimationParam) void {
-    if (self.current_animation != param.animation) {
-        self.current_animation = param.animation;
+    if (self.current_animation.type != param.animation) {
+        self.current_animation = self.animation_buffer.readAnimation(param.animation) catch |err| {
+            std.log.err("Error setting animation: {!}\n", .{err});
+            std.process.exit(1);
+        };
         self.animation_clock = 0;
     }
     self.animation_speed = param.animation_speed;
@@ -139,29 +149,28 @@ pub fn getSourceRect(self: *const Sprite) ?rl.Rectangle {
 
 pub fn update(self: *Sprite, scene: *Scene, delta_time: f32) !void {
     // Animation
-    const current_animation = try self.animation_buffer.readAnimation(self.current_animation);
-    const current_animation_duration: f32 = @floatCast(current_animation.duration);
-    const anim_length: f32 = @floatFromInt(current_animation.frames.len);
+    const current_animation_duration: f32 = @floatCast(self.current_animation.duration);
+    const anim_length: f32 = @floatFromInt(self.current_animation.frames.len);
 
     const frame_duration: f32 = current_animation_duration / anim_length;
     const frame_idx: usize = @min(
         @as(usize, @intFromFloat(@floor(self.animation_clock / frame_duration))),
-        current_animation.frames.len - 1,
+        self.current_animation.frames.len - 1,
     );
 
     self.animation_clock += delta_time * self.animation_speed;
 
-    if (self.animation_clock > current_animation.duration) {
+    if (self.animation_clock > self.current_animation.duration) {
         if (self.on_animation_finished) |callback| {
             callback.call(callback.context, self, scene);
         } else if (self.freeze_animation_on_last_frame) {
-            self.animation_clock = current_animation.duration;
+            self.animation_clock = self.current_animation.duration;
         } else {
-            self.animation_clock = @mod(self.animation_clock, current_animation.duration);
+            self.animation_clock = @mod(self.animation_clock, self.current_animation.duration);
         }
     }
 
-    self.current_display_frame = current_animation.frames[frame_idx];
+    self.current_display_frame = self.current_animation.frames[frame_idx];
 }
 
 pub fn draw(self: *const Sprite, scene: *const Scene, pos: rl.Vector2, color: rl.Color) void {

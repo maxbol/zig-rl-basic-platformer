@@ -50,8 +50,7 @@ pub fn PrefabOverlay(PaletteType: type, spawn_fn: fn (scene: *Scene, item_idx: u
                 }
 
                 if (rl.isMouseButtonPressed(rl.MouseButton.mouse_button_left)) {
-                    for (self.scene_data, 0..) |item, i| {
-                        _ = item; // autofix
+                    for (0..self.scene_data.len) |i| {
                         if (self.marked_for_deletion[i]) {
                             self.scene_data[i].delete();
                         }

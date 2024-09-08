@@ -4,6 +4,7 @@ const Sprite = @import("../sprite.zig");
 const an = @import("../animation.zig");
 const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
+const std = @import("std");
 
 pub fn PrefabPalette(
     ItemType: type,

@@ -92,6 +92,7 @@ pub fn create(allocator: std.mem.Allocator, scene: *Scene, vmouse: *controls.Vir
 pub fn destroy(self: *Editor) void {
     self.allocator.destroy(self.palette_mob);
     self.allocator.destroy(self.palette_collectables);
+    self.allocator.destroy(self.palette_platform);
     self.allocator.destroy(self.palette_tiles);
     self.allocator.destroy(self);
 }

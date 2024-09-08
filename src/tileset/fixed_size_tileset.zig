@@ -62,10 +62,6 @@ pub fn FixedSizeTileset(size: usize) type {
             self.allocator.destroy(self);
         }
 
-        pub fn deinit(self: *@This()) void {
-            rl.unloadTexture(self.texture);
-        }
-
         pub fn writeToFile(self: *@This(), file: std.fs.File) !void {
             return self.writeBytes(file.writer());
         }
