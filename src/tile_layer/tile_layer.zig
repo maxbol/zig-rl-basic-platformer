@@ -258,17 +258,14 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !@This() {
     if (data_size > MAX_DATA_SIZE) {
         return error.LayerTooBig;
     }
-    std.debug.print("data_size={d}\n", .{data_size});
 
     // Layer size
     const size_bytes = try reader.readBytesNoEof(8);
     const layer_size = std.mem.bytesToValue(rl.Vector2, &size_bytes);
-    std.debug.print("layer_size.x={d}, .y={d}\n", .{ layer_size.x, layer_size.y });
 
     // Row size
     const row_size_bytes = try reader.readBytesNoEof(2);
     const row_size = std.mem.bytesToValue(u16, &row_size_bytes);
-    std.debug.print("row_size={d}\n", .{row_size});
 
     // Tileset file path length
     const len_bytes = try reader.readBytesNoEof(2);

@@ -580,7 +580,6 @@ pub fn collideAt(self: *Scene, rect: shapes.IRect, grid_rect: shapes.IRect) ?Col
     var solid_it = self.getSolidIterator();
     while (solid_it.next()) |solid| {
         if (solid.collideAt(rect)) {
-            std.debug.print("Collided with solid! Solid.collidable={any}\n", .{solid.getCollidable().collidable});
             return .{
                 .flags = @intFromEnum(Tileset.TileFlag.Collidable),
                 .solid = solid,

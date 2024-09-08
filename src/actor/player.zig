@@ -29,7 +29,6 @@ score: u32 = 0,
 speed: rl.Vector2,
 sprite: Sprite,
 sprite_offset: rl.Vector2,
-riding_solid: ?Solid = null,
 
 sfx_hurt: rl.Sound,
 sfx_jump: rl.Sound,
@@ -138,11 +137,6 @@ fn move(self: *Player, scene: *Scene, comptime axis: types.Axis, amount: f32) vo
 }
 
 fn isRiding(ctx: *anyopaque, solid: Solid) bool {
-    // const self: *Player = @ptrCast(@alignCast(ctx));
-    // if (self.riding_solid) |s| {
-    //     return s.ptr == solid.ptr;
-    // }
-    // return false;
     const solid_hitbox = solid.getHitboxRect();
     const hitbox = getHitboxRect(ctx);
 
@@ -154,7 +148,6 @@ fn isRiding(ctx: *anyopaque, solid: Solid) bool {
         return false;
     }
 
-    std.debug.print("Player feet={d}, Solid ground ={d}\n", .{ hitbox.y + hitbox.height, solid_hitbox.y });
     if (hitbox.y + hitbox.height != solid_hitbox.y) {
         return false;
     }
@@ -165,7 +158,6 @@ fn isRiding(ctx: *anyopaque, solid: Solid) bool {
 fn handleSquish(ctx: *anyopaque, _: types.Axis, _: i8, _: u8) void {
     const self: *Player = @ptrCast(@alignCast(ctx));
     self.die();
-    std.debug.print("Player got squished!\n", .{});
 
     // TODO 07/09/2024: Implement squish handling-
 }
@@ -178,7 +170,7 @@ inline fn die(self: *Player) void {
     });
 }
 
-pub fn handleCollision(self: *Player, axis: types.Axis, sign: i8, flags: u8, solid: ?Solid) void {
+pub fn handleCollision(self: *Player, axis: types.Axis, sign: i8, flags: u8, _: ?Solid) void {
     if (flags & @intFromEnum(Tileset.TileFlag.Deadly) != 0) {
         self.die();
     }
@@ -192,13 +184,6 @@ pub fn handleCollision(self: *Player, axis: types.Axis, sign: i8, flags: u8, sol
             self.jump_counter = 0;
             self.is_stunlocked = false;
             self.is_slipping = flags & @intFromEnum(Tileset.TileFlag.Slippery) != 0;
-
-            if (solid != null) {
-                std.debug.print("Player collided with solid\n", .{});
-            } else {
-                std.debug.print("Clearing player riding status\n", .{});
-            }
-            self.riding_solid = solid;
 
             if (self.lives == 0) {
                 self.die();
@@ -237,10 +222,6 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     }
     const is_grounded = self.jump_counter == 0;
     const is_slipping = self.is_slipping and is_grounded;
-
-    if (!is_grounded) {
-        self.riding_solid = null;
-    }
 
     // Rolling
     if (self.speed.x != 0 and self.sprite.current_animation != .Roll and !self.is_stunlocked and is_grounded and controls.isKeyboardControlPressed(controls.KBD_ROLL)) {

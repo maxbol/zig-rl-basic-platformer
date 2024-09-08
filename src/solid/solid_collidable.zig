@@ -23,7 +23,6 @@ inline fn moveOnAxis(self: *SolidCollidable, all_actors: []Actor, riding_actors:
     const hitbox_size = if (axis == .X) &self.hitbox.width else &self.hitbox.height;
 
     remainder.* -= @floatFromInt(amount);
-    std.debug.print("Adding {d} to {s} axis\n", .{ @as(f32, @floatFromInt(amount)), @tagName(axis) });
     hitbox_loc.* += @floatFromInt(amount);
 
     const mov_dir = std.math.sign(amount);
@@ -32,29 +31,25 @@ inline fn moveOnAxis(self: *SolidCollidable, all_actors: []Actor, riding_actors:
         if (solid.overlapsActor(actor)) {
             // Push the actor out of the way
 
-            const actor_hitbox = actor.getHitboxRect();
+            const actor_collidable = actor.getCollidableBody();
+            const actor_hitbox = actor_collidable.hitbox;
             const mov_amount = if (mov_dir == 1)
-                hitbox_loc.* + hitbox_size.* - (if (axis == .X) actor_hitbox.x else actor_hitbox.y)
+                hitbox_loc.* + hitbox_size.* - (if (axis == .X) (actor_hitbox.x) else (actor_hitbox.y))
             else
                 hitbox_loc.* - if (axis == .X) (actor_hitbox.x + actor_hitbox.width) else (actor_hitbox.y + actor_hitbox.height);
 
-            std.debug.print("Pushing actor! axis={s} mov_amount={d}, riding_actors={any}\n", .{ @tagName(axis), mov_amount, riding_actors });
-
-            actor.getCollidableBody().move(
+            actor_collidable.move(
                 scene,
                 axis,
                 mov_amount,
                 actor.squishCollider(),
             );
 
-            std.debug.print("Done pusing actor\n", .{});
-
             continue;
         }
 
         for (riding_actors) |idx| {
             if (idx == i) {
-                std.debug.print("Transporting riding actor!\n", .{});
                 actor.getCollidableBody().move(scene, axis, @floatFromInt(amount), null);
                 break;
             }
