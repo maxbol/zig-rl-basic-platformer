@@ -1,5 +1,5 @@
 const Actor = @import("actor.zig");
-const CollidableBody = @import("collidable_body.zig");
+const RigidBody = @import("rigid_body.zig");
 const Entity = @import("../entity.zig");
 const Player = @This();
 const Tileset = @import("../tileset/tileset.zig");
@@ -19,7 +19,7 @@ const types = @import("../types.zig");
 const approach = helpers.approach;
 
 initial_hitbox: rl.Rectangle,
-collidable: CollidableBody,
+rigid_body: RigidBody,
 face_dir: u1 = 1,
 is_slipping: bool = false,
 is_stunlocked: bool = false,
@@ -86,7 +86,7 @@ pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2) Pla
         .speed = rl.Vector2.init(0, 0),
         .sprite = sprite,
         .sprite_offset = sprite_offset,
-        .collidable = CollidableBody.init(hitbox),
+        .rigid_body = RigidBody.init(hitbox),
     };
 }
 
@@ -97,7 +97,7 @@ pub fn reset(self: *Player) void {
 
 pub fn actor(self: *Player) Actor {
     return .{ .ptr = self, .impl = &.{
-        .getCollidableBody = getCollidableBody,
+        .getRigidBody = getRigidBody,
         .getHitboxRect = getHitboxRect,
         .getGridRect = getGridRect,
         .squish = handleSquish,
@@ -116,26 +116,23 @@ pub fn entity(self: *Player) Entity {
     };
 }
 
-fn getCollidableBody(ctx: *anyopaque) *CollidableBody {
+fn getRigidBody(ctx: *anyopaque) *RigidBody {
     const self: *Player = @ptrCast(@alignCast(ctx));
-    return &self.collidable;
+    return &self.rigid_body;
 }
 
 fn getHitboxRect(ctx: *const anyopaque) rl.Rectangle {
     const self: *const Player = @ptrCast(@alignCast(ctx));
-    return self.collidable.hitbox;
+    return self.rigid_body.hitbox;
 }
 
 fn getGridRect(ctx: *const anyopaque) shapes.IRect {
     const self: *const Player = @ptrCast(@alignCast(ctx));
-    return self.collidable.grid_rect;
+    return self.rigid_body.grid_rect;
 }
 
-fn move(self: *Player, scene: *Scene, comptime axis: types.Axis, amount: f32) void {
-    self.collidable.move(scene, axis, amount, self);
-}
-
-fn handleSquish(ctx: *anyopaque, _: types.Axis, _: i8, _: u8) void {
+fn handleSquish(ctx: *anyopaque, scene: *Scene, _: types.Axis, _: i8, _: u8) void {
+    _ = scene; // autofix
     const self: *Player = @ptrCast(@alignCast(ctx));
     self.die();
 }
@@ -148,7 +145,7 @@ inline fn die(self: *Player) void {
     });
 }
 
-pub fn handleCollision(self: *Player, axis: types.Axis, sign: i8, flags: u8, _: ?Solid) void {
+pub fn handleCollision(self: *Player, scene: *Scene, axis: types.Axis, sign: i8, flags: u8, solid: ?Solid) void {
     if (flags & @intFromEnum(Tileset.TileFlag.Deadly) != 0) {
         self.die();
     }
@@ -168,12 +165,16 @@ pub fn handleCollision(self: *Player, axis: types.Axis, sign: i8, flags: u8, _: 
             }
         }
     }
+
+    if (solid) |s| {
+        s.handlePlayerCollision(scene, axis, sign, flags, self.actor());
+    }
 }
 
 fn setPos(ctx: *anyopaque, pos: rl.Vector2) void {
     const self: *Player = @ptrCast(@alignCast(ctx));
-    self.collidable.hitbox.x = pos.x;
-    self.collidable.hitbox.y = pos.y;
+    self.rigid_body.hitbox.x = pos.x;
+    self.rigid_body.hitbox.y = pos.y;
 }
 
 fn revertToIdle(_: *anyopaque, sprite: *Sprite, _: *Scene) void {
@@ -300,34 +301,29 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
 
     // Move the player hitbox
     if (self.speed.x != 0) {
-        self.move(scene, types.Axis.X, self.speed.x * delta_time);
-    } else {
-        self.collidable.clear(.X);
+        self.rigid_body.move(scene, types.Axis.X, self.speed.x * delta_time, self);
     }
     if (self.speed.y != 0) {
-        self.move(scene, types.Axis.Y, self.speed.y * delta_time);
-    } else {
-        self.collidable.clear(.Y);
+        self.rigid_body.move(scene, types.Axis.Y, self.speed.y * delta_time, self);
     }
-
-    scene.centerViewportOnPos(self.collidable.hitbox);
+    scene.centerViewportOnPos(self.rigid_body.hitbox);
 
     try self.sprite.update(scene, delta_time);
 }
 
 fn draw(ctx: *anyopaque, scene: *const Scene) void {
     const self: *Player = @ptrCast(@alignCast(ctx));
-    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.collidable.hitbox);
+    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.rigid_body.hitbox);
 
     self.sprite.draw(scene, sprite_pos, rl.Color.white);
 }
 
 fn drawDebug(ctx: *anyopaque, scene: *const Scene) void {
     const self: *Player = @ptrCast(@alignCast(ctx));
-    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.collidable.hitbox);
+    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.rigid_body.hitbox);
 
     self.sprite.drawDebug(scene, sprite_pos);
-    self.collidable.drawDebug(scene);
+    self.rigid_body.drawDebug(scene);
 }
 
 pub const Knight = @import("player/knight.zig").Knight;

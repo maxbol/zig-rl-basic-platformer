@@ -1,7 +1,7 @@
 const Actor = @import("actor.zig");
-const CollidableBody = @import("collidable_body.zig");
 const Entity = @import("../entity.zig");
 const Mob = @This();
+const RigidBody = @import("rigid_body.zig");
 const Scene = @import("../scene.zig");
 const Solid = @import("../solid/solid.zig");
 const Sprite = @import("../sprite.zig");
@@ -10,14 +10,14 @@ const an = @import("../animation.zig");
 const globals = @import("../globals.zig");
 const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
-const std = @import("std");
 const shapes = @import("../shapes.zig");
+const std = @import("std");
 const types = @import("../types.zig");
 
 const approach = helpers.approach;
 
 initial_hitbox: rl.Rectangle,
-collidable: CollidableBody,
+rigid_body: RigidBody,
 sprite: Sprite,
 sprite_offset: rl.Vector2,
 speed: rl.Vector2,
@@ -68,7 +68,7 @@ pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2, mob
         .speed = rl.Vector2.init(0, 0),
         .sprite = sprite,
         .sprite_offset = sprite_offset,
-        .collidable = CollidableBody.init(hitbox),
+        .rigid_body = RigidBody.init(hitbox),
         .behavior = mob_attributes,
     };
 
@@ -79,17 +79,16 @@ pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2, mob
 
 pub fn actor(self: *Mob) Actor {
     return .{ .ptr = self, .impl = &.{
-        .getCollidableBody = getCollidableBodyCast,
+        .getRigidBody = getRigidBodyCast,
         .getHitboxRect = getHitboxRectCast,
         .getGridRect = getGridRectCast,
         .setPos = setPosCast,
-        .squish = handleSquish,
     } };
 }
 
-fn getCollidableBodyCast(ctx: *anyopaque) *CollidableBody {
+fn getRigidBodyCast(ctx: *anyopaque) *RigidBody {
     const self: *Mob = @ptrCast(@alignCast(ctx));
-    return self.getCollidableBody();
+    return self.getRigidBody();
 }
 
 fn getGridRectCast(ctx: *const anyopaque) shapes.IRect {
@@ -116,11 +115,8 @@ pub fn reset(self: *Mob) void {
     self.sprite.reset();
 }
 
-fn handleSquish(_: *anyopaque, _: types.Axis, _: i8, _: u8) void {
-    // TODO 07/09/2024: Implement squish
-}
-
-pub fn handleCollision(self: *Mob, axis: types.Axis, sign: i8, _: u8, _: ?Solid) void {
+pub fn handleCollision(self: *Mob, scene: *Scene, axis: types.Axis, sign: i8, _: u8, _: ?Solid) void {
+    _ = scene; // autofix
     if (axis == types.Axis.X) {
         // Reverse direction when hitting an obstacle (unless we are hunting the player)
         if (!self.is_hunting) {
@@ -135,16 +131,16 @@ pub fn handleCollision(self: *Mob, axis: types.Axis, sign: i8, _: u8, _: ?Solid)
     }
 }
 
-pub inline fn getCollidableBody(self: *Mob) *CollidableBody {
-    return &self.collidable;
+pub inline fn getRigidBody(self: *Mob) *RigidBody {
+    return &self.rigid_body;
 }
 
 pub inline fn getGridRect(self: *const Mob) shapes.IRect {
-    return self.collidable.grid_rect;
+    return self.rigid_body.grid_rect;
 }
 
 pub inline fn getHitboxRect(self: *const Mob) rl.Rectangle {
-    return self.collidable.hitbox;
+    return self.rigid_body.hitbox;
 }
 
 pub fn getInitialPos(self: *const Mob) rl.Vector2 {
@@ -152,10 +148,6 @@ pub fn getInitialPos(self: *const Mob) rl.Vector2 {
         .x = self.initial_hitbox.x,
         .y = self.initial_hitbox.y,
     };
-}
-
-fn move(self: *Mob, scene: *Scene, comptime axis: types.Axis, amount: f32) void {
-    self.collidable.move(scene, axis, amount, self);
 }
 
 fn detectGapOnNextTile(self: *Mob, scene: *Scene, _: f32) bool {
@@ -208,8 +200,8 @@ fn randomlyAcquireNextHuntjumpDistance(self: *Mob) void {
 }
 
 pub inline fn setPos(self: *Mob, pos: rl.Vector2) void {
-    self.collidable.hitbox.x = pos.x;
-    self.collidable.hitbox.y = pos.y;
+    self.rigid_body.hitbox.x = pos.x;
+    self.rigid_body.hitbox.y = pos.y;
 }
 
 pub fn delete(self: *Mob) void {
@@ -278,8 +270,8 @@ pub fn update(self: *Mob, scene: *Scene, delta_time: f32) Entity.UpdateError!voi
     }
 
     // Move the mob
-    self.move(scene, types.Axis.X, self.speed.x * delta_time);
-    self.move(scene, types.Axis.Y, self.speed.y * delta_time);
+    self.rigid_body.move(scene, types.Axis.X, self.speed.x * delta_time, self);
+    self.rigid_body.move(scene, types.Axis.Y, self.speed.y * delta_time, self);
 
     try self.sprite.update(scene, delta_time);
 }
@@ -288,7 +280,7 @@ pub fn draw(self: *const Mob, scene: *const Scene) void {
     if (self.is_deleted or self.is_dead) {
         return;
     }
-    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.collidable.hitbox);
+    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.rigid_body.hitbox);
     self.sprite.draw(scene, sprite_pos, rl.Color.white);
 }
 
@@ -296,10 +288,10 @@ pub fn drawDebug(self: *const Mob, scene: *const Scene) void {
     if (self.is_deleted or self.is_dead) {
         return;
     }
-    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.collidable.hitbox);
+    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.rigid_body.hitbox);
 
     self.sprite.drawDebug(scene, sprite_pos);
-    self.collidable.drawDebug(scene);
+    self.rigid_body.drawDebug(scene);
 }
 
 pub const GreenSlime = @import("mob/slime.zig").GreenSlime;

@@ -1,5 +1,4 @@
 const Actor = @import("../actor/actor.zig");
-const Collectable = @import("../collectable/collectable.zig");
 const Palette = @import("palette.zig");
 const Editor = @import("../editor.zig");
 const Scene = @import("../scene.zig");

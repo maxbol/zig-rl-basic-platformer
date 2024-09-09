@@ -1,5 +1,4 @@
 const Actor = @import("actor/actor.zig");
-const Collectable = @import("collectable/collectable.zig");
 const Entity = @import("entity.zig");
 const Scene = @This();
 const Sprite = @import("sprite.zig");
@@ -29,9 +28,11 @@ mobs_starting_pos: [constants.MAX_AMOUNT_OF_MOBS]rl.Vector2,
 mobs_amount: usize,
 platforms: [constants.MAX_AMOUNT_OF_PLATFORMS]Solid.Platform,
 platforms_amount: usize,
+mystery_boxes: [constants.MAX_AMOUNT_OF_MYSTERY_BOXES]Solid.MysteryBox,
+mystery_boxes_amount: usize,
 gravity: f32 = 13 * 60,
 first_frame_initialization_done: bool = false,
-collectables: [constants.MAX_AMOUNT_OF_COLLECTABLES]Collectable = undefined,
+collectables: [constants.MAX_AMOUNT_OF_COLLECTABLES]Actor.Collectable = undefined,
 collectables_amount: usize,
 layer_visibility_treshold: ?i16 = null,
 
@@ -47,10 +48,24 @@ pub const SceneSolidIterator = struct {
     idx: usize = 0,
 
     pub fn next(self: *SceneSolidIterator) ?Solid {
-        for (self.idx..self.scene.platforms_amount) |i| {
-            self.idx += 1;
-            if (!self.scene.platforms[i].is_deleted) {
-                return self.scene.platforms[i].solid();
+        var idx = self.idx;
+        if (idx < self.scene.platforms_amount) {
+            for (idx..self.scene.platforms_amount) |i| {
+                self.idx += 1;
+                if (!self.scene.platforms[i].is_deleted) {
+                    return self.scene.platforms[i].solid();
+                }
+            }
+        }
+
+        idx -= self.scene.platforms_amount;
+
+        if (idx < self.scene.mystery_boxes_amount) {
+            for (idx..self.scene.mystery_boxes_amount) |i| {
+                self.idx += 1;
+                if (!self.scene.mystery_boxes[i].is_deleted) {
+                    return self.scene.mystery_boxes[i].solid();
+                }
             }
         }
 
@@ -63,17 +78,30 @@ pub const SceneActorIterator = struct {
     idx: usize = 0,
 
     pub fn next(self: *SceneActorIterator) ?Actor {
-        if (self.idx == 0) {
+        var idx = self.idx;
+
+        if (idx == 0) {
             self.idx += 1;
             return self.scene.player.actor();
         }
 
-        const mob_idx = self.idx - 1;
+        idx -= 1;
 
-        for (mob_idx..self.scene.mobs_amount) |i| {
-            self.idx += 1;
-            if (!self.scene.mobs[i].is_deleted and !self.scene.mobs[i].is_dead) {
-                return self.scene.mobs[i].actor();
+        if (idx < self.scene.mobs_amount) {
+            for (idx..self.scene.mobs_amount) |i| {
+                self.idx += 1;
+                if (!self.scene.mobs[i].is_deleted and !self.scene.mobs[i].is_dead) {
+                    return self.scene.mobs[i].actor();
+                }
+            }
+        }
+
+        idx -= self.scene.mobs_amount;
+
+        for (idx..self.scene.collectables_amount) |i| {
+            if (!self.scene.collectables[i].is_deleted and !self.scene.collectables[i].is_collected) {
+                self.idx += 1;
+                return self.scene.collectables[i].actor();
             }
         }
 
@@ -92,7 +120,7 @@ pub fn create(
     mobs: [constants.MAX_AMOUNT_OF_MOBS]Actor.Mob,
     mobs_starting_pos: [constants.MAX_AMOUNT_OF_MOBS]rl.Vector2,
     mobs_amount: usize,
-    collectables: [constants.MAX_AMOUNT_OF_COLLECTABLES]Collectable,
+    collectables: [constants.MAX_AMOUNT_OF_COLLECTABLES]Actor.Collectable,
     collectables_amount: usize,
 ) !*Scene {
     const new = try allocator.create(Scene);
@@ -111,6 +139,8 @@ pub fn create(
         .player_starting_pos = player_starting_pos,
         .platforms = undefined,
         .platforms_amount = 0,
+        .mystery_boxes = undefined,
+        .mystery_boxes_amount = 0,
         .collectables_amount = collectables_amount,
         .collectables = collectables,
     };
@@ -199,14 +229,14 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
 
     // Read collectables
     if (verbose > 0) try reader.skipBytes(BYTE_COLLECTABLE_HEADER.len, .{});
-    var collectables: [constants.MAX_AMOUNT_OF_COLLECTABLES]Collectable = undefined;
+    var collectables: [constants.MAX_AMOUNT_OF_COLLECTABLES]Actor.Collectable = undefined;
     for (0..collectables_amount) |i| {
         const collectable_type = try reader.readByte();
         const collectable_pos_bytes = try reader.readBytesNoEof(8);
         const collectable_pos = std.mem.bytesToValue(rl.Vector2, &collectable_pos_bytes);
-        collectables[i] = Collectable.initCollectableByIndex(collectable_type, collectable_pos) catch |err| blk: {
+        collectables[i] = Actor.Collectable.initCollectableByIndex(collectable_type, collectable_pos) catch |err| blk: {
             std.log.err("{d} Error: failed to init collectable by type: {d}: {!}\n", .{ i, collectable_type, err });
-            break :blk Collectable.stub();
+            break :blk Actor.Collectable.stub();
         };
     }
 
@@ -350,28 +380,39 @@ pub fn getSolidIterator(self: *Scene) SceneSolidIterator {
     return SceneSolidIterator{ .scene = self };
 }
 
-pub fn spawnCollectable(self: *Scene, collectable_type: usize, pos: rl.Vector2) SpawnError!void {
-    const collectable: Collectable = try Collectable.initCollectableByIndex(collectable_type, pos);
+pub fn spawnCollectable(self: *Scene, collectable_type: usize, pos: rl.Vector2) SpawnError!*Actor.Collectable {
+    const collectable: Actor.Collectable = try Actor.Collectable.initCollectableByIndex(collectable_type, pos);
     self.collectables[self.collectables_amount] = collectable;
     self.collectables_amount += 1;
+    return &self.collectables[self.collectables_amount - 1];
 }
 
-pub fn spawnMob(self: *Scene, mob_type: usize, pos: rl.Vector2) SpawnError!void {
+pub fn spawnMob(self: *Scene, mob_type: usize, pos: rl.Vector2) SpawnError!*Actor.Mob {
     const mob: Actor.Mob = try Actor.Mob.initMobByIndex(mob_type, pos);
-
     self.mobs[self.mobs_amount] = mob;
     self.mobs_starting_pos[self.mobs_amount] = pos;
     self.mobs_amount += 1;
+    return &self.mobs[self.mobs_amount - 1];
 }
 
-pub fn spawnPlatform(self: *Scene, platform_type: usize, pos: rl.Vector2) SpawnError!void {
+pub fn spawnPlatform(self: *Scene, platform_type: usize, pos: rl.Vector2) SpawnError!*Solid.Platform {
     const platform: Solid.Platform = try Solid.Platform.initPlatformByIndex(
         platform_type,
         shapes.IPos.fromVec2(pos),
     );
-
     self.platforms[self.platforms_amount] = platform;
     self.platforms_amount += 1;
+    return &self.platforms[self.platforms_amount - 1];
+}
+
+pub fn spawnMysteryBox(self: *Scene, mystery_box_type: usize, pos: rl.Vector2) SpawnError!*Solid.MysteryBox {
+    const mystery_box: Solid.MysteryBox = try Solid.MysteryBox.initMysteryBoxByIndex(
+        mystery_box_type,
+        shapes.IPos.fromVec2(pos),
+    );
+    self.mystery_boxes[self.mystery_boxes_amount] = mystery_box;
+    self.mystery_boxes_amount += 1;
+    return &self.mystery_boxes[self.mystery_boxes_amount - 1];
 }
 
 pub fn removeMob(self: *Scene, mob_idx: usize) void {
@@ -412,6 +453,10 @@ pub fn update(self: *Scene, delta_time: f32) !void {
         for (0..self.platforms_amount) |i| {
             try self.platforms[i].update(self, delta_time);
         }
+
+        for (0..self.mystery_boxes_amount) |i| {
+            try self.mystery_boxes[i].update(self, delta_time);
+        }
     }
 
     for (0..self.collectables_amount) |i| {
@@ -444,6 +489,10 @@ pub fn draw(self: *const Scene) void {
 
     for (0..self.platforms_amount) |i| {
         self.platforms[i].draw(self);
+    }
+
+    for (0..self.mystery_boxes_amount) |i| {
+        self.mystery_boxes[i].draw(self);
     }
 
     self.player.entity().draw(self);

@@ -6,7 +6,6 @@ const rl = @import("raylib");
 const std = @import("std");
 const types = @import("../types.zig");
 
-collidable: bool = true,
 x_remainder: f32 = 0,
 y_remainder: f32 = 0,
 hitbox: rl.Rectangle,
@@ -28,17 +27,18 @@ inline fn moveOnAxis(self: *SolidCollidable, all_actors: []Actor, riding_actors:
     const mov_dir = std.math.sign(amount);
 
     for (all_actors, 0..) |actor, i| {
+        const actor_rigid = actor.getRigidBody();
+
         if (solid.overlapsActor(actor)) {
             // Push the actor out of the way
 
-            const actor_collidable = actor.getCollidableBody();
-            const actor_hitbox = actor_collidable.hitbox;
+            const actor_hitbox = actor_rigid.hitbox;
             const mov_amount = if (mov_dir == 1)
                 hitbox_loc.* + hitbox_size.* - (if (axis == .X) (actor_hitbox.x) else (actor_hitbox.y))
             else
                 hitbox_loc.* - if (axis == .X) (actor_hitbox.x + actor_hitbox.width) else (actor_hitbox.y + actor_hitbox.height);
 
-            actor_collidable.move(
+            actor_rigid.move(
                 scene,
                 axis,
                 mov_amount,
@@ -49,10 +49,12 @@ inline fn moveOnAxis(self: *SolidCollidable, all_actors: []Actor, riding_actors:
         }
 
         for (riding_actors) |idx| {
-            if (idx == i) {
-                actor.getCollidableBody().move(scene, axis, @floatFromInt(amount), null);
-                break;
+            if (idx != i) {
+                continue;
             }
+
+            actor_rigid.move(scene, axis, @floatFromInt(amount), null);
+            break;
         }
     }
 }
@@ -82,7 +84,7 @@ pub fn move(self: *SolidCollidable, scene: *Scene, solid: Solid, x: f32, y: f32)
     const all_actors_slice = all_actors[0..actors_idx];
     const riding_actors_slice = riding_actors[0..riding_idx];
 
-    self.collidable = false;
+    solid.setIsCollidable(false);
 
     if (x_mov != 0) {
         self.moveOnAxis(
@@ -106,5 +108,5 @@ pub fn move(self: *SolidCollidable, scene: *Scene, solid: Solid, x: f32, y: f32)
         );
     }
 
-    self.collidable = true;
+    solid.setIsCollidable(true);
 }

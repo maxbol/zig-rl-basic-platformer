@@ -1,6 +1,7 @@
 const Actor = @This();
-const CollidableBody = @import("collidable_body.zig");
+const RigidBody = @import("rigid_body.zig");
 const Entity = @import("../entity.zig");
+const Scene = @import("../scene.zig");
 const Solid = @import("../solid/solid.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
@@ -10,17 +11,17 @@ ptr: *anyopaque,
 impl: *const Interface,
 
 pub const Interface = struct {
-    getCollidableBody: *const fn (ctx: *anyopaque) *CollidableBody,
+    getRigidBody: *const fn (ctx: *anyopaque) *RigidBody,
     getHitboxRect: *const fn (ctx: *const anyopaque) rl.Rectangle,
     getGridRect: *const fn (ctx: *const anyopaque) shapes.IRect,
     setPos: *const fn (ctx: *anyopaque, pos: rl.Vector2) void,
-    squish: *const fn (*anyopaque, types.Axis, i8, u8) void,
+    squish: ?*const fn (*anyopaque, *Scene, types.Axis, i8, u8) void = null,
 };
 
 pub const SquishCollider = struct {
     actor: Actor,
-    pub fn handleCollision(self: SquishCollider, axis: types.Axis, sign: i8, flags: u8, _: ?Solid) void {
-        return self.actor.squish(axis, sign, flags);
+    pub fn handleCollision(self: SquishCollider, scene: *Scene, axis: types.Axis, sign: i8, flags: u8, _: ?Solid) void {
+        return self.actor.squish(scene, axis, sign, flags);
     }
 };
 
@@ -47,16 +48,18 @@ pub fn isRiding(self: Actor, solid: Solid) bool {
     return true;
 }
 
-pub fn squish(self: Actor, axis: types.Axis, sign: i8, flags: u8) void {
-    return self.impl.squish(self.ptr, axis, sign, flags);
+pub fn squish(self: Actor, scene: *Scene, axis: types.Axis, sign: i8, flags: u8) void {
+    if (self.impl.squish) |call| {
+        call(self.ptr, scene, axis, sign, flags);
+    }
 }
 
 pub fn squishCollider(self: Actor) SquishCollider {
     return .{ .actor = self };
 }
 
-pub fn getCollidableBody(self: Actor) *CollidableBody {
-    return self.impl.getCollidableBody(self.ptr);
+pub fn getRigidBody(self: Actor) *RigidBody {
+    return self.impl.getRigidBody(self.ptr);
 }
 
 pub fn getHitboxRect(self: Actor) rl.Rectangle {
@@ -77,3 +80,4 @@ pub fn setPos(self: Actor, pos: rl.Vector2) void {
 
 pub const Player = @import("player.zig");
 pub const Mob = @import("mob.zig");
+pub const Collectable = @import("collectable.zig");

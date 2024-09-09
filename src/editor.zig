@@ -1,5 +1,4 @@
 const Actor = @import("actor/actor.zig");
-const Collectable = @import("collectable/collectable.zig");
 const Editor = @This();
 const Overlay = @import("editor/overlay.zig");
 const Palette = @import("editor/palette.zig");
@@ -27,11 +26,13 @@ active_palette: Palette.ActivePaletteType,
 palette_collectables: *Palette.CollectablePalette,
 palette_mob: *Palette.MobPalette,
 palette_platform: *Palette.PlatformPalette,
+palette_mysterybox: *Palette.MysteryBoxPalette,
 palette_tiles: *Palette.TilePalette,
 
 overlay_collectables: Overlay.CollectableOverlay,
 overlay_mob: Overlay.MobOverlay,
 overlay_platform: Overlay.PlatformOverlay,
+overlay_mysterybox: Overlay.MysteryBoxOverlay,
 overlay_tiles: Overlay.TileOverlay,
 
 save_btn_rect: rl.Rectangle = undefined,
@@ -43,29 +44,41 @@ pub fn create(allocator: std.mem.Allocator, scene: *Scene, vmouse: *controls.Vir
     const palette_mob = try allocator.create(Palette.MobPalette);
     const palette_collectables = try allocator.create(Palette.CollectablePalette);
     const palette_platform = try allocator.create(Palette.PlatformPalette);
+    const palette_mysterybox = try allocator.create(Palette.MysteryBoxPalette);
     const palette_tiles = try allocator.create(Palette.TilePalette);
     const editor = try allocator.create(Editor);
 
+    var x_adjust: f32 = constants.VIEWPORT_PADDING_X;
     palette_mob.* = Palette.MobPalette.init(
         onFocus,
-        constants.VIEWPORT_PADDING_X,
-        constants.GAME_SIZE_Y - Palette.MobPalette.window_height - constants.VIEWPORT_PADDING_X,
+        x_adjust,
+        constants.GAME_SIZE_Y - Palette.MobPalette.window_height - constants.VIEWPORT_PADDING_Y,
     );
+    x_adjust += palette_mob.window.width + 10;
     palette_collectables.* = Palette.CollectablePalette.init(
         onFocus,
-        constants.VIEWPORT_PADDING_X + (palette_mob.window.width) + 10,
-        constants.GAME_SIZE_Y - Palette.CollectablePalette.window_height - constants.VIEWPORT_PADDING_X,
+        x_adjust,
+        constants.GAME_SIZE_Y - Palette.CollectablePalette.window_height - constants.VIEWPORT_PADDING_Y,
     );
+    x_adjust += palette_collectables.window.width + 10;
     palette_platform.* = Palette.PlatformPalette.init(
         onFocus,
-        constants.VIEWPORT_PADDING_X + palette_mob.window.width + palette_collectables.window.width + 10 + 10,
+        x_adjust,
         constants.GAME_SIZE_Y - Palette.PlatformPalette.window_height - constants.VIEWPORT_PADDING_Y,
     );
+    x_adjust += palette_platform.window.width + 10;
+    palette_mysterybox.* = Palette.MysteryBoxPalette.init(
+        onFocus,
+        x_adjust,
+        constants.GAME_SIZE_Y - Palette.MysteryBoxPalette.window_height - constants.VIEWPORT_PADDING_Y,
+    );
+
     palette_tiles.* = Palette.TilePalette.init(onFocus);
 
     const overlay_mob = Overlay.MobOverlay.init(palette_mob, &scene.mobs);
     const overlay_collectables = Overlay.CollectableOverlay.init(palette_collectables, &scene.collectables);
     const overlay_platform = Overlay.PlatformOverlay.init(palette_platform, &scene.platforms);
+    const overlay_mysterybox = Overlay.MysteryBoxOverlay.init(palette_mysterybox, &scene.mystery_boxes);
     const overlay_tiles = Overlay.TileOverlay.init(palette_tiles);
 
     editor.* = Editor{
@@ -75,10 +88,12 @@ pub fn create(allocator: std.mem.Allocator, scene: *Scene, vmouse: *controls.Vir
         .overlay_collectables = overlay_collectables,
         .overlay_mob = overlay_mob,
         .overlay_platform = overlay_platform,
+        .overlay_mysterybox = overlay_mysterybox,
         .overlay_tiles = overlay_tiles,
         .palette_collectables = palette_collectables,
         .palette_mob = palette_mob,
         .palette_platform = palette_platform,
+        .palette_mysterybox = palette_mysterybox,
         .palette_tiles = palette_tiles,
         .scene = scene,
         .vmouse = vmouse,
@@ -93,6 +108,7 @@ pub fn destroy(self: *Editor) void {
     self.allocator.destroy(self.palette_mob);
     self.allocator.destroy(self.palette_collectables);
     self.allocator.destroy(self.palette_platform);
+    self.allocator.destroy(self.palette_mysterybox);
     self.allocator.destroy(self.palette_tiles);
     self.allocator.destroy(self);
 }
@@ -181,6 +197,7 @@ pub fn update(self: *Editor, delta_time: f32) !void {
     try self.palette_mob.update(self, delta_time);
     try self.palette_collectables.update(self, delta_time);
     try self.palette_platform.update(self, delta_time);
+    try self.palette_mysterybox.update(self, delta_time);
 
     switch (self.active_palette) {
         .None => {},
@@ -196,6 +213,9 @@ pub fn update(self: *Editor, delta_time: f32) !void {
         .Platform => {
             try self.overlay_platform.update(self, delta_time);
         },
+        .MysteryBox => {
+            try self.overlay_mysterybox.update(self, delta_time);
+        },
     }
 
     self.updateSaveButton();
@@ -206,6 +226,7 @@ pub fn draw(self: *const Editor) void {
     self.palette_mob.draw(self, self.active_palette == .Mob);
     self.palette_collectables.draw(self, self.active_palette == .Collectable);
     self.palette_platform.draw(self, self.active_palette == .Platform);
+    self.palette_mysterybox.draw(self, self.active_palette == .MysteryBox);
 
     switch (self.active_palette) {
         .None => {},
@@ -220,6 +241,9 @@ pub fn draw(self: *const Editor) void {
         },
         .Platform => {
             self.overlay_platform.draw(self);
+        },
+        .MysteryBox => {
+            self.overlay_mysterybox.draw(self);
         },
     }
     self.drawSaveButton();

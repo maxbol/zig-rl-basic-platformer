@@ -14,6 +14,7 @@ behaviors: [MAX_NO_OF_BEHAVIORS]Behavior,
 behaviors_amount: usize,
 collidable: SolidCollidable,
 initial_hitbox: rl.Rectangle,
+is_collidable: bool = true,
 is_deleted: bool = false,
 sprite: Sprite,
 sprite_offset: rl.Vector2,
@@ -74,14 +75,19 @@ pub fn solid(self: *Platform) Solid {
     return .{
         .ptr = self,
         .impl = &.{
-            .getCollidable = getCollidableCast,
+            .isCollidable = isCollidableCast,
             .getHitboxRect = getHitboxRectCast,
+            .setIsCollidable = setIsCollidableCast,
         },
     };
 }
 
-pub inline fn getCollidable(self: *const Platform) SolidCollidable {
-    return self.collidable;
+pub inline fn isCollidable(self: *const Platform) bool {
+    return self.is_collidable;
+}
+
+pub inline fn setIsCollidable(self: *Platform, is_collidable: bool) void {
+    self.is_collidable = is_collidable;
 }
 
 pub inline fn getHitboxRect(self: *const Platform) rl.Rectangle {
@@ -92,9 +98,14 @@ pub fn getInitialPos(self: *const Platform) rl.Vector2 {
     return rl.Vector2.init(self.initial_hitbox.x, self.initial_hitbox.y);
 }
 
-fn getCollidableCast(ctx: *const anyopaque) SolidCollidable {
+fn isCollidableCast(ctx: *const anyopaque) bool {
     const self: *const Platform = @ptrCast(@alignCast(ctx));
-    return self.getCollidable();
+    return self.isCollidable();
+}
+
+fn setIsCollidableCast(ctx: *anyopaque, is_collidable: bool) void {
+    const self: *Platform = @ptrCast(@alignCast(ctx));
+    self.setIsCollidable(is_collidable);
 }
 
 fn getHitboxRectCast(ctx: *const anyopaque) rl.Rectangle {

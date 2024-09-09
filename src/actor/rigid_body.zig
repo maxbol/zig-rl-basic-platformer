@@ -1,4 +1,4 @@
-const CollidableBody = @This();
+const RigidBody = @This();
 const Entity = @import("../entity.zig");
 const Scene = @import("../scene.zig");
 const debug = @import("../debug.zig");
@@ -8,27 +8,40 @@ const shapes = @import("../shapes.zig");
 const std = @import("std");
 const types = @import("../types.zig");
 
+mode: MovementMode = MovementMode.Rigid,
 hitbox: rl.Rectangle,
 x_remainder: f32 = 0,
 y_remainder: f32 = 0,
 grid_rect: shapes.IRect = shapes.IRect{ .x = 0, .y = 0, .width = 0, .height = 0 },
 
-pub fn init(hitbox: rl.Rectangle) CollidableBody {
+pub const MovementMode = enum {
+    Rigid,
+    Static,
+};
+
+pub fn init(hitbox: rl.Rectangle) RigidBody {
     return .{
         .hitbox = hitbox,
     };
 }
 
-pub fn clear(self: *CollidableBody, comptime axis: types.Axis) void {
-    if (axis == .X) {
-        self.x_remainder = 0;
-    } else if (axis == .Y) {
-        self.y_remainder = 0;
+pub fn move(self: *RigidBody, scene: *Scene, comptime axis: types.Axis, amount: f32, collider: anytype) void {
+    switch (self.mode) {
+        .Static => self.moveStatic(axis, amount),
+        .Rigid => self.moveRigid(scene, axis, amount, collider),
     }
 }
 
-pub fn move(
-    self: *CollidableBody,
+fn moveStatic(self: *RigidBody, comptime axis: types.Axis, amount: f32) void {
+    if (axis == types.Axis.X) {
+        self.hitbox.x += amount;
+    } else {
+        self.hitbox.y += amount;
+    }
+}
+
+fn moveRigid(
+    self: *RigidBody,
     scene: *Scene,
     comptime axis: types.Axis,
     amount: f32,
@@ -68,7 +81,7 @@ pub fn move(
             switch (@typeInfo(@TypeOf(collider))) {
                 .Null => {},
                 inline else => {
-                    collider.handleCollision(axis, sign, c.flags, c.solid);
+                    collider.handleCollision(scene, axis, sign, c.flags, c.solid);
                 },
             }
             break;
@@ -83,10 +96,12 @@ pub fn move(
         }
     }
 
+    // Store the grid rect to be able to display it with drawDebug()
+    // TODO 09/09/2024: Remove?
     self.grid_rect = grid_rect;
 }
 
-pub fn drawDebug(self: *const CollidableBody, scene: *const Scene) void {
+pub fn drawDebug(self: *const RigidBody, scene: *const Scene) void {
     if (debug.isDebugFlagSet(.ShowHitboxes)) {
         const rect = scene.getViewportAdjustedPos(rl.Rectangle, self.hitbox);
         rl.drawRectangleLinesEx(rect, 1, rl.Color.red);

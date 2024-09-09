@@ -147,6 +147,15 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !Tileset {
 }
 
 pub fn loadTilesetFromFile(allocator: std.mem.Allocator, file_path: []const u8) !Tileset {
+    const Cache = struct {
+        var map: ?std.StringHashMap(Tileset) = null;
+    };
+    if (Cache.map == null) {
+        Cache.map = std.StringHashMap(Tileset).init(allocator);
+    }
+    if (Cache.map.?.contains(file_path)) {
+        return Cache.map.?.get(file_path) orelse unreachable;
+    }
     const file = try helpers.openFile(file_path, .{ .mode = .read_only });
     defer file.close();
     return readBytes(allocator, file.reader());
