@@ -12,13 +12,23 @@ fn loadTexture() rl.Texture2D {
     };
 }
 
-fn SpritePrefab(offset: usize) type {
+fn getAnimationBuffer(hidden_box: bool) MysteryBox.AnimationBuffer {
+    var buffer = MysteryBox.AnimationBuffer{};
+
+    buffer.writeAnimation(.Initial, 1, &.{if (hidden_box) 2 else 1});
+    buffer.writeAnimation(.Active, 1, &.{1});
+    buffer.writeAnimation(.Depleted, 1, &.{2});
+
+    return buffer;
+}
+
+fn SpritePrefab(offset: usize, hidden_box: bool) type {
     return Sprite.Prefab(
         16,
         16,
         loadTexture,
-        an.getNoAnimationsBuffer(),
-        an.NoAnimationsType.Idle,
+        getAnimationBuffer(hidden_box),
+        MysteryBox.AnimationType.Initial,
         .{
             .x = offset,
             .y = 0,
@@ -26,10 +36,10 @@ fn SpritePrefab(offset: usize) type {
     );
 }
 
-const SpringSprite = SpritePrefab(0);
-const SummerSprite = SpritePrefab(48);
-const FallSprite = SpritePrefab(64);
-const WinterSprite = SpritePrefab(96);
+const SpringSprite = SpritePrefab(0, false);
+const SummerSprite = SpritePrefab(32, false);
+const FallSprite = SpritePrefab(64, false);
+const WinterSprite = SpritePrefab(96, false);
 
 pub const QSpringC5 = MysteryBox.Prefab(
     &.{

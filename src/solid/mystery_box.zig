@@ -3,6 +3,7 @@ const MysteryBox = @This();
 const Scene = @import("../scene.zig");
 const Solid = @import("solid.zig");
 const Sprite = @import("../sprite.zig");
+const an = @import("../animation.zig");
 const constants = @import("../constants.zig");
 const globals = @import("../globals.zig");
 const helpers = @import("../helpers.zig");
@@ -10,6 +11,18 @@ const rl = @import("raylib");
 const types = @import("../types.zig");
 const shapes = @import("../shapes.zig");
 const std = @import("std");
+
+pub const AnimationType = enum(u8) {
+    Initial,
+    Active,
+    Depleted,
+};
+
+pub const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{
+    .Initial,
+    .Active,
+    .Depleted,
+}, 1);
 
 pub fn Prefab(
     contents: []const Content,
@@ -132,20 +145,14 @@ fn handlePlayerCollision(ctx: *anyopaque, scene: *Scene, axis: types.Axis, sign:
         return;
     }
 
-    if (self.content_idx >= self.contents_amount) {
-        self.is_depleted = true;
+    if (self.is_depleted) {
         return;
     }
 
-    while (self.content_step >= self.contents[self.content_idx].amount) {
-        self.content_idx += 1;
-        self.content_step = 0;
-
-        if (self.content_idx >= self.contents_amount) {
-            self.is_depleted = true;
-            return;
-        }
+    if (!self.isPlayingAnimation(.Active)) {
+        self.sprite.setAnimation(AnimationType.Active, .{});
     }
+
     const content = self.contents[self.content_idx];
 
     if (self.content_step >= content.amount) {
@@ -187,11 +194,31 @@ fn handlePlayerCollision(ctx: *anyopaque, scene: *Scene, axis: types.Axis, sign:
     item.speed.y = launch_speed;
 
     self.content_step += 1;
+
+    while (self.content_step >= self.contents[self.content_idx].amount) {
+        self.content_idx += 1;
+        self.content_step = 0;
+
+        if (self.content_idx >= self.contents_amount) {
+            self.is_depleted = true;
+            return;
+        }
+    }
+}
+
+fn isPlayingAnimation(self: *MysteryBox, animation: AnimationType) bool {
+    return self.sprite.current_animation.type == @as(u8, @intFromEnum(animation));
 }
 
 pub fn update(self: *MysteryBox, scene: *Scene, delta_time: f32) !void {
-    if (self.is_depleted or self.is_deleted) {
+    if (self.is_deleted) {
         return;
+    }
+    if (self.is_depleted) {
+        if (!self.isPlayingAnimation(AnimationType.Depleted)) {
+            std.debug.print("Playing animation DEPLETED\n", .{});
+            self.sprite.setAnimation(AnimationType.Depleted, .{});
+        }
     }
     try self.sprite.update(scene, delta_time);
 }

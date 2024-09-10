@@ -155,6 +155,11 @@ pub fn getSourceRect(self: *const Sprite) ?rl.Rectangle {
 
 pub fn update(self: *Sprite, scene: *Scene, delta_time: f32) !void {
     // Animation
+    if (self.current_animation.frames.len == 0) {
+        self.current_display_frame = 0;
+        return;
+    }
+
     const current_animation_duration: f32 = @floatCast(self.current_animation.duration);
     const anim_length: f32 = @floatFromInt(self.current_animation.frames.len);
 
@@ -165,6 +170,7 @@ pub fn update(self: *Sprite, scene: *Scene, delta_time: f32) !void {
     );
 
     self.animation_clock += delta_time * self.animation_speed;
+    self.current_display_frame = self.current_animation.frames[frame_idx];
 
     if (self.animation_clock > self.current_animation.duration) {
         if (self.on_animation_finished) |callback| {
@@ -175,8 +181,6 @@ pub fn update(self: *Sprite, scene: *Scene, delta_time: f32) !void {
             self.animation_clock = @mod(self.animation_clock, self.current_animation.duration);
         }
     }
-
-    self.current_display_frame = self.current_animation.frames[frame_idx];
 }
 
 pub fn draw(self: *const Sprite, scene: *const Scene, pos: rl.Vector2, color: rl.Color) void {

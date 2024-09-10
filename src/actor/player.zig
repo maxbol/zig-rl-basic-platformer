@@ -1,11 +1,12 @@
 const Actor = @import("actor.zig");
-const RigidBody = @import("rigid_body.zig");
+const Effect = @import("../effect.zig");
 const Entity = @import("../entity.zig");
 const Player = @This();
-const Tileset = @import("../tileset/tileset.zig");
+const RigidBody = @import("rigid_body.zig");
 const Scene = @import("../scene.zig");
 const Solid = @import("../solid/solid.zig");
 const Sprite = @import("../sprite.zig");
+const Tileset = @import("../tileset/tileset.zig");
 const an = @import("../animation.zig");
 const constants = @import("../constants.zig");
 const controls = @import("../controls.zig");
@@ -18,6 +19,7 @@ const types = @import("../types.zig");
 
 const approach = helpers.approach;
 
+current_effect: ?Effect = null,
 initial_hitbox: rl.Rectangle,
 rigid_body: RigidBody,
 face_dir: u1 = 1,
@@ -32,6 +34,7 @@ sprite_offset: rl.Vector2,
 
 sfx_hurt: rl.Sound,
 sfx_jump: rl.Sound,
+sfx_land: rl.Sound,
 
 pub const AnimationType = enum(u8) {
     Idle,
@@ -41,7 +44,6 @@ pub const AnimationType = enum(u8) {
     Death,
     Attack,
     Jump,
-    Slipping,
 };
 
 pub const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{
@@ -51,7 +53,6 @@ pub const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{
     .Death,
     .Roll,
     .Jump,
-    .Slipping,
 }, 16);
 
 pub fn Prefab(
@@ -89,11 +90,13 @@ const slip_speed: f32 = 4 * 60;
 pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2) Player {
     const sfx_hurt = rl.loadSound("assets/sounds/hurt.wav");
     const sfx_jump = rl.loadSound("assets/sounds/jump.wav");
+    const sfx_land = rl.loadSound("assets/sounds/tap.wav");
 
     return .{
         .initial_hitbox = hitbox,
         .sfx_hurt = sfx_hurt,
         .sfx_jump = sfx_jump,
+        .sfx_land = sfx_land,
         .speed = rl.Vector2.init(0, 0),
         .sprite = sprite,
         .sprite_offset = sprite_offset,
@@ -167,10 +170,23 @@ pub fn handleCollision(self: *Player, scene: *Scene, axis: types.Axis, sign: i8,
     if (axis == types.Axis.X) {
         self.speed.x = 0;
     } else {
-        self.speed.y = 0;
-
         if (sign == 1) {
-            // Only reset jump counter when colliding with something below player
+            if (self.speed.y > 60) {
+                // Heavy landing game feel stuff
+                rl.playSound(self.sfx_land);
+
+                self.current_effect = Effect.Dust.init(
+                    .{
+                        .x = self.rigid_body.hitbox.x + (if (self.face_dir == 1) 0 else self.rigid_body.hitbox.width) - (Effect.Dust.width / 2),
+                        .y = self.rigid_body.hitbox.y + self.rigid_body.hitbox.height - (Effect.Dust.height),
+                    },
+                    .{
+                        .call = handleEffectOver,
+                        .context = self,
+                    },
+                    self.face_dir == 1,
+                );
+            }
             self.jump_counter = 0;
             self.is_stunlocked = false;
             self.is_slipping = flags & @intFromEnum(Tileset.TileFlag.Slippery) != 0;
@@ -179,6 +195,8 @@ pub fn handleCollision(self: *Player, scene: *Scene, axis: types.Axis, sign: i8,
                 self.die();
             }
         }
+
+        self.speed.y = 0;
     }
 
     if (solid) |s| {
@@ -202,6 +220,11 @@ fn handleGameOver(_: *anyopaque, _: *Sprite, scene: *Scene) void {
 
 fn isCurrentAnimation(self: *Player, animation: AnimationType) bool {
     return self.sprite.current_animation.type == @intFromEnum(animation);
+}
+
+fn handleEffectOver(ctx: *anyopaque, _: *Sprite, _: *Scene) void {
+    const self: *Player = @ptrCast(@alignCast(ctx));
+    self.current_effect = null;
 }
 
 fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
@@ -327,6 +350,10 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     scene.centerViewportOnPos(self.rigid_body.hitbox);
 
     try self.sprite.update(scene, delta_time);
+
+    if (self.current_effect != null) {
+        try self.current_effect.?.update(scene, delta_time);
+    }
 }
 
 fn draw(ctx: *anyopaque, scene: *const Scene) void {
@@ -334,6 +361,10 @@ fn draw(ctx: *anyopaque, scene: *const Scene) void {
     const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.rigid_body.hitbox);
 
     self.sprite.draw(scene, sprite_pos, rl.Color.white);
+
+    if (self.current_effect != null) {
+        self.current_effect.?.draw(scene);
+    }
 }
 
 fn drawDebug(ctx: *anyopaque, scene: *const Scene) void {

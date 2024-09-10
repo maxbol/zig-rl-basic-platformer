@@ -47,13 +47,6 @@ fn getAnimations() Player.AnimationBuffer {
         }
         break :blk &data;
     });
-    buffer.writeAnimation(.Slipping, 0.3, blk: {
-        var data: [16]u8 = undefined;
-        for (17..33, 0..) |i, idx| {
-            data[idx] = @intCast(i);
-        }
-        break :blk &data;
-    });
 
     return buffer;
 }
