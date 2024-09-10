@@ -82,6 +82,7 @@ pub fn actor(self: *Mob) Actor {
         .getRigidBody = getRigidBodyCast,
         .getHitboxRect = getHitboxRectCast,
         .getGridRect = getGridRectCast,
+        .isHostile = isHostile,
         .setPos = setPosCast,
     } };
 }
@@ -99,6 +100,10 @@ fn getGridRectCast(ctx: *const anyopaque) shapes.IRect {
 fn getHitboxRectCast(ctx: *const anyopaque) rl.Rectangle {
     const self: *const Mob = @ptrCast(@alignCast(ctx));
     return self.getHitboxRect();
+}
+
+fn isHostile() bool {
+    return true;
 }
 
 fn setPosCast(ctx: *anyopaque, pos: rl.Vector2) void {

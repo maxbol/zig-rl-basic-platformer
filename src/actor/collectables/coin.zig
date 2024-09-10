@@ -36,7 +36,6 @@ fn getAnimationBuffer() AnimationBuffer {
 
 fn onCollected(_: *Collectable, player: *Player) void {
     player.score += 100;
-    rl.playSound(loadSound());
     std.debug.print("Your score is {d}\n", .{player.score});
 }
 
@@ -60,5 +59,6 @@ pub const Coin = Collectable.Prefab(
         .Idle,
         rl.Vector2{ .x = 0, .y = 0 },
     ),
+    loadSound,
     onCollected,
 );

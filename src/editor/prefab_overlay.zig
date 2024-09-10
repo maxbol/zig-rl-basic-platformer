@@ -4,17 +4,27 @@ const Editor = @import("../editor.zig");
 const Scene = @import("../scene.zig");
 const constants = @import("../constants.zig");
 const rl = @import("raylib");
+const shapes = @import("../shapes.zig");
 const std = @import("std");
 
 pub const eraser_radius = 20;
 
-pub fn PrefabOverlay(PaletteType: type, spawn_fn: fn (scene: *Scene, item_idx: usize, pos: rl.Vector2) Scene.SpawnError!void, max_amount_of_items: usize) type {
+pub fn PrefabOverlay(
+    PaletteType: type,
+    spawn_fn: fn (
+        scene: *Scene,
+        item_idx: usize,
+        pos: rl.Vector2,
+    ) Scene.SpawnError!void,
+    max_amount_of_items: usize,
+) type {
     return struct {
         palette: *const PaletteType,
         mouse_scene_pos: ?rl.Vector2 = null,
         marked_for_deletion: [max_amount_of_items]bool = undefined,
         no_marked_for_deletion: usize = 0,
         scene_data: []PaletteType.Item,
+        snap_to_grid: bool = false,
 
         pub fn init(palette: *const PaletteType, scene_data: []PaletteType.Item) @This() {
             return .{
@@ -24,8 +34,25 @@ pub fn PrefabOverlay(PaletteType: type, spawn_fn: fn (scene: *Scene, item_idx: u
         }
 
         pub fn update(self: *@This(), editor: *Editor, _: f32) !void {
-            self.mouse_scene_pos = editor.vmouse.getScenePosition(editor.scene);
+            const mouse_scene_pos = editor.vmouse.getScenePosition(editor.scene);
+
+            self.mouse_scene_pos = mouse_scene_pos;
             self.marked_for_deletion = undefined;
+            self.snap_to_grid = false;
+
+            // Snap to grid?
+            if (rl.isKeyDown(rl.KeyboardKey.key_left_shift)) {
+                const layer = editor.getActiveLayer();
+                const mouse_grid_pos = editor.vmouse.getGridPosition(editor.scene, layer);
+                if (mouse_grid_pos) |pos| {
+                    const tile_size = layer.getTileset().getTileSize();
+                    self.mouse_scene_pos = rl.Vector2.init(
+                        @as(f32, @floatFromInt(pos.x)) * tile_size.x,
+                        @as(f32, @floatFromInt(pos.y)) * tile_size.y,
+                    );
+                    self.snap_to_grid = true;
+                }
+            }
 
             if (self.palette.eraser_mode and self.mouse_scene_pos != null) {
                 for (self.scene_data, 0..) |item, i| {
@@ -40,7 +67,7 @@ pub fn PrefabOverlay(PaletteType: type, spawn_fn: fn (scene: *Scene, item_idx: u
                     );
 
                     const should_delete = rl.checkCollisionCircleRec(
-                        self.mouse_scene_pos.?,
+                        mouse_scene_pos.?,
                         eraser_radius,
                         h_rect,
                     );
@@ -59,12 +86,12 @@ pub fn PrefabOverlay(PaletteType: type, spawn_fn: fn (scene: *Scene, item_idx: u
 
             if (rl.isMouseButtonPressed(rl.MouseButton.mouse_button_left)) {
                 const selected_item = self.palette.selected_item orelse return;
-                const mouse_scene_pos = self.mouse_scene_pos orelse return;
+                const msp = self.mouse_scene_pos orelse return;
                 const sprite = self.palette.sprites[selected_item];
                 const sprite_offset = self.palette.sprite_offsets[selected_item];
                 const spawn_pos = rl.Vector2.init(
-                    mouse_scene_pos.x - (sprite.size.x / 2) + sprite_offset.x,
-                    mouse_scene_pos.y - (sprite.size.y / 2) + sprite_offset.y,
+                    msp.x - (if (self.snap_to_grid) 0 else sprite.size.x / 2) + sprite_offset.x,
+                    msp.y - (if (self.snap_to_grid) 0 else sprite.size.y / 2) + sprite_offset.y,
                 );
                 try spawn_fn(editor.scene, selected_item, spawn_pos);
             }
@@ -90,8 +117,8 @@ pub fn PrefabOverlay(PaletteType: type, spawn_fn: fn (scene: *Scene, item_idx: u
             if (selected_item) |item_idx| {
                 const sprite = self.palette.sprites[item_idx];
                 const draw_pos = rl.Vector2.init(
-                    mouse_scene_pos.x - (sprite.size.x / 2),
-                    mouse_scene_pos.y - (sprite.size.y / 2),
+                    mouse_scene_pos.x - (if (self.snap_to_grid) 0 else sprite.size.x / 2),
+                    mouse_scene_pos.y - (if (self.snap_to_grid) 0 else sprite.size.y / 2),
                 );
                 sprite.draw(editor.scene, draw_pos, rl.Color.green.fade(0.5));
             } else if (self.palette.eraser_mode) {

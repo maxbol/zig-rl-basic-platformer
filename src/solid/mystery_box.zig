@@ -4,6 +4,7 @@ const Scene = @import("../scene.zig");
 const Solid = @import("solid.zig");
 const Sprite = @import("../sprite.zig");
 const constants = @import("../constants.zig");
+const globals = @import("../globals.zig");
 const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const types = @import("../types.zig");
@@ -46,11 +47,13 @@ content_idx: u3 = 0,
 content_step: u8 = 0,
 initial_hitbox: rl.Rectangle,
 is_collidable: bool = true,
-is_delpeted: bool = false,
+is_depleted: bool = false,
 is_deleted: bool = false,
 hitbox: rl.Rectangle,
 sprite: Sprite,
 sprite_offset: rl.Vector2,
+
+pub const launch_speed: f32 = -3 * 60;
 
 pub fn init(contents: []const Content, hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2) MysteryBox {
     const contents_amount: u3 = @intCast(contents.len);
@@ -71,7 +74,7 @@ pub fn init(contents: []const Content, hitbox: rl.Rectangle, sprite: Sprite, spr
 pub fn reset(self: *MysteryBox) void {
     self.content_idx = 0;
     self.content_step = 0;
-    self.is_delpeted = false;
+    self.is_depleted = false;
     self.hitbox = self.initial_hitbox;
     self.sprite.reset();
 }
@@ -120,18 +123,17 @@ fn setIsCollidableCast(ctx: *anyopaque, is_collidable: bool) void {
     self.setIsCollidable(is_collidable);
 }
 
-fn handlePlayerCollision(ctx: *anyopaque, scene: *Scene, axis: types.Axis, sign: i8, flags: u8, player: Actor) void {
+fn handlePlayerCollision(ctx: *anyopaque, scene: *Scene, axis: types.Axis, sign: i8, flags: u8, player: *Actor.Player) void {
     const self: *MysteryBox = @ptrCast(@alignCast(ctx));
     _ = axis; // autofix
     _ = flags; // autofix
-    _ = player; // autofix
     if (sign != -1) {
         // Only handle collision if player is moving up
         return;
     }
 
     if (self.content_idx >= self.contents_amount) {
-        self.is_delpeted = true;
+        self.is_depleted = true;
         return;
     }
 
@@ -140,7 +142,7 @@ fn handlePlayerCollision(ctx: *anyopaque, scene: *Scene, axis: types.Axis, sign:
         self.content_step = 0;
 
         if (self.content_idx >= self.contents_amount) {
-            self.is_delpeted = true;
+            self.is_depleted = true;
             return;
         }
     }
@@ -159,6 +161,17 @@ fn handlePlayerCollision(ctx: *anyopaque, scene: *Scene, axis: types.Axis, sign:
         @panic("Collectable prefab not found");
     };
 
+    const loadSound = blk: {
+        inline for (Actor.Collectable.prefabs, 0..) |CollectablePrefab, i| {
+            if (i == content.prefab_idx) {
+                break :blk CollectablePrefab._loadSound;
+            }
+        }
+        @panic("Collectable prefab not found");
+    };
+    const sound = loadSound();
+    rl.playSound(sound);
+
     const pos = rl.Vector2.init(
         self.hitbox.x + (self.hitbox.width / 2) - (item_hitbox.width / 2),
         self.hitbox.y - item_hitbox.height,
@@ -168,19 +181,25 @@ fn handlePlayerCollision(ctx: *anyopaque, scene: *Scene, axis: types.Axis, sign:
         std.log.err("Error spawning collectable from mystery box: {!}", .{err});
         std.process.exit(1);
     };
-    _ = item; // autofix
+
+    item.rigid_body.mode = .Rigid;
+    item.speed.x = player.speed.x / std.math.pi;
+    item.speed.y = launch_speed;
 
     self.content_step += 1;
 }
 
 pub fn update(self: *MysteryBox, scene: *Scene, delta_time: f32) !void {
-    if (self.is_delpeted or self.is_deleted) {
+    if (self.is_depleted or self.is_deleted) {
         return;
     }
     try self.sprite.update(scene, delta_time);
 }
 
 pub fn draw(self: *const MysteryBox, scene: *const Scene) void {
+    if (self.is_deleted) {
+        return;
+    }
     const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.hitbox);
     self.sprite.draw(scene, sprite_pos, rl.Color.white);
 }

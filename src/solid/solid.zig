@@ -14,7 +14,7 @@ pub const Interface = struct {
     isCollidable: *const fn (*const anyopaque) bool,
     setIsCollidable: *const fn (*anyopaque, bool) void,
     getHitboxRect: *const fn (*const anyopaque) rl.Rectangle,
-    handlePlayerCollision: ?*const fn (*anyopaque, *Scene, types.Axis, i8, u8, Actor) void = null,
+    handlePlayerCollision: ?*const fn (*anyopaque, *Scene, types.Axis, i8, u8, *Actor.Player) void = null,
 };
 
 pub fn isCollidable(self: Solid) bool {
@@ -33,7 +33,7 @@ pub fn overlapsActor(self: Solid, actor: Actor) bool {
     return self.getHitboxRect().checkCollision(actor.getHitboxRect());
 }
 
-pub fn handlePlayerCollision(self: Solid, scene: *Scene, axis: types.Axis, sign: i8, flags: u8, player: Actor) void {
+pub fn handlePlayerCollision(self: Solid, scene: *Scene, axis: types.Axis, sign: i8, flags: u8, player: *Actor.Player) void {
     if (self.impl.handlePlayerCollision) |call| {
         return call(self.ptr, scene, axis, sign, flags, player);
     }

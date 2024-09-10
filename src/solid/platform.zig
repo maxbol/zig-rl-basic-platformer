@@ -121,7 +121,7 @@ pub fn update(self: *Platform, scene: *Scene, delta_time: f32) !void {
     }
 
     if (self.speed.x != 0 or self.speed.y != 0) {
-        self.collidable.move(scene, self.solid(), self.speed.x, self.speed.y);
+        self.collidable.move(scene, self.solid(), self.speed.x * delta_time, self.speed.y * delta_time);
     }
 }
 

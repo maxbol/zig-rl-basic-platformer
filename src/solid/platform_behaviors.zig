@@ -103,7 +103,23 @@ pub fn KeyframedMovement(keyframes: []const shapes.IPos, speed: f32) type {
             const platform_rect = platform.getHitboxRect();
             var abs_keyframe = getAbsKeyframe(keyframes[keyframe_idx], platform);
 
-            if (@as(i32, @intFromFloat(platform_rect.x)) == abs_keyframe.x and @as(i32, @intFromFloat(platform_rect.y)) == abs_keyframe.y) {
+            if (blk: {
+                const speed_sign_x: i32 = @intFromFloat(std.math.sign(platform.speed.x));
+                const platform_x: i32 = @intFromFloat(platform_rect.x);
+
+                if (std.math.sign(platform_x - abs_keyframe.x) != speed_sign_x) {
+                    break :blk false;
+                }
+
+                const speed_sign_y: i32 = @intFromFloat(std.math.sign(platform.speed.y));
+                const platform_y: i32 = @intFromFloat(platform_rect.y);
+
+                if (std.math.sign(platform_y - abs_keyframe.y) != speed_sign_y) {
+                    break :blk false;
+                }
+
+                break :blk true;
+            }) {
                 keyframe_idx = (keyframe_idx + 1) % keyframes.len;
                 abs_keyframe = getAbsKeyframe(keyframes[keyframe_idx], platform);
                 setKeyframeIdx(b, keyframe_idx);

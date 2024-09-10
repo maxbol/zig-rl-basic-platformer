@@ -22,6 +22,7 @@ sprite_offset: rl.Vector2,
 is_collected: bool = false,
 is_deleted: bool = false,
 speed: rl.Vector2 = .{ .x = 0, .y = 0 },
+sound: rl.Sound,
 
 const fall_speed: f32 = 3.6 * 60;
 
@@ -30,6 +31,7 @@ pub fn stub() Collectable {
         .collectable_type = undefined,
         .rigid_body = undefined,
         .initial_hitbox = undefined,
+        .sound = undefined,
         .sprite = undefined,
         .sprite_offset = undefined,
         .onCollected = undefined,
@@ -43,12 +45,14 @@ pub fn Prefab(
     hitbox: rl.Rectangle,
     sprite_offset: rl.Vector2,
     SpritePrefab: anytype,
+    loadSound: *const fn () rl.Sound,
     onCollected: *const fn (self: *Collectable, player: *Player) void,
 ) type {
     return struct {
         pub const Sprite = SpritePrefab;
         pub const Hitbox = hitbox;
         pub const spr_offset = sprite_offset;
+        pub const _loadSound = loadSound;
 
         pub fn init(pos: shapes.IPos) Collectable {
             const sprite = SpritePrefab.init();
@@ -57,7 +61,16 @@ pub fn Prefab(
             collectable_hitbox.x = @floatFromInt(pos.x);
             collectable_hitbox.y = @floatFromInt(pos.y);
 
-            return Collectable.init(collectable_type, collectable_hitbox, sprite, sprite_offset, onCollected);
+            const sound = loadSound();
+
+            return Collectable.init(
+                collectable_type,
+                collectable_hitbox,
+                sprite,
+                sprite_offset,
+                sound,
+                onCollected,
+            );
         }
     };
 }
@@ -67,18 +80,20 @@ pub fn init(
     hitbox: rl.Rectangle,
     sprite: Sprite,
     sprite_offset: rl.Vector2,
+    sound: rl.Sound,
     onCollected: *const fn (
         self: *Collectable,
         player: *Player,
     ) void,
 ) Collectable {
     var rigid_body = RigidBody.init(hitbox);
-    rigid_body.mode = .Rigid;
+    rigid_body.mode = .Static;
 
     return .{
         .collectable_type = collectable_type,
         .initial_hitbox = hitbox,
         .rigid_body = rigid_body,
+        .sound = sound,
         .sprite = sprite,
         .sprite_offset = sprite_offset,
         .onCollected = onCollected,
@@ -90,6 +105,7 @@ pub fn actor(self: *Collectable) Actor {
         .getRigidBody = getRigidBodyCast,
         .getHitboxRect = getHitboxRectCast,
         .getGridRect = getGridRectCast,
+        .isHostile = isHostile,
         .setPos = setPosCast,
     } };
 }
@@ -99,7 +115,7 @@ pub fn reset(self: *Collectable) void {
         return;
     }
 
-    self.* = Collectable.init(self.collectable_type, self.initial_hitbox, self.sprite, self.sprite_offset, self.onCollected);
+    self.* = Collectable.init(self.collectable_type, self.initial_hitbox, self.sprite, self.sprite_offset, self.sound, self.onCollected);
     self.sprite.reset();
 }
 
@@ -121,6 +137,10 @@ fn getHitboxRectCast(ctx: *const anyopaque) rl.Rectangle {
 fn setPosCast(ctx: *anyopaque, pos: rl.Vector2) void {
     const self: *Collectable = @ptrCast(@alignCast(ctx));
     self.setPos(pos);
+}
+
+fn isHostile() bool {
+    return false;
 }
 
 pub inline fn getRigidBody(self: *Collectable) *RigidBody {
@@ -179,6 +199,7 @@ pub fn update(self: *Collectable, scene: *Scene, delta_time: f32) !void {
 
     if (rl.checkCollisionRecs(scene.player.actor().getHitboxRect(), self.rigid_body.hitbox)) {
         self.is_collected = true;
+        rl.playSound(self.sound);
         self.onCollected(self, scene.player);
     }
 

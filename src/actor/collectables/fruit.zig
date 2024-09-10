@@ -34,7 +34,6 @@ fn getAnimationBuffer(offset: usize) AnimationBuffer {
 
 fn onHealthGrapeCollected(_: *Collectable, player: *Player) void {
     player.lives += 1;
-    rl.playSound(loadSound());
     std.debug.print("Your lives are {d}\n", .{player.lives});
 }
 
@@ -59,6 +58,7 @@ pub fn Fruit(offset: usize, on_collected: fn (*Collectable, *Player) void) type 
             .Idle,
             rl.Vector2{ .x = 0, .y = 0 },
         ),
+        loadSound,
         on_collected,
     );
 }

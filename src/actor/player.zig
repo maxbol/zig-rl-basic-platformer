@@ -100,6 +100,7 @@ pub fn actor(self: *Player) Actor {
         .getRigidBody = getRigidBody,
         .getHitboxRect = getHitboxRect,
         .getGridRect = getGridRect,
+        .isHostile = isHostile,
         .squish = handleSquish,
         .setPos = setPos,
     } };
@@ -129,6 +130,10 @@ fn getHitboxRect(ctx: *const anyopaque) rl.Rectangle {
 fn getGridRect(ctx: *const anyopaque) shapes.IRect {
     const self: *const Player = @ptrCast(@alignCast(ctx));
     return self.rigid_body.grid_rect;
+}
+
+fn isHostile() bool {
+    return false;
 }
 
 fn handleSquish(ctx: *anyopaque, scene: *Scene, _: types.Axis, _: i8, _: u8) void {
@@ -167,7 +172,7 @@ pub fn handleCollision(self: *Player, scene: *Scene, axis: types.Axis, sign: i8,
     }
 
     if (solid) |s| {
-        s.handlePlayerCollision(scene, axis, sign, flags, self.actor());
+        s.handlePlayerCollision(scene, axis, sign, flags, self);
     }
 }
 
@@ -260,12 +265,12 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
         self.sprite.setFlip(Sprite.FlipState.XFlip, self.face_dir == 0);
     }
 
-    // Collision with other actors
+    // Collision with hostile actors
     if (!self.is_stunlocked and !debug.isPaused()) {
         var actor_iter = scene.getActorIterator();
         const player_actor = self.actor();
         while (actor_iter.next()) |a| {
-            if (a.is(self)) {
+            if (a.is(self) or !a.isHostile()) {
                 continue;
             }
 
