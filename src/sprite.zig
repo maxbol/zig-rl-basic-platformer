@@ -13,9 +13,9 @@ texture: rl.Texture2D,
 sprite_texture_map_r: SpriteTextureMap,
 sprite_texture_map_l: SpriteTextureMap,
 animation_buffer: an.AnimationBufferReader,
-initial_animation: an.AnimationType,
+initial_animation: u8,
 current_animation: an.AnimationData,
-queued_animation: ?an.AnimationType = null,
+queued_animation: ?u8 = null,
 freeze_animation_on_last_frame: bool = false,
 on_animation_finished: ?Callback = null,
 animation_speed: f32 = 1,
@@ -30,7 +30,6 @@ pub const Callback = struct {
 };
 
 pub const SetAnimationParam = struct {
-    animation: an.AnimationType,
     animation_speed: f32 = 1,
     on_animation_finished: ?Callback = null,
     freeze_animation_on_last_frame: bool = false,
@@ -46,7 +45,7 @@ pub fn Prefab(
     size_y: f32,
     loadTexture: fn () rl.Texture2D,
     animation_buffer: anytype,
-    initial_animation: an.AnimationType,
+    initial_animation: anytype,
     sprite_map_offset: rl.Vector2,
 ) type {
     return struct {
@@ -56,7 +55,13 @@ pub fn Prefab(
         pub fn init() Sprite {
             const size = rl.Vector2.init(size_x, size_y);
             const texture = loadTexture();
-            return Sprite.init(texture, size, animation_buffer.reader(), initial_animation, sprite_map_offset) catch |err| {
+            return Sprite.init(
+                texture,
+                size,
+                animation_buffer.reader(),
+                @intFromEnum(initial_animation),
+                sprite_map_offset,
+            ) catch |err| {
                 std.log.err("Error initializing sprite: {!}\n", .{err});
                 std.process.exit(1);
             };
@@ -68,7 +73,7 @@ pub fn init(
     texture: rl.Texture2D,
     size: rl.Vector2,
     animation_buffer: an.AnimationBufferReader,
-    initial_animation: an.AnimationType,
+    initial_animation: u8,
     sprite_map_offset: rl.Vector2,
 ) !Sprite {
     const sprite_texture_map_r = helpers.buildRectMap(
@@ -121,9 +126,10 @@ pub fn reset(self: *Sprite) void {
     };
 }
 
-pub fn setAnimation(self: *Sprite, param: SetAnimationParam) void {
-    if (self.current_animation.type != param.animation) {
-        self.current_animation = self.animation_buffer.readAnimation(param.animation) catch |err| {
+pub fn setAnimation(self: *Sprite, animation: anytype, param: SetAnimationParam) void {
+    const anim_int: u8 = @intFromEnum(animation);
+    if (self.current_animation.type != anim_int) {
+        self.current_animation = self.animation_buffer.readAnimation(anim_int) catch |err| {
             std.log.err("Error setting animation: {!}\n", .{err});
             std.process.exit(1);
         };

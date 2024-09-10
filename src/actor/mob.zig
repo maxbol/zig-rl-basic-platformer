@@ -16,6 +16,18 @@ const types = @import("../types.zig");
 
 const approach = helpers.approach;
 
+pub const AnimationType = enum(u8) {
+    Walk,
+    Attack,
+    Hit,
+};
+
+pub const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{
+    .Walk,
+    .Attack,
+    .Hit,
+}, 6);
+
 initial_hitbox: rl.Rectangle,
 rigid_body: RigidBody,
 sprite: Sprite,
@@ -263,9 +275,9 @@ pub fn update(self: *Mob, scene: *Scene, delta_time: f32) Entity.UpdateError!voi
 
     // Set animation and flip sprite
     if (self.is_hunting) {
-        self.sprite.setAnimation(.{ .animation = .Attack });
+        self.sprite.setAnimation(AnimationType.Attack, .{});
     } else {
-        self.sprite.setAnimation(.{ .animation = .Walk });
+        self.sprite.setAnimation(AnimationType.Walk, .{});
     }
 
     if (self.speed.x > 0) {

@@ -18,7 +18,7 @@ fn SpritePrefab(offset: usize) type {
         16,
         loadTexture,
         an.getNoAnimationsBuffer(),
-        .Idle,
+        an.NoAnimationsType.Idle,
         .{
             .x = offset,
             .y = 0,

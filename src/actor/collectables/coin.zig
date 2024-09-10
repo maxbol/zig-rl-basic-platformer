@@ -5,7 +5,11 @@ const an = @import("../../animation.zig");
 const rl = @import("raylib");
 const std = @import("std");
 
-const AnimationBuffer = an.AnimationBuffer(&.{.Idle}, 12);
+const AnimationType = enum(u8) {
+    Idle,
+};
+
+const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{.Idle}, 12);
 
 var sound: ?rl.Sound = null;
 var texture: ?rl.Texture = null;
@@ -56,7 +60,7 @@ pub const Coin = Collectable.Prefab(
         16,
         loadTexture,
         getAnimationBuffer(),
-        .Idle,
+        an.NoAnimationsType.Idle,
         rl.Vector2{ .x = 0, .y = 0 },
     ),
     loadSound,

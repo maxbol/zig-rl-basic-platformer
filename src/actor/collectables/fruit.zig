@@ -5,7 +5,11 @@ const an = @import("../../animation.zig");
 const rl = @import("raylib");
 const std = @import("std");
 
-const AnimationBuffer = an.AnimationBuffer(&.{.Idle}, 1);
+const AnimationType = enum(u8) {
+    Idle,
+};
+
+const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{.Idle}, 1);
 
 var sound: ?rl.Sound = null;
 var texture: ?rl.Texture = null;
@@ -55,7 +59,7 @@ pub fn Fruit(offset: usize, on_collected: fn (*Collectable, *Player) void) type 
             16,
             loadTexture,
             getAnimationBuffer(offset),
-            .Idle,
+            an.NoAnimationsType.Idle,
             rl.Vector2{ .x = 0, .y = 0 },
         ),
         loadSound,

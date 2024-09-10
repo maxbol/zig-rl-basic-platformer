@@ -43,7 +43,7 @@ fn BuildPrefab(offset: usize, size: usize) type {
             16,
             loadTexture,
             an.getNoAnimationsBuffer(),
-            .Idle,
+            an.NoAnimationsType.Idle,
             sprite_map_offset,
         ),
         &.{behavior.KeyframedMovement(&.{ .{ .x = 0, .y = 0 }, .{ .x = 100, .y = 100 } }, 60)},

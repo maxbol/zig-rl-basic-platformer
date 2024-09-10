@@ -33,7 +33,18 @@ sprite_offset: rl.Vector2,
 sfx_hurt: rl.Sound,
 sfx_jump: rl.Sound,
 
-pub const AnimationBuffer = an.AnimationBuffer(&.{
+pub const AnimationType = enum(u8) {
+    Idle,
+    Walk,
+    Roll,
+    Hit,
+    Death,
+    Attack,
+    Jump,
+    Slipping,
+};
+
+pub const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{
     .Idle,
     .Hit,
     .Walk,
@@ -144,8 +155,7 @@ fn handleSquish(ctx: *anyopaque, scene: *Scene, _: types.Axis, _: i8, _: u8) voi
 
 inline fn die(self: *Player) void {
     self.lives = 0;
-    self.sprite.setAnimation(.{
-        .animation = .Death,
+    self.sprite.setAnimation(AnimationType.Death, .{
         .on_animation_finished = .{ .context = self, .call = handleGameOver },
     });
 }
@@ -183,17 +193,21 @@ fn setPos(ctx: *anyopaque, pos: rl.Vector2) void {
 }
 
 fn revertToIdle(_: *anyopaque, sprite: *Sprite, _: *Scene) void {
-    sprite.setAnimation(.{ .animation = .Idle });
+    sprite.setAnimation(AnimationType.Idle, .{});
 }
 
 fn handleGameOver(_: *anyopaque, _: *Sprite, scene: *Scene) void {
     scene.reset();
 }
 
+fn isCurrentAnimation(self: *Player, animation: AnimationType) bool {
+    return self.sprite.current_animation.type == @intFromEnum(animation);
+}
+
 fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     const self: *Player = @ptrCast(@alignCast(ctx));
 
-    if (self.sprite.current_animation.type == .Death) {
+    if (self.isCurrentAnimation(.Death)) {
         try self.sprite.update(scene, delta_time);
         return;
     }
@@ -208,11 +222,11 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     const is_slipping = self.is_slipping and is_grounded;
 
     // Rolling
-    if (self.speed.x != 0 and self.sprite.current_animation.type != .Roll and !self.is_stunlocked and is_grounded and controls.isKeyboardControlPressed(controls.KBD_ROLL)) {
-        self.sprite.setAnimation(.{ .animation = .Roll, .on_animation_finished = .{ .context = self, .call = revertToIdle } });
+    if (self.speed.x != 0 and self.isCurrentAnimation(.Roll) and !self.is_stunlocked and is_grounded and controls.isKeyboardControlPressed(controls.KBD_ROLL)) {
+        self.sprite.setAnimation(AnimationType.Roll, .{ .on_animation_finished = .{ .context = self, .call = revertToIdle } });
         self.speed.x = std.math.sign(self.speed.x) * roll_speed;
     }
-    const is_rolling = self.sprite.current_animation.type == .Roll;
+    const is_rolling = self.isCurrentAnimation(.Roll);
 
     // Left/right movement
     if (self.is_stunlocked) {
@@ -245,15 +259,14 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
 
     // Set animation and direction
     if (self.is_stunlocked) {
-        self.sprite.setAnimation(.{ .animation = .Hit });
+        self.sprite.setAnimation(AnimationType.Hit, .{});
     } else if (!is_rolling) {
         if (!is_grounded) {
-            self.sprite.setAnimation(.{ .animation = .Jump });
+            self.sprite.setAnimation(AnimationType.Jump, .{});
         } else if (self.speed.x == 0) {
-            self.sprite.setAnimation(.{ .animation = .Idle });
+            self.sprite.setAnimation(AnimationType.Idle, .{});
         } else {
-            self.sprite.setAnimation(.{
-                .animation = .Walk,
+            self.sprite.setAnimation(AnimationType.Walk, .{
                 .animation_speed = @min(2, @abs(self.speed.x) / 180),
             });
         }

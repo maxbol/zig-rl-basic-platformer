@@ -3,12 +3,6 @@ const Sprite = @import("../../sprite.zig");
 const an = @import("../../animation.zig");
 const rl = @import("raylib");
 
-const AnimationBuffer = an.AnimationBuffer(&.{
-    .Walk,
-    .Attack,
-    .Hit,
-}, 6);
-
 var texture: ?rl.Texture = null;
 
 fn loadTexture() rl.Texture {
@@ -18,8 +12,8 @@ fn loadTexture() rl.Texture {
     };
 }
 
-fn getAnimations() AnimationBuffer {
-    var buffer = AnimationBuffer{};
+fn getAnimations() Mob.AnimationBuffer {
+    var buffer = Mob.AnimationBuffer{};
 
     buffer.writeAnimation(.Walk, 1, &.{ 1, 2, 3, 4, 3, 2 });
     buffer.writeAnimation(.Attack, 0.5, &.{ 5, 6, 7, 8 });
@@ -61,7 +55,7 @@ pub const GreenSlime = Mob.Prefab(
         // Animation buffer
         getAnimations(),
         // Initial animation
-        .Walk,
+        Mob.AnimationType.Walk,
         rl.Vector2{ .x = 0, .y = 0 },
     ),
 );

@@ -5,10 +5,10 @@ pub const AnimationBufferReader = struct {
     impl: *const Interface,
 
     pub const Interface = struct {
-        readAnimation: *const fn (ctx: *const anyopaque, animation_type: AnimationType) AnimationBufferError!AnimationData,
+        readAnimation: *const fn (ctx: *const anyopaque, animation_type: u8) AnimationBufferError!AnimationData,
     };
 
-    pub fn readAnimation(self: AnimationBufferReader, animation_type: AnimationType) AnimationBufferError!AnimationData {
+    pub fn readAnimation(self: AnimationBufferReader, animation_type: u8) AnimationBufferError!AnimationData {
         return self.impl.readAnimation(self.ptr, animation_type);
     }
 };
@@ -17,7 +17,7 @@ pub const AnimationBufferError = error{
     InvalidAnimation,
 };
 
-pub fn AnimationBuffer(animation_index: []const AnimationType, max_no_of_frames: usize) type {
+pub fn AnimationBuffer(comptime AnimationType: type, animation_index: []const AnimationType, max_no_of_frames: usize) type {
     const max_no_of_animations = animation_index.len;
 
     const BufferData = [max_no_of_animations * (max_no_of_frames + 2)]u8;
@@ -68,12 +68,13 @@ pub fn AnimationBuffer(animation_index: []const AnimationType, max_no_of_frames:
 
         pub fn readAnimation(
             ctx: *const anyopaque,
-            animation_type: AnimationType,
+            animation_type: u8,
         ) !AnimationData {
             const self: *const @This() = @ptrCast(@alignCast(ctx));
+            const atype: AnimationType = @enumFromInt(animation_type);
             const animation_idx = blk: {
                 for (animation_index, 0..) |anim, i| {
-                    if (anim == animation_type) {
+                    if (anim == atype) {
                         break :blk i;
                     }
                 }
@@ -104,21 +105,13 @@ pub fn AnimationBuffer(animation_index: []const AnimationType, max_no_of_frames:
 pub const AnimationData = struct {
     duration: f16,
     frames: []const u8,
-    type: AnimationType,
+    type: u8,
 };
 
-pub const AnimationType = enum(usize) {
+pub const NoAnimationsType = enum(u8) {
     Idle,
-    Walk,
-    Roll,
-    Hit,
-    Death,
-    Attack,
-    Jump,
-    Slipping,
 };
-
-pub const NoAnimationsBuffer = AnimationBuffer(&.{.Idle}, 1);
+pub const NoAnimationsBuffer = AnimationBuffer(NoAnimationsType, &.{.Idle}, 1);
 pub fn getNoAnimationsBuffer() NoAnimationsBuffer {
     var buffer = NoAnimationsBuffer{};
     buffer.writeAnimation(.Idle, 0.5, &.{1});
