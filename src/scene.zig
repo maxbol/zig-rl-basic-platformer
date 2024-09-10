@@ -99,8 +99,8 @@ pub const SceneActorIterator = struct {
         idx -= self.scene.mobs_amount;
 
         for (idx..self.scene.collectables_amount) |i| {
+            self.idx += 1;
             if (!self.scene.collectables[i].is_deleted and !self.scene.collectables[i].is_collected) {
-                self.idx += 1;
                 return self.scene.collectables[i].actor();
             }
         }
@@ -132,17 +132,21 @@ pub fn create(
         .fg_layers = fg_layers orelse std.ArrayList(TileLayer).init(allocator),
         .scroll_state = rl.Vector2.init(0, 0),
         .viewport = viewport,
+
+        // Actors
         .mobs = mobs,
         .mobs_starting_pos = mobs_starting_pos,
         .mobs_amount = mobs_amount,
         .player = player,
         .player_starting_pos = player_starting_pos,
+        .collectables_amount = collectables_amount,
+        .collectables = collectables,
+
+        // Solids
         .platforms = undefined,
         .platforms_amount = 0,
         .mystery_boxes = undefined,
         .mystery_boxes_amount = 0,
-        .collectables_amount = collectables_amount,
-        .collectables = collectables,
     };
 
     return new;
@@ -638,7 +642,17 @@ pub fn collideAt(self: *Scene, rect: shapes.IRect, grid_rect: shapes.IRect) ?Col
         return .{ .flags = @intFromEnum(Tileset.TileFlag.Collidable) };
     }
 
-    if (@as(f32, @floatFromInt(rect.x + rect.width)) > self.main_layer.getPixelSize().x or @as(f32, @floatFromInt(rect.y + rect.height)) > self.main_layer.getPixelSize().y) {
+    if (blk: {
+        if (@as(f32, @floatFromInt(rect.x + rect.width)) > self.main_layer.getPixelSize().x) {
+            break :blk true;
+        }
+
+        if (@as(f32, @floatFromInt(rect.y + rect.height)) > self.main_layer.getPixelSize().y) {
+            break :blk true;
+        }
+
+        break :blk false;
+    }) {
         return .{ .flags = @intFromEnum(Tileset.TileFlag.Collidable) };
     }
 

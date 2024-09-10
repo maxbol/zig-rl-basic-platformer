@@ -74,7 +74,7 @@ pub fn move(self: *SolidCollidable, scene: *Scene, solid: Solid, x: f32, y: f32)
 
     while (actor_it.next()) |actor| {
         all_actors[actors_idx] = actor;
-        if (actor.isRiding(solid)) {
+        if (riding_idx < riding_actors.len and actor.isRiding(solid)) {
             riding_actors[riding_idx] = actors_idx;
             riding_idx += 1;
         }

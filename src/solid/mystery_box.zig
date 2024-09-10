@@ -150,8 +150,6 @@ fn handlePlayerCollision(ctx: *anyopaque, scene: *Scene, axis: types.Axis, sign:
         return;
     }
 
-    std.debug.print("Spawning collectable from mystery box\n", .{});
-
     const item_hitbox = blk: {
         inline for (Actor.Collectable.prefabs, 0..) |CollectablePrefab, i| {
             if (i == content.prefab_idx) {

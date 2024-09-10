@@ -4,9 +4,13 @@ const Player = @import("player.zig");
 const RigidBody = @import("rigid_body.zig");
 const Scene = @import("../scene.zig");
 const Sprite = @import("../sprite.zig");
+const Solid = @import("../solid/solid.zig");
 const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
+const types = @import("../types.zig");
+
+const approach = helpers.approach;
 
 onCollected: *const fn (self: *Collectable, player: *Player) void,
 
@@ -17,6 +21,9 @@ sprite: Sprite,
 sprite_offset: rl.Vector2,
 is_collected: bool = false,
 is_deleted: bool = false,
+speed: rl.Vector2 = .{ .x = 0, .y = 0 },
+
+const fall_speed: f32 = 3.6 * 60;
 
 pub fn stub() Collectable {
     return .{
@@ -144,6 +151,27 @@ pub fn delete(self: *Collectable) void {
     self.is_deleted = true;
 }
 
+pub fn handleCollision(self: *Collectable, scene: *Scene, axis: types.Axis, sign: i8, flags: u8, _: ?Solid) void {
+    _ = scene; // autofix
+    _ = flags; // autofix
+    if (self.is_collected or self.is_deleted) {
+        return;
+    }
+
+    if (axis == types.Axis.Y) {
+        if (sign == 1) {
+            // Bounce!
+            if (self.speed.y > 60) {
+                self.speed.y *= -0.8;
+            } else {
+                self.speed.y = 0;
+            }
+        } else {
+            self.speed.y = 0;
+        }
+    }
+}
+
 pub fn update(self: *Collectable, scene: *Scene, delta_time: f32) !void {
     if (self.is_collected or self.is_deleted) {
         return;
@@ -152,6 +180,18 @@ pub fn update(self: *Collectable, scene: *Scene, delta_time: f32) !void {
     if (rl.checkCollisionRecs(scene.player.actor().getHitboxRect(), self.rigid_body.hitbox)) {
         self.is_collected = true;
         self.onCollected(self, scene.player);
+    }
+
+    // Apply forces if rigid_body is rigid
+    if (self.rigid_body.mode == .Rigid) {
+        self.speed.y = approach(self.speed.y, fall_speed, scene.gravity * delta_time);
+
+        if (self.speed.x != 0) {
+            self.rigid_body.move(scene, types.Axis.X, self.speed.x * delta_time, self);
+        }
+        if (self.speed.y != 0) {
+            self.rigid_body.move(scene, types.Axis.Y, self.speed.y * delta_time, self);
+        }
     }
 
     try self.sprite.update(scene, delta_time);

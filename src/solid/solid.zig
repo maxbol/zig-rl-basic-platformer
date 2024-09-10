@@ -34,9 +34,7 @@ pub fn overlapsActor(self: Solid, actor: Actor) bool {
 }
 
 pub fn handlePlayerCollision(self: Solid, scene: *Scene, axis: types.Axis, sign: i8, flags: u8, player: Actor) void {
-    std.debug.print("handlePlayerCollision() called\n", .{});
     if (self.impl.handlePlayerCollision) |call| {
-        std.debug.print("handlePlayerCollision implementation called\n", .{});
         return call(self.ptr, scene, axis, sign, flags, player);
     }
 }
