@@ -164,14 +164,15 @@ inline fn die(self: *Player) void {
 }
 
 pub fn handleCollision(self: *Player, scene: *Scene, axis: types.Axis, sign: i8, flags: u8, solid: ?Solid) void {
-    if (flags & @intFromEnum(Tileset.TileFlag.Deadly) != 0) {
+    const deadlyFall = flags & @intFromEnum(Tileset.TileFlag.Deadly) != 0;
+    if (deadlyFall) {
         self.die();
     }
     if (axis == types.Axis.X) {
         self.speed.x = 0;
     } else {
         if (sign == 1) {
-            if (self.speed.y > 60) {
+            if (self.speed.y > 60 and !deadlyFall) {
                 // Heavy landing game feel stuff
                 rl.playSound(self.sfx_land);
 

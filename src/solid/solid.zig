@@ -1,7 +1,6 @@
 const Actor = @import("../actor/actor.zig");
 const Scene = @import("../scene.zig");
 const Solid = @This();
-const SolidCollidable = @import("solid_collidable.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
 const std = @import("std");

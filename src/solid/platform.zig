@@ -1,9 +1,9 @@
+const Behavior = @import("platform_behaviors.zig");
 const Platform = @import("platform.zig");
+const RigidBody = @import("rigid_body.zig");
 const Scene = @import("../scene.zig");
 const Solid = @import("solid.zig");
-const SolidCollidable = @import("solid_collidable.zig");
 const Sprite = @import("../sprite.zig");
-const Behavior = @import("platform_behaviors.zig");
 const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
@@ -12,7 +12,7 @@ pub const MAX_NO_OF_BEHAVIORS = 5;
 
 behaviors: [MAX_NO_OF_BEHAVIORS]Behavior,
 behaviors_amount: usize,
-collidable: SolidCollidable,
+rigid_body: RigidBody,
 initial_hitbox: rl.Rectangle,
 is_collidable: bool = true,
 is_deleted: bool = false,
@@ -55,7 +55,7 @@ pub fn init(
     return .{
         .behaviors = behaviors,
         .behaviors_amount = behaviors_amount,
-        .collidable = SolidCollidable.init(hitbox),
+        .rigid_body = RigidBody.init(hitbox),
         .initial_hitbox = hitbox,
         .sprite = sprite,
         .sprite_offset = sprite_offset,
@@ -91,7 +91,7 @@ pub inline fn setIsCollidable(self: *Platform, is_collidable: bool) void {
 }
 
 pub inline fn getHitboxRect(self: *const Platform) rl.Rectangle {
-    return self.collidable.hitbox;
+    return self.rigid_body.hitbox;
 }
 
 pub fn getInitialPos(self: *const Platform) rl.Vector2 {
@@ -121,12 +121,12 @@ pub fn update(self: *Platform, scene: *Scene, delta_time: f32) !void {
     }
 
     if (self.speed.x != 0 or self.speed.y != 0) {
-        self.collidable.move(scene, self.solid(), self.speed.x * delta_time, self.speed.y * delta_time);
+        self.rigid_body.move(scene, self.solid(), self.speed.x * delta_time, self.speed.y * delta_time);
     }
 }
 
 pub fn draw(self: *const Platform, scene: *const Scene) void {
-    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.collidable.hitbox);
+    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.rigid_body.hitbox);
     self.sprite.draw(scene, sprite_pos, rl.Color.white);
 }
 
