@@ -77,7 +77,10 @@ pub fn initGameData() void {
 
     // Init audio
     globals.on_save_sfx = rl.loadSound("assets/sounds/power_up.wav");
-    globals.music = rl.loadMusicStream("assets/music/time_for_adventure.mp3");
+    globals.music_level = rl.loadMusicStream("assets/music/time_for_adventure.mp3");
+    globals.music_gameover = rl.loadMusicStream("assets/music/game_over.mp3");
+    globals.music_gameover.looping = false;
+    globals.current_music = &globals.music_level;
 
     // Init viewport
     globals.viewport = Viewport.init(constants.VIEWPORT_BIG_RECT);
@@ -123,10 +126,15 @@ pub fn main() anyerror!void {
     defer globals.editor.destroy();
 
     // Play music
-    rl.playMusicStream(globals.music);
+    rl.playMusicStream(globals.current_music.*);
 
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
-        rl.updateMusicStream(globals.music);
+        if (globals.current_music == &globals.music_gameover and !rl.isMusicStreamPlaying(globals.current_music.*)) {
+            globals.current_music = &globals.music_level;
+            rl.seekMusicStream(globals.current_music.*, 0);
+            rl.playMusicStream(globals.current_music.*);
+        }
+        rl.updateMusicStream(globals.current_music.*);
         // Update
         //----------------------------------------------------------------------------------
         // TODO: Update your variables here

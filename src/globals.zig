@@ -10,14 +10,15 @@ const debug = @import("debug.zig");
 const rl = @import("raylib");
 const std = @import("std");
 
+pub var current_music: *rl.Music = undefined;
 pub var debug_flags: []const debug.DebugFlag = undefined;
 pub var editor: *Editor = undefined;
 pub var editor_mode: bool = false;
 pub var font: rl.Font = undefined;
 pub var mob_actors: [constants.MOB_AMOUNT]Actor = undefined;
 pub var mobs: [constants.MOB_AMOUNT]Actor.Mob = undefined;
-pub var mobs_starting_pos: [constants.MOB_AMOUNT]rl.Vector2 = undefined;
-pub var music: rl.Music = undefined;
+pub var music_level: rl.Music = undefined;
+pub var music_gameover: rl.Music = undefined;
 pub var on_save_sfx: rl.Sound = undefined;
 pub var player: Actor.Player = undefined;
 pub var rand: std.Random = undefined;

@@ -11,6 +11,7 @@ const an = @import("../animation.zig");
 const constants = @import("../constants.zig");
 const controls = @import("../controls.zig");
 const debug = @import("../debug.zig");
+const globals = @import("../globals.zig");
 const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
@@ -150,17 +151,19 @@ fn isHostile() bool {
     return false;
 }
 
-fn handleSquish(ctx: *anyopaque, scene: *Scene, _: types.Axis, _: i8, _: u8) void {
-    _ = scene; // autofix
+fn handleSquish(ctx: *anyopaque, _: *Scene, _: types.Axis, _: i8, _: u8) void {
     const self: *Player = @ptrCast(@alignCast(ctx));
     self.die();
 }
 
 inline fn die(self: *Player) void {
     self.lives = 0;
+    self.rigid_body.mode = .Static;
     self.sprite.setAnimation(AnimationType.Death, .{
         .on_animation_finished = .{ .context = self, .call = handleGameOver },
     });
+    globals.current_music = &globals.music_gameover;
+    rl.playMusicStream(globals.current_music.*);
 }
 
 pub fn handleCollision(self: *Player, scene: *Scene, axis: types.Axis, sign: i8, flags: u8, solid: ?Solid) void {
