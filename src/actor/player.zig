@@ -1,6 +1,5 @@
 const Actor = @import("actor.zig");
 const Effect = @import("../effect.zig");
-const Entity = @import("../entity.zig");
 const Player = @This();
 const RigidBody = @import("rigid_body.zig");
 const Scene = @import("../scene.zig");
@@ -121,17 +120,6 @@ pub fn actor(self: *Player) Actor {
     } };
 }
 
-pub fn entity(self: *Player) Entity {
-    return .{
-        .ptr = self,
-        .impl = &.{
-            .update = update,
-            .draw = draw,
-            .drawDebug = drawDebug,
-        },
-    };
-}
-
 fn getRigidBody(ctx: *anyopaque) *RigidBody {
     const self: *Player = @ptrCast(@alignCast(ctx));
     return &self.rigid_body;
@@ -231,9 +219,7 @@ fn handleEffectOver(ctx: *anyopaque, _: *Sprite, _: *Scene) void {
     self.current_effect = null;
 }
 
-fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
-    const self: *Player = @ptrCast(@alignCast(ctx));
-
+pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
     if (self.isCurrentAnimation(.Death)) {
         try self.sprite.update(scene, delta_time);
         return;
@@ -326,7 +312,7 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
             if (player_actor.overlapsActor(a)) {
                 rl.playSound(self.sfx_hurt);
 
-                const player_hitbox = getHitboxRect(ctx);
+                const player_hitbox = getHitboxRect(self);
                 const actor_hitbox = a.getHitboxRect();
 
                 const knockback_direction = std.math.sign((player_hitbox.x + player_hitbox.width / 2) - actor_hitbox.x);
@@ -360,8 +346,7 @@ fn update(ctx: *anyopaque, scene: *Scene, delta_time: f32) !void {
     }
 }
 
-fn draw(ctx: *anyopaque, scene: *const Scene) void {
-    const self: *Player = @ptrCast(@alignCast(ctx));
+pub fn draw(self: *const Player, scene: *const Scene) void {
     const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.rigid_body.hitbox);
 
     self.sprite.draw(scene, sprite_pos, rl.Color.white);
@@ -371,8 +356,7 @@ fn draw(ctx: *anyopaque, scene: *const Scene) void {
     }
 }
 
-fn drawDebug(ctx: *anyopaque, scene: *const Scene) void {
-    const self: *Player = @ptrCast(@alignCast(ctx));
+pub fn drawDebug(self: *const Player, scene: *const Scene) void {
     const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.rigid_body.hitbox);
 
     self.sprite.drawDebug(scene, sprite_pos);

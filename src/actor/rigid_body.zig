@@ -1,5 +1,4 @@
 const RigidBody = @This();
-const Entity = @import("../entity.zig");
 const Scene = @import("../scene.zig");
 const debug = @import("../debug.zig");
 const helpers = @import("../helpers.zig");

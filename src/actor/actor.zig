@@ -1,6 +1,5 @@
 const Actor = @This();
 const RigidBody = @import("rigid_body.zig");
-const Entity = @import("../entity.zig");
 const Scene = @import("../scene.zig");
 const Solid = @import("../solid/solid.zig");
 const rl = @import("raylib");

@@ -1,4 +1,3 @@
-const Entity = @import("../entity.zig");
 const Scene = @import("../scene.zig");
 const Scrollable = @import("scrollable.zig");
 const TileLayer = @import("tile_layer.zig");
@@ -252,7 +251,7 @@ pub fn FixedSizeTileLayer(comptime size: usize) type {
             }
         }
 
-        fn update(ctx: *anyopaque, scene: *Scene, _: f32) Entity.UpdateError!void {
+        fn update(ctx: *anyopaque, scene: *Scene, _: f32) !void {
             const self: *@This() = @ptrCast(@alignCast(ctx));
             try self.scrollable.update(scene, self.tileLayer());
         }

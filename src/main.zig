@@ -1,6 +1,5 @@
 const Actor = @import("actor/actor.zig");
 const Editor = @import("editor.zig");
-const Entity = @import("entity.zig");
 const Scene = @import("scene.zig");
 const Sprite = @import("sprite.zig");
 const TileLayer = @import("tile_layer/tile_layer.zig");

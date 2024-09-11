@@ -1,5 +1,4 @@
 const Actor = @import("actor/actor.zig");
-const Entity = @import("entity.zig");
 const Scene = @This();
 const Sprite = @import("sprite.zig");
 const Solid = @import("solid/solid.zig");
@@ -456,7 +455,7 @@ pub fn update(self: *Scene, delta_time: f32) !void {
         try self.collectables.items[i].update(self, delta_time);
     }
 
-    try self.player.entity().update(self, delta_time);
+    try self.player.update(self, delta_time);
 }
 
 pub fn draw(self: *const Scene) void {
@@ -488,7 +487,7 @@ pub fn draw(self: *const Scene) void {
         self.mystery_boxes.items[i].draw(self);
     }
 
-    self.player.entity().draw(self);
+    self.player.draw(self);
 
     for (self.fg_layers.items, 0..) |layer, i| {
         const layer_mask_index: i16 = @intCast(i + 1);
@@ -510,7 +509,7 @@ pub fn drawDebug(self: *const Scene) void {
         self.mobs.items[i].drawDebug(self);
     }
 
-    self.player.entity().drawDebug(self);
+    self.player.drawDebug(self);
 
     for (self.fg_layers.items) |layer| {
         layer.drawDebug(self);

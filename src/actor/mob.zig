@@ -1,5 +1,4 @@
 const Actor = @import("actor.zig");
-const Entity = @import("../entity.zig");
 const Mob = @This();
 const RigidBody = @import("rigid_body.zig");
 const Scene = @import("../scene.zig");
@@ -229,7 +228,7 @@ pub fn kill(self: *Mob) void {
     self.is_dead = true;
 }
 
-pub fn update(self: *Mob, scene: *Scene, delta_time: f32) Entity.UpdateError!void {
+pub fn update(self: *Mob, scene: *Scene, delta_time: f32) !void {
     if (self.is_deleted or self.is_dead) {
         return;
     }

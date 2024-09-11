@@ -1,4 +1,3 @@
-const Entity = @import("../entity.zig");
 const Scene = @import("../scene.zig");
 const TileLayer = @This();
 const Tileset = @import("../tileset/tileset.zig");
@@ -25,7 +24,7 @@ pub const Interface = struct {
     getTileset: *const fn (ctx: *anyopaque) Tileset,
     resizeLayer: *const fn (ctx: *anyopaque, new_size: rl.Vector2, row_size: usize) void,
     storeCollisionData: *const fn (ctx: *anyopaque, tile_idx: usize, did_collide: bool) void,
-    update: *const fn (ctx: *anyopaque, scene: *Scene, delta_time: f32) Entity.UpdateError!void,
+    update: *const fn (ctx: *anyopaque, scene: *Scene, delta_time: f32) anyerror!void,
     wasTestedThisFrame: *const fn (ctx: *anyopaque, tile_idx: usize) bool,
     writeBytes: *const fn (ctx: *anyopaque, writer: std.io.AnyWriter) error{WriteError}!void,
     writeTile: *const fn (ctx: *anyopaque, tile_idx: usize, tile: u8) void,
@@ -75,7 +74,7 @@ pub fn resizeLayer(self: TileLayer, new_size: rl.Vector2, row_size: usize) void 
     return self.impl.resizeLayer(self.ptr, new_size, row_size);
 }
 
-pub fn update(self: TileLayer, scene: *Scene, delta_time: f32) Entity.UpdateError!void {
+pub fn update(self: TileLayer, scene: *Scene, delta_time: f32) !void {
     return self.impl.update(self.ptr, scene, delta_time);
 }
 
