@@ -390,15 +390,6 @@ pub fn spawnMob(self: *Scene, mob_type: usize, pos: rl.Vector2) !*Actor.Mob {
     return &self.mobs.items[self.mobs.items.len - 1];
 }
 
-pub fn spawnMobs(self: *Scene, mob_type: usize, pos: rl.Vector2, amount: usize) !void {
-    std.debug.assert(amount <= 1000);
-    var mobs: [1000]Actor.Mob = undefined;
-    for (0..amount) |i| {
-        mobs[i] = try Actor.Mob.initMobByIndex(mob_type, pos);
-    }
-    try self.mobs.appendSlice(mobs[0..amount]);
-}
-
 pub fn spawnPlatform(self: *Scene, platform_type: usize, pos: rl.Vector2) !*Solid.Platform {
     const platform: Solid.Platform = try Solid.Platform.initPlatformByIndex(
         platform_type,
@@ -425,17 +416,6 @@ pub fn update(self: *Scene, delta_time: f32) !void {
     if (!self.first_frame_initialization_done) {
         self.first_frame_initialization_done = true;
         self.player.actor().setPos(self.player_starting_pos);
-    }
-
-    const MobSpawner = struct {
-        var spawn_timer: f32 = 0;
-    };
-
-    MobSpawner.spawn_timer += delta_time;
-    if (MobSpawner.spawn_timer > 1) {
-        MobSpawner.spawn_timer -= 1;
-        try self.spawnMobs(0, rl.Vector2.init(200, 100), 100);
-        std.debug.print("Number of mobs: {d}\n", .{self.mobs.items.len});
     }
 
     const pixel_size = self.main_layer.getPixelSize();
