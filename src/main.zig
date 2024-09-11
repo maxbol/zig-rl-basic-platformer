@@ -105,7 +105,7 @@ pub fn main() anyerror!void {
     rl.initWindow(constants.WINDOW_SIZE_X, constants.WINDOW_SIZE_Y, "knight jumper");
     rl.initAudioDevice();
     rl.setWindowMinSize(constants.GAME_SIZE_X, constants.GAME_SIZE_Y);
-    rl.setTargetFPS(60); // Set our game to run at 60 frames-per-second
+    rl.setTargetFPS(120); // Set our game to run at 60 frames-per-second
 
     const target = rl.loadRenderTexture(constants.GAME_SIZE_X, constants.GAME_SIZE_Y);
     rl.setTextureFilter(target.texture, .texture_filter_bilinear);

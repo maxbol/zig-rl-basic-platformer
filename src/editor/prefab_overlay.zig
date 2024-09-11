@@ -15,7 +15,7 @@ pub fn PrefabOverlay(
         scene: *Scene,
         item_idx: usize,
         pos: rl.Vector2,
-    ) Scene.SpawnError!void,
+    ) anyerror!void,
     max_amount_of_items: usize,
 ) type {
     return struct {
@@ -23,10 +23,10 @@ pub fn PrefabOverlay(
         mouse_scene_pos: ?rl.Vector2 = null,
         marked_for_deletion: [max_amount_of_items]bool = undefined,
         no_marked_for_deletion: usize = 0,
-        scene_data: []PaletteType.Item,
+        scene_data: *std.ArrayList(PaletteType.Item),
         snap_to_grid: bool = false,
 
-        pub fn init(palette: *const PaletteType, scene_data: []PaletteType.Item) @This() {
+        pub fn init(palette: *const PaletteType, scene_data: *std.ArrayList(PaletteType.Item)) @This() {
             return .{
                 .palette = palette,
                 .scene_data = scene_data,
@@ -55,7 +55,7 @@ pub fn PrefabOverlay(
             }
 
             if (self.palette.eraser_mode and self.mouse_scene_pos != null) {
-                for (self.scene_data, 0..) |item, i| {
+                for (self.scene_data.items, 0..) |item, i| {
                     const mob_hitbox = item.getHitboxRect();
                     const pos = item.getInitialPos();
 
@@ -76,9 +76,9 @@ pub fn PrefabOverlay(
                 }
 
                 if (rl.isMouseButtonPressed(rl.MouseButton.mouse_button_left)) {
-                    for (0..self.scene_data.len) |i| {
+                    for (0..self.scene_data.items.len) |i| {
                         if (self.marked_for_deletion[i]) {
-                            self.scene_data[i].delete();
+                            _ = self.scene_data.swapRemove(i);
                         }
                     }
                 }
@@ -100,7 +100,7 @@ pub fn PrefabOverlay(
         pub fn draw(self: *const @This(), editor: *const Editor) void {
             const mouse_scene_pos = self.mouse_scene_pos orelse return;
 
-            for (self.scene_data, 0..) |item, i| {
+            for (self.scene_data.items, 0..) |item, i| {
                 if (item.is_deleted) {
                     continue;
                 }
