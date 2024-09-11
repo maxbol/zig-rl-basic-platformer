@@ -60,19 +60,38 @@ pub fn createDefaultScene(allocator: std.mem.Allocator) *Scene {
     return scene;
 }
 
-pub fn initGameData() void {
+pub fn initGameData(allocator: std.mem.Allocator) !void {
     // Init randomizer
     globals.rand = helpers.createRandomizer() catch {
         std.log.err("Error initializing randomizer, quitting...", .{});
         std.process.exit(1);
     };
 
+    // Spawn game over texts
+    const all_game_over_texts = [_][*:0]const u8{
+        "Ya done goofed up son!",
+        "You a failure!",
+        "You a disgrace!",
+    };
+    var slots: [all_game_over_texts.len]bool = .{false} ** all_game_over_texts.len;
+    globals.game_over_texts = try allocator.alloc([*:0]const u8, all_game_over_texts.len);
+    for (all_game_over_texts) |text| {
+        while (true) {
+            const idx = globals.rand.random().intRangeAtMost(usize, 0, globals.game_over_texts.len - 1);
+            if (!slots[idx]) {
+                slots[idx] = true;
+                globals.game_over_texts[idx] = text;
+                break;
+            }
+        }
+    }
+
     // Init debug flags
     globals.debug_flags = &.{ .ShowHitboxes, .ShowScrollState, .ShowFps, .ShowSpriteOutlines, .ShowTestedTiles, .ShowCollidedTiles, .ShowGridBoxes, .ShowTilemapDebug };
     // debug.setDebugFlags(globals.debug_flags);
 
     // Init game font
-    globals.font = rl.loadFont("assets/fonts/PixelOperator8.ttf");
+    globals.font = rl.loadFont("assets/fonts/PixelOperator8-Bold.ttf");
 
     // Init audio
     globals.on_save_sfx = rl.loadSound("assets/sounds/power_up.wav");
@@ -89,6 +108,10 @@ pub fn initGameData() void {
 
     // Init virtual mouse
     globals.vmouse = controls.VirtualMouse{};
+}
+
+pub fn freeGameData(allocator: std.mem.Allocator) void {
+    allocator.free(globals.game_over_texts);
 }
 
 pub fn main() anyerror!void {
@@ -114,7 +137,8 @@ pub fn main() anyerror!void {
     rebuildAndStoreDefaultTileset(allocator, "data/tilesets/default.tileset");
 
     // Setup static game data
-    initGameData();
+    try initGameData(allocator);
+    defer freeGameData(allocator);
 
     const scene = createDefaultScene(allocator);
     defer scene.destroy();

@@ -3,12 +3,20 @@ const Sprite = @import("../../sprite.zig");
 const an = @import("../../animation.zig");
 const rl = @import("raylib");
 
+var sound_dud: ?rl.Sound = null;
 var texture: ?rl.Texture2D = null;
 
 fn loadTexture() rl.Texture2D {
     return texture orelse {
         texture = rl.loadTexture("assets/sprites/mystery-boxes.png");
         return texture.?;
+    };
+}
+
+fn loadSoundDud() rl.Sound {
+    return sound_dud orelse {
+        sound_dud = rl.loadSound("assets/sounds/hurt.wav");
+        return sound_dud.?;
     };
 }
 
@@ -59,4 +67,5 @@ pub const QSpringC5 = MysteryBox.Prefab(
         .y = 0,
     },
     SpringSprite,
+    loadSoundDud,
 );

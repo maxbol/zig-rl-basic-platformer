@@ -19,6 +19,7 @@ pub fn FixedSizeTileLayer(comptime size: usize) type {
         scrollable: Scrollable,
         tileset_path_buf: [3 * 1024]u8 = undefined,
         tileset_path_len: u16,
+        tint: rl.Color = rl.Color.white,
 
         // Debug vars
         tested_tiles: [size]bool = .{false} ** size,
@@ -136,7 +137,9 @@ pub fn FixedSizeTileLayer(comptime size: usize) type {
                     .getTileset = getTileset,
                     .getTileIdxFromRowAndCol = getTileIdxFromRowAndCol,
                     .getTileFromRowAndCol = getTileFromRowAndCol,
+                    .getTint = getTint,
                     .resizeLayer = resizeLayer,
+                    .setTint = setTint,
                     .storeCollisionData = storeCollisionData,
                     .update = update,
                     .wasTestedThisFrame = wasTestedThisFrame,
@@ -220,6 +223,11 @@ pub fn FixedSizeTileLayer(comptime size: usize) type {
             return tile;
         }
 
+        fn getTint(ctx: *anyopaque) rl.Color {
+            const self: *@This() = @ptrCast(@alignCast(ctx));
+            return self.tint;
+        }
+
         fn resizeLayer(ctx: *anyopaque, new_size: rl.Vector2, row_size: usize) void {
             const self: *@This() = @ptrCast(@alignCast(ctx));
             const tile_size = self.tileset.getTileSize();
@@ -235,6 +243,11 @@ pub fn FixedSizeTileLayer(comptime size: usize) type {
                 .x = new_size.x * tile_size.x,
                 .y = new_size.y * tile_size.y,
             };
+        }
+
+        fn setTint(ctx: *anyopaque, tint: rl.Color) void {
+            const self: *@This() = @ptrCast(@alignCast(ctx));
+            self.tint = tint;
         }
 
         fn storeCollisionData(ctx: *anyopaque, tile_idx: usize, did_collide: bool) void {

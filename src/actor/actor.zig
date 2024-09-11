@@ -82,13 +82,6 @@ pub fn setPos(self: Actor, pos: rl.Vector2) void {
     return self.impl.setPos(self.ptr, pos);
 }
 
-// pub fn isDeleted()
-// pub fn reset()
-// pub fn delete()
-// pub fn update()
-// pub fn draw()
-// ?pub fn drawDebug()
-
 pub const Player = @import("player.zig");
 pub const Mob = @import("mob.zig");
 pub const Collectable = @import("collectable.zig");

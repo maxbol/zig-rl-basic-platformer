@@ -29,6 +29,7 @@ pub fn Prefab(
     hitbox: rl.Rectangle,
     sprite_offset: rl.Vector2,
     SpritePrefab: type,
+    loadSoundDud: *const fn () rl.Sound,
 ) type {
     return struct {
         pub const Sprite = SpritePrefab;
@@ -42,7 +43,9 @@ pub fn Prefab(
             mystery_box_hitbox.x = @floatFromInt(pos.x);
             mystery_box_hitbox.y = @floatFromInt(pos.y);
 
-            return MysteryBox.init(contents, mystery_box_hitbox, sprite, sprite_offset);
+            const sound_dud = loadSoundDud();
+
+            return MysteryBox.init(contents, mystery_box_hitbox, sprite, sprite_offset, sound_dud);
         }
     };
 }
@@ -65,10 +68,17 @@ is_deleted: bool = false,
 hitbox: rl.Rectangle,
 sprite: Sprite,
 sprite_offset: rl.Vector2,
+sound_dud: rl.Sound,
 
 pub const launch_speed: f32 = -3 * 60;
 
-pub fn init(contents: []const Content, hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2) MysteryBox {
+pub fn init(
+    contents: []const Content,
+    hitbox: rl.Rectangle,
+    sprite: Sprite,
+    sprite_offset: rl.Vector2,
+    sound_dud: rl.Sound,
+) MysteryBox {
     const contents_amount: u3 = @intCast(contents.len);
     var _contents: [MAX_AMOUNT_OF_CONTENTS]Content = undefined;
     for (contents, 0..) |content, i| {
@@ -81,6 +91,7 @@ pub fn init(contents: []const Content, hitbox: rl.Rectangle, sprite: Sprite, spr
         .initial_hitbox = hitbox,
         .sprite = sprite,
         .sprite_offset = sprite_offset,
+        .sound_dud = sound_dud,
     };
 }
 
@@ -146,6 +157,8 @@ fn handlePlayerCollision(ctx: *anyopaque, scene: *Scene, axis: types.Axis, sign:
     }
 
     if (self.is_depleted) {
+        // Already depleted, let's move on!
+        rl.playSound(self.sound_dud);
         return;
     }
 
@@ -216,7 +229,6 @@ pub fn update(self: *MysteryBox, scene: *Scene, delta_time: f32) !void {
     }
     if (self.is_depleted) {
         if (!self.isPlayingAnimation(AnimationType.Depleted)) {
-            std.debug.print("Playing animation DEPLETED\n", .{});
             self.sprite.setAnimation(AnimationType.Depleted, .{});
         }
     }

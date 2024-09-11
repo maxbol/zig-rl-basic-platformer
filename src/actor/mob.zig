@@ -212,7 +212,7 @@ fn detectNearbyPlayer(self: *Mob, scene: *Scene, delta_time: f32) void {
 }
 
 fn randomlyAcquireNextHuntjumpDistance(self: *Mob) void {
-    self.next_huntjump_distance = @floatFromInt(globals.rand.intRangeAtMostBiased(u8, 80, 160));
+    self.next_huntjump_distance = @floatFromInt(globals.rand.random().intRangeAtMostBiased(u8, 80, 160));
 }
 
 pub inline fn setPos(self: *Mob, pos: rl.Vector2) void {

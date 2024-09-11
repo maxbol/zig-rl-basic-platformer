@@ -139,17 +139,18 @@ fn isHostile() bool {
     return false;
 }
 
-fn handleSquish(ctx: *anyopaque, _: *Scene, _: types.Axis, _: i8, _: u8) void {
+fn handleSquish(ctx: *anyopaque, scene: *Scene, _: types.Axis, _: i8, _: u8) void {
     const self: *Player = @ptrCast(@alignCast(ctx));
-    self.die();
+    self.die(scene);
 }
 
-inline fn die(self: *Player) void {
+inline fn die(self: *Player, scene: *Scene) void {
     self.lives = 0;
     self.rigid_body.mode = .Static;
     self.sprite.setAnimation(AnimationType.Death, .{
         .on_animation_finished = .{ .context = self, .call = handleGameOver },
     });
+    scene.game_over_screen_elapsed = 0;
     globals.current_music = &globals.music_gameover;
     rl.playMusicStream(globals.current_music.*);
 }
@@ -157,7 +158,7 @@ inline fn die(self: *Player) void {
 pub fn handleCollision(self: *Player, scene: *Scene, axis: types.Axis, sign: i8, flags: u8, solid: ?Solid) void {
     const deadlyFall = flags & @intFromEnum(Tileset.TileFlag.Deadly) != 0;
     if (deadlyFall) {
-        self.die();
+        self.die(scene);
     }
     if (axis == types.Axis.X) {
         self.speed.x = 0;
@@ -184,7 +185,7 @@ pub fn handleCollision(self: *Player, scene: *Scene, axis: types.Axis, sign: i8,
             self.is_slipping = flags & @intFromEnum(Tileset.TileFlag.Slippery) != 0;
 
             if (self.lives == 0) {
-                self.die();
+                self.die(scene);
             }
         }
 
@@ -206,8 +207,8 @@ fn revertToIdle(_: *anyopaque, sprite: *Sprite, _: *Scene) void {
     sprite.setAnimation(AnimationType.Idle, .{});
 }
 
-fn handleGameOver(_: *anyopaque, _: *Sprite, scene: *Scene) void {
-    scene.reset();
+fn handleGameOver(_: *anyopaque, _: *Sprite, _: *Scene) void {
+    // Do nothing (for now)
 }
 
 fn isCurrentAnimation(self: *Player, animation: AnimationType) bool {
@@ -337,7 +338,10 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
     if (self.speed.y != 0) {
         self.rigid_body.move(scene, types.Axis.Y, self.speed.y * delta_time, self);
     }
+
+    // if (rl.isKeyPressed(rl.KeyboardKey.key_q)) {
     scene.centerViewportOnPos(self.rigid_body.hitbox);
+    // }
 
     try self.sprite.update(scene, delta_time);
 

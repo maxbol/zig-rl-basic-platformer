@@ -46,7 +46,7 @@ pub fn AnimationBuffer(comptime AnimationType: type, animation_index: []const An
                         break :blk i;
                     }
                 }
-                @compileError("Invalid animation type referenced in encodeAnimationData(), make sure the animation type is allowed by the buffer");
+                @compileError("Invalid animation type referenced in writeAnimation(), make sure the animation type is allowed by the buffer");
             };
             const start_idx: usize = animation_idx * (max_no_of_frames + 2);
             const end_idx: usize = start_idx + (max_no_of_frames + 2);

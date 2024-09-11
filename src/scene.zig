@@ -15,7 +15,6 @@ const TileLayer = @import("tile_layer/tile_layer.zig");
 
 // Initial state
 allocator: std.mem.Allocator,
-scroll_state: rl.Vector2,
 viewport: *Viewport,
 main_layer: TileLayer,
 bg_layers: std.ArrayList(TileLayer),
@@ -29,11 +28,13 @@ mystery_boxes: std.ArrayList(Solid.MysteryBox),
 gravity: f32 = 13 * 60,
 first_frame_initialization_done: bool = false,
 layer_visibility_treshold: ?i16 = null,
+game_over_screen_elapsed: f32 = -1,
 
-max_x_scroll: f32 = 0,
-max_y_scroll: f32 = 0,
 viewport_x_offset: f32 = 0,
 viewport_y_offset: f32 = 0,
+scroll_state: rl.Vector2 = .{ .x = 0, .y = 0 },
+max_x_scroll: f32 = 0,
+max_y_scroll: f32 = 0,
 viewport_x_limit: f32 = 0,
 viewport_y_limit: f32 = 0,
 
@@ -123,7 +124,6 @@ pub fn create(
         .main_layer = main_layer,
         .bg_layers = bg_layers orelse std.ArrayList(TileLayer).init(allocator),
         .fg_layers = fg_layers orelse std.ArrayList(TileLayer).init(allocator),
-        .scroll_state = rl.Vector2.init(0, 0),
         .viewport = viewport,
 
         // Actors
@@ -357,6 +357,16 @@ pub fn writeBytes(self: *const Scene, writer: anytype, verbose: bool) !void {
 }
 
 pub fn reset(self: *Scene) void {
+    for (0..self.bg_layers.items.len) |i| {
+        self.bg_layers.items[i].setTint(rl.Color.white);
+    }
+
+    self.main_layer.setTint(rl.Color.white);
+
+    for (0..self.fg_layers.items.len) |i| {
+        self.fg_layers.items[i].setTint(rl.Color.white);
+    }
+
     for (0..self.mobs.items.len) |i| {
         self.mobs.items[i].reset();
     }
@@ -385,7 +395,6 @@ pub fn spawnCollectable(self: *Scene, collectable_type: usize, pos: rl.Vector2) 
 pub fn spawnMob(self: *Scene, mob_type: usize, pos: rl.Vector2) !*Actor.Mob {
     const mob: Actor.Mob = try Actor.Mob.initMobByIndex(mob_type, pos);
     try self.mobs.append(mob);
-    std.debug.print("No of mobs: {d}\n", .{self.mobs.items.len});
     return &self.mobs.items[self.mobs.items.len - 1];
 }
 
@@ -407,6 +416,25 @@ pub fn spawnMysteryBox(self: *Scene, mystery_box_type: usize, pos: rl.Vector2) !
     return &self.mystery_boxes.items[self.mystery_boxes.items.len - 1];
 }
 
+pub fn getGameOverScreenTint(self: *Scene, delta_time: f32) rl.Color {
+    self.game_over_screen_elapsed += delta_time;
+
+    const step_len = (255 / game_over_screen_steps);
+    const elapsed_quote = @min(
+        game_over_screen_duration,
+        self.game_over_screen_elapsed,
+    ) / game_over_screen_duration;
+    const current_step: u8 = @intFromFloat(elapsed_quote * game_over_screen_steps);
+    const layer_tint_col = 255 - (current_step * step_len);
+
+    return .{
+        .r = layer_tint_col,
+        .g = layer_tint_col,
+        .b = layer_tint_col,
+        .a = 255,
+    };
+}
+
 pub fn removeMob(self: *Scene, mob_idx: usize) void {
     self.mobs[mob_idx].delete();
 }
@@ -421,19 +449,33 @@ pub fn update(self: *Scene, delta_time: f32) !void {
     self.max_x_scroll = @max(pixel_size.x - self.viewport.rectangle.width, 0);
     self.max_y_scroll = @max(pixel_size.y - self.viewport.rectangle.height, 0);
 
-    self.viewport_x_offset = @round(self.scroll_state.x * self.max_x_scroll);
-    self.viewport_y_offset = @round(self.scroll_state.y * self.max_y_scroll);
+    self.scroll_state.x = @min(@max(self.viewport_x_offset / self.max_x_scroll, 0), 1);
+    self.scroll_state.y = @min(@max(self.viewport_y_offset / self.max_y_scroll, 0), 1);
 
     self.viewport_x_limit = self.viewport_x_offset + self.viewport.rectangle.width;
     self.viewport_y_limit = self.viewport_y_offset + self.viewport.rectangle.height;
 
+    var layer_tint: ?rl.Color = null;
+    if (self.game_over_screen_elapsed != -1) {
+        layer_tint = self.getGameOverScreenTint(delta_time);
+    }
+
     for (0..self.bg_layers.items.len) |i| {
+        if (layer_tint) |tint| {
+            self.bg_layers.items[i].setTint(tint);
+        }
         try self.bg_layers.items[i].update(self, delta_time);
     }
 
+    if (layer_tint) |tint| {
+        self.main_layer.setTint(tint);
+    }
     try self.main_layer.update(self, delta_time);
 
     for (0..self.fg_layers.items.len) |i| {
+        if (layer_tint) |tint| {
+            self.fg_layers.items[i].setTint(tint);
+        }
         try self.fg_layers.items[i].update(self, delta_time);
     }
 
@@ -456,6 +498,13 @@ pub fn update(self: *Scene, delta_time: f32) !void {
     }
 
     try self.player.update(self, delta_time);
+
+    if (self.game_over_screen_elapsed >= game_over_screen_duration + game_over_screen_delay) {
+        // Post game over handler
+        self.game_over_screen_elapsed = -1;
+        globals.game_over_counter += 1;
+        self.reset();
+    }
 }
 
 pub fn draw(self: *const Scene) void {
@@ -471,20 +520,22 @@ pub fn draw(self: *const Scene) void {
         self.main_layer.draw(self);
     }
 
-    for (0..self.mobs.items.len) |i| {
-        self.mobs.items[i].draw(self);
-    }
+    if (self.game_over_screen_elapsed == -1) {
+        for (0..self.mobs.items.len) |i| {
+            self.mobs.items[i].draw(self);
+        }
 
-    for (0..self.collectables.items.len) |i| {
-        self.collectables.items[i].draw(self);
-    }
+        for (0..self.collectables.items.len) |i| {
+            self.collectables.items[i].draw(self);
+        }
 
-    for (0..self.platforms.items.len) |i| {
-        self.platforms.items[i].draw(self);
-    }
+        for (0..self.platforms.items.len) |i| {
+            self.platforms.items[i].draw(self);
+        }
 
-    for (0..self.mystery_boxes.items.len) |i| {
-        self.mystery_boxes.items[i].draw(self);
+        for (0..self.mystery_boxes.items.len) |i| {
+            self.mystery_boxes.items[i].draw(self);
+        }
     }
 
     self.player.draw(self);
@@ -495,6 +546,14 @@ pub fn draw(self: *const Scene) void {
             break;
         }
         layer.draw(self);
+    }
+
+    // Draw gameover text
+    if (self.game_over_screen_elapsed >= game_over_screen_duration) {
+        const text = globals.game_over_texts[globals.game_over_counter % globals.game_over_texts.len];
+        const game_over_text_x = self.viewport.rectangle.x + (self.viewport.rectangle.width / 2) - 130;
+        const game_over_text_y = self.viewport.rectangle.y + (self.viewport.rectangle.height / 2) - 30;
+        rl.drawTextEx(globals.font, text, .{ .x = game_over_text_x, .y = game_over_text_y }, 12, 1, rl.Color.white);
     }
 }
 
@@ -585,21 +644,18 @@ pub fn isPointInViewport(self: *const Scene, point: anytype) bool {
     return true;
 }
 
+pub fn setViewportOffset(self: *Scene, viewport_offset: rl.Vector2) void {
+    self.viewport_x_offset = viewport_offset.x;
+    self.viewport_y_offset = viewport_offset.y;
+    self.scroll_state.x = @min(@max(viewport_offset.x / self.max_x_scroll, 0), 1);
+    self.scroll_state.y = @min(@max(viewport_offset.y / self.max_y_scroll, 0), 1);
+}
+
 pub fn centerViewportOnPos(self: *Scene, pos: anytype) void {
-    self.scroll_state.x = @min(
-        @max(
-            pos.x - (self.viewport.rectangle.width / 2),
-            0,
-        ) / self.max_x_scroll,
-        1,
-    );
-    self.scroll_state.y = @min(
-        @max(
-            pos.y - (self.viewport.rectangle.height / 2),
-            0,
-        ) / self.max_y_scroll,
-        1,
-    );
+    self.setViewportOffset(.{
+        .x = @min(@max(pos.x - (self.viewport.rectangle.width / 2), 0), self.max_x_scroll),
+        .y = @min(@max(pos.y - (self.viewport.rectangle.height / 2), 0), self.max_y_scroll),
+    });
 }
 
 pub const Collision = struct {
@@ -668,3 +724,6 @@ const BYTE_MOB_HEADER = "\nMOBS\n";
 const BYTE_COLLECTABLE_HEADER = "\nCOLLECTABLES\n";
 
 pub const data_format_version = 1;
+pub const game_over_screen_duration = 1;
+pub const game_over_screen_steps = 3;
+pub const game_over_screen_delay = 1;

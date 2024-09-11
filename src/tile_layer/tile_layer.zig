@@ -17,12 +17,14 @@ pub const Interface = struct {
     getPixelSize: *const fn (ctx: *anyopaque) rl.Vector2,
     getLayerPosition: *const fn (ctx: *anyopaque, pos: rl.Vector2) rl.Vector2,
     getRowSize: *const fn (ctx: *anyopaque) usize,
+    getTint: *const fn (ctx: *anyopaque) rl.Color,
     getScrollState: *const fn (ctx: *anyopaque) *const Scrollable,
     getSize: *const fn (ctx: *anyopaque) rl.Vector2,
     getTileFromRowAndCol: *const fn (ctx: *anyopaque, row_idx: usize, col_idx: usize) ?u8,
     getTileIdxFromRowAndCol: *const fn (ctx: *anyopaque, row_idx: usize, col_idx: usize) usize,
     getTileset: *const fn (ctx: *anyopaque) Tileset,
     resizeLayer: *const fn (ctx: *anyopaque, new_size: rl.Vector2, row_size: usize) void,
+    setTint: *const fn (ctx: *anyopaque, tint: rl.Color) void,
     storeCollisionData: *const fn (ctx: *anyopaque, tile_idx: usize, did_collide: bool) void,
     update: *const fn (ctx: *anyopaque, scene: *Scene, delta_time: f32) anyerror!void,
     wasTestedThisFrame: *const fn (ctx: *anyopaque, tile_idx: usize) bool,
@@ -32,6 +34,10 @@ pub const Interface = struct {
 
 pub fn destroy(self: TileLayer) void {
     return self.impl.destroy(self.ptr);
+}
+
+pub fn didCollideThisFrame(self: TileLayer, tile_idx: usize) bool {
+    return self.impl.didCollideThisFrame(self.ptr, tile_idx);
 }
 
 pub fn getFlags(self: TileLayer) u8 {
@@ -62,6 +68,10 @@ pub fn getTileFromRowAndCol(self: TileLayer, row_idx: usize, col_idx: usize) ?u8
     return self.impl.getTileFromRowAndCol(self.ptr, row_idx, col_idx);
 }
 
+pub fn getTint(self: TileLayer) rl.Color {
+    return self.impl.getTint(self.ptr);
+}
+
 pub fn getRowSize(self: TileLayer) usize {
     return self.impl.getRowSize(self.ptr);
 }
@@ -74,18 +84,17 @@ pub fn resizeLayer(self: TileLayer, new_size: rl.Vector2, row_size: usize) void 
     return self.impl.resizeLayer(self.ptr, new_size, row_size);
 }
 
-pub fn update(self: TileLayer, scene: *Scene, delta_time: f32) !void {
-    return self.impl.update(self.ptr, scene, delta_time);
+pub fn setTint(self: TileLayer, tint: rl.Color) void {
+    return self.impl.setTint(self.ptr, tint);
 }
 
 pub fn storeCollisionData(self: TileLayer, tile_idx: usize, did_collide: bool) void {
     return self.impl.storeCollisionData(self.ptr, tile_idx, did_collide);
 }
 
-pub fn didCollideThisFrame(self: TileLayer, tile_idx: usize) bool {
-    return self.impl.didCollideThisFrame(self.ptr, tile_idx);
+pub fn update(self: TileLayer, scene: *Scene, delta_time: f32) !void {
+    return self.impl.update(self.ptr, scene, delta_time);
 }
-
 pub fn wasTestedThisFrame(self: TileLayer, tile_idx: usize) bool {
     return self.impl.wasTestedThisFrame(self.ptr, tile_idx);
 }
@@ -143,10 +152,11 @@ pub fn draw(self: TileLayer, _: *const Scene) void {
     const scroll = self.getScrollState();
     const tileset = self.getTileset();
     const tile_size = tileset.getTileSize();
+    const tint = self.getTint();
     for (scroll.scroll_y_tiles..scroll.include_y_tiles + 1) |row_idx| {
         for (scroll.scroll_x_tiles..scroll.include_x_tiles + 1) |col_idx| {
             const tile = self.getTileFromRowAndCol(row_idx, col_idx) orelse continue;
-            drawTileAtImpl(tileset, tile, scroll, tile_size, row_idx, col_idx, rl.Color.white);
+            drawTileAtImpl(tileset, tile, scroll, tile_size, row_idx, col_idx, tint);
         }
     }
 }

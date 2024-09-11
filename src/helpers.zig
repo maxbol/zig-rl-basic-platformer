@@ -165,13 +165,12 @@ pub fn approach(current: f32, target: f32, increase: f32) f32 {
     }
 }
 
-pub inline fn createRandomizer() !std.Random {
-    var prng = std.rand.DefaultPrng.init(blk: {
+pub inline fn createRandomizer() !std.rand.DefaultPrng {
+    return std.rand.DefaultPrng.init(blk: {
         var seed: u64 = undefined;
         try std.posix.getrandom(std.mem.asBytes(&seed));
         break :blk seed;
     });
-    return prng.random();
 }
 
 pub fn drawRectBorder(rect: rl.Rectangle, border_width: f32, color: rl.Color) void {
