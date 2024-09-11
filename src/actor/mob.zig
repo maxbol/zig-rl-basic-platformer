@@ -131,8 +131,8 @@ pub fn reset(self: *Mob) void {
     self.sprite.reset();
 }
 
-pub fn handleCollision(self: *Mob, scene: *Scene, axis: types.Axis, sign: i8, _: u8, _: ?Solid) void {
-    _ = scene; // autofix
+pub fn handleCollision(self: *Mob, scene: *Scene, axis: types.Axis, sign: i8, flags: u8, _: ?Solid) void {
+    const deadly_fall = flags & @intFromEnum(Tileset.TileFlag.Deadly) != 0;
     if (axis == types.Axis.X) {
         // Reverse direction when hitting an obstacle (unless we are hunting the player)
         if (!self.is_hunting) {
@@ -142,9 +142,17 @@ pub fn handleCollision(self: *Mob, scene: *Scene, axis: types.Axis, sign: i8, _:
         if (sign == 1) {
             // Stop falling when hitting the ground
             self.is_jumping = false;
+            if (deadly_fall) {
+                self.die(scene);
+            }
         }
         self.speed.y = 0;
     }
+}
+
+pub fn die(self: *Mob, scene: *Scene) void {
+    _ = scene; // autofix
+    self.is_dead = true;
 }
 
 pub inline fn getRigidBody(self: *Mob) *RigidBody {

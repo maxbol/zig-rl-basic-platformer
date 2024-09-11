@@ -36,12 +36,11 @@ fn getAnimationBuffer(offset: usize) AnimationBuffer {
     return buffer;
 }
 
-fn onHealthGrapeCollected(_: *Collectable, player: *Player) void {
-    player.lives += 1;
-    std.debug.print("Your lives are {d}\n", .{player.lives});
+fn onHealthGrapeCollected(_: *Collectable, player: *Player) bool {
+    return player.gainLives(1);
 }
 
-pub fn Fruit(offset: usize, on_collected: fn (*Collectable, *Player) void) type {
+pub fn Fruit(offset: usize, on_collected: fn (*Collectable, *Player) bool) type {
     return Collectable.Prefab(
         1,
         .{

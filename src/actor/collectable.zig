@@ -12,7 +12,7 @@ const types = @import("../types.zig");
 
 const approach = helpers.approach;
 
-onCollected: *const fn (self: *Collectable, player: *Player) void,
+onCollected: *const fn (self: *Collectable, player: *Player) bool,
 
 collectable_type: u8,
 rigid_body: RigidBody,
@@ -46,7 +46,7 @@ pub fn Prefab(
     sprite_offset: rl.Vector2,
     SpritePrefab: anytype,
     loadSound: *const fn () rl.Sound,
-    onCollected: *const fn (self: *Collectable, player: *Player) void,
+    onCollected: *const fn (self: *Collectable, player: *Player) bool,
 ) type {
     return struct {
         pub const Sprite = SpritePrefab;
@@ -84,7 +84,7 @@ pub fn init(
     onCollected: *const fn (
         self: *Collectable,
         player: *Player,
-    ) void,
+    ) bool,
 ) Collectable {
     var rigid_body = RigidBody.init(hitbox);
     rigid_body.mode = .Static;
@@ -198,9 +198,10 @@ pub fn update(self: *Collectable, scene: *Scene, delta_time: f32) !void {
     }
 
     if (rl.checkCollisionRecs(scene.player.actor().getHitboxRect(), self.rigid_body.hitbox)) {
-        self.is_collected = true;
-        rl.playSound(self.sound);
-        self.onCollected(self, scene.player);
+        if (self.onCollected(self, scene.player)) {
+            self.is_collected = true;
+            rl.playSound(self.sound);
+        }
     }
 
     // Apply forces if rigid_body is rigid

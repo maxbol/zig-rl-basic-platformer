@@ -26,7 +26,7 @@ face_dir: u1 = 1,
 is_slipping: bool = false,
 is_stunlocked: bool = false,
 jump_counter: u2 = 0,
-lives: u8 = 10,
+lives: u8 = max_lives,
 score: u32 = 0,
 speed: rl.Vector2,
 sprite: Sprite,
@@ -86,6 +86,9 @@ const run_speed: f32 = 3 * 60;
 const slip_acceleration: f32 = 50 * 60;
 const slip_reduce: f32 = 3 * 60;
 const slip_speed: f32 = 4 * 60;
+
+pub const max_lives = 5;
+pub const max_score = 999999;
 
 pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2) Player {
     const sfx_hurt = rl.loadSound("assets/sounds/hurt.wav");
@@ -156,15 +159,15 @@ inline fn die(self: *Player, scene: *Scene) void {
 }
 
 pub fn handleCollision(self: *Player, scene: *Scene, axis: types.Axis, sign: i8, flags: u8, solid: ?Solid) void {
-    const deadlyFall = flags & @intFromEnum(Tileset.TileFlag.Deadly) != 0;
-    if (deadlyFall) {
+    const deadly_fall = flags & @intFromEnum(Tileset.TileFlag.Deadly) != 0;
+    if (deadly_fall) {
         self.die(scene);
     }
     if (axis == types.Axis.X) {
         self.speed.x = 0;
     } else {
         if (sign == 1) {
-            if (self.speed.y > 60 and !deadlyFall) {
+            if (self.speed.y > 60 and !deadly_fall) {
                 // Heavy landing game feel stuff
                 rl.playSound(self.sfx_land);
 
@@ -195,6 +198,22 @@ pub fn handleCollision(self: *Player, scene: *Scene, axis: types.Axis, sign: i8,
     if (solid) |s| {
         s.handlePlayerCollision(scene, axis, sign, flags, self);
     }
+}
+
+pub fn gainLives(self: *Player, amount: u8) bool {
+    if (self.lives == max_lives) {
+        return false;
+    }
+    self.lives = @min(max_lives, self.lives + amount);
+    return true;
+}
+
+pub fn gainScore(self: *Player, amount: u8) bool {
+    if (self.score == max_score) {
+        return false;
+    }
+    self.score = @min(max_score, self.score + amount);
+    return true;
 }
 
 fn setPos(ctx: *anyopaque, pos: rl.Vector2) void {

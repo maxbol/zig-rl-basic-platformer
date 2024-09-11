@@ -227,6 +227,12 @@ pub fn draw(self: *const Sprite, scene: *const Scene, pos: rl.Vector2, color: rl
     _ = helpers.culledRectDraw(self.texture, rect, dest, color, cull_x, cull_y);
 }
 
+pub fn drawDirect(self: *Sprite, pos: rl.Vector2, color: rl.Color) void {
+    if (self.getSourceRect()) |rect| {
+        self.texture.drawRec(rect, pos, color);
+    }
+}
+
 pub fn drawDebug(self: *const Sprite, scene: *const Scene, pos: rl.Vector2) void {
     if (!debug.isDebugFlagSet(.ShowSpriteOutlines)) {
         return;

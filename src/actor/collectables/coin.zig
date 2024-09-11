@@ -38,9 +38,8 @@ fn getAnimationBuffer() AnimationBuffer {
     return buffer;
 }
 
-fn onCollected(_: *Collectable, player: *Player) void {
-    player.score += 100;
-    std.debug.print("Your score is {d}\n", .{player.score});
+fn onCollected(_: *Collectable, player: *Player) bool {
+    return player.gainScore(100);
 }
 
 pub const Coin = Collectable.Prefab(

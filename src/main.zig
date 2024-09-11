@@ -1,5 +1,6 @@
 const Actor = @import("actor/actor.zig");
 const Editor = @import("editor.zig");
+const HUD = @import("hud.zig");
 const Scene = @import("scene.zig");
 const Sprite = @import("sprite.zig");
 const TileLayer = @import("tile_layer/tile_layer.zig");
@@ -148,6 +149,9 @@ pub fn main() anyerror!void {
     globals.editor_mode = false;
     defer globals.editor.destroy();
 
+    // Init HUD
+    var hud = HUD.init(&globals.player);
+
     // Play music
     rl.playMusicStream(globals.current_music.*);
 
@@ -171,37 +175,42 @@ pub fn main() anyerror!void {
         );
         const delta_time = rl.getFrameTime();
 
-        if (rl.isKeyPressed(rl.KeyboardKey.key_f)) {
-            rl.toggleFullscreen();
-        }
-
-        if (rl.isKeyPressed(rl.KeyboardKey.key_p)) {
-            debug.togglePause();
-        }
-
-        if (rl.isKeyPressed(rl.KeyboardKey.key_r)) {
-            scene.reset();
-        }
-
-        if (rl.isKeyPressed(rl.KeyboardKey.key_o)) {
-            if (debug.isDebugFlagSet(globals.debug_flags[0])) {
-                debug.clearDebugFlags();
-            } else {
-                debug.setDebugFlags(globals.debug_flags);
+        // Only run update jobs if window is not currently being resized to avoid weirdness/miscalculations
+        // std.debug.print("{d} isWindowResized: {any}\n", .{ delta_time, rl.isWindowResized() });
+        if (!rl.isWindowResized()) {
+            if (rl.isKeyPressed(rl.KeyboardKey.key_f)) {
+                rl.toggleFullscreen();
             }
-        }
 
-        if (rl.isKeyDown(rl.KeyboardKey.key_left_shift) and rl.isKeyPressed(rl.KeyboardKey.key_t)) {
-            globals.editor_mode = !globals.editor_mode;
-            globals.viewport.setTargetRect(if (!globals.editor_mode) constants.VIEWPORT_BIG_RECT else constants.VIEWPORT_SMALL_RECT);
-        }
+            if (rl.isKeyPressed(rl.KeyboardKey.key_p)) {
+                debug.togglePause();
+            }
 
-        globals.viewport.update(delta_time);
-        scene.layer_visibility_treshold = null;
-        try scene.update(delta_time);
+            if (rl.isKeyPressed(rl.KeyboardKey.key_r)) {
+                scene.reset();
+            }
 
-        if (globals.editor_mode) {
-            try globals.editor.update(delta_time);
+            if (rl.isKeyPressed(rl.KeyboardKey.key_o)) {
+                if (debug.isDebugFlagSet(globals.debug_flags[0])) {
+                    debug.clearDebugFlags();
+                } else {
+                    debug.setDebugFlags(globals.debug_flags);
+                }
+            }
+
+            if (rl.isKeyDown(rl.KeyboardKey.key_left_shift) and rl.isKeyPressed(rl.KeyboardKey.key_t)) {
+                globals.editor_mode = !globals.editor_mode;
+                globals.viewport.setTargetRect(if (!globals.editor_mode) constants.VIEWPORT_BIG_RECT else constants.VIEWPORT_SMALL_RECT);
+            }
+
+            globals.viewport.update(delta_time);
+            scene.layer_visibility_treshold = null;
+            try scene.update(delta_time);
+            try hud.update(scene, delta_time);
+
+            if (globals.editor_mode) {
+                try globals.editor.update(delta_time);
+            }
         }
 
         // Draw to render texture
@@ -214,6 +223,8 @@ pub fn main() anyerror!void {
 
         globals.viewport.draw();
         scene.draw();
+        hud.draw(scene);
+
         scene.drawDebug();
 
         if (globals.editor_mode) {
