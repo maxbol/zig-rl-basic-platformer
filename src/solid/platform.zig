@@ -38,7 +38,6 @@ pub fn Prefab(platform_type: u8, hitbox: rl.Rectangle, sprite_offset: rl.Vector2
             const behaviors_amount = behaviors.len;
             inline for (behaviors, 0..) |B, i| {
                 behaviors_any[i] = B.init();
-                behaviors_any[i].setup();
             }
 
             return Platform.init(

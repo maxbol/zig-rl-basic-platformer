@@ -10,13 +10,8 @@ state: [MAX_NO_OF_STATES * 8]u8 = undefined,
 impl: *const Interface,
 
 pub const Interface = struct {
-    setup: *const fn (*Behavior) void,
     update: *const fn (*Behavior, *Platform, f32) void,
 };
-
-pub fn setup(self: *Behavior) void {
-    return self.impl.setup(self);
-}
 
 pub fn update(self: *Behavior, platform: *Platform, delta_time: f32) void {
     return self.impl.update(self, platform, delta_time);
@@ -73,10 +68,11 @@ pub fn KeyframedMovement(keyframes: []const shapes.IPos, speed: f32) type {
 
     return struct {
         pub fn init() Behavior {
-            return .{ .impl = &.{
+            var b = Behavior{ .impl = &.{
                 .update = updateFn,
-                .setup = setupFn,
             } };
+            setKeyframeIdx(&b, 0);
+            return b;
         }
 
         inline fn getKeyframeIdx(b: *Behavior) usize {
@@ -85,10 +81,6 @@ pub fn KeyframedMovement(keyframes: []const shapes.IPos, speed: f32) type {
 
         inline fn setKeyframeIdx(b: *Behavior, value: usize) void {
             return State.setState(b, "keyframe_idx", value);
-        }
-
-        pub fn setupFn(b: *Behavior) void {
-            setKeyframeIdx(b, 0);
         }
 
         inline fn getAbsKeyframe(keyframe: shapes.IPos, platform: *Platform) shapes.IPos {
