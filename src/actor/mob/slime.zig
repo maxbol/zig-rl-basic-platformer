@@ -23,6 +23,8 @@ fn getAnimations() Mob.AnimationBuffer {
 }
 
 pub const GreenSlime = Mob.Prefab(
+    // ID
+    0,
     // Hitbox
     .{
         .x = 0,

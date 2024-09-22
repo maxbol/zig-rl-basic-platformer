@@ -31,6 +31,7 @@ pub fn is(self: Actor, ptr: *const anyopaque) bool {
 
 pub fn isRiding(self: Actor, solid: Solid) bool {
     const solid_hitbox = solid.getHitboxRect();
+
     const hitbox = self.getHitboxRect();
 
     if (hitbox.x > solid_hitbox.x + solid_hitbox.width) {

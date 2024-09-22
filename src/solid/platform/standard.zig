@@ -14,7 +14,7 @@ fn loadTexture() rl.Texture2D {
     };
 }
 
-fn BuildPrefab(offset: usize, size: usize) type {
+fn BuildPrefab(platform_type: u8, offset: usize, size: usize) type {
     const row = @divFloor(offset, 4);
     const col = offset % 4;
 
@@ -22,7 +22,7 @@ fn BuildPrefab(offset: usize, size: usize) type {
         .x = 0,
         .y = 0,
         .width = size * 16,
-        .height = 9,
+        .height = 8,
     };
 
     const sprite_offset = rl.Vector2{
@@ -36,11 +36,12 @@ fn BuildPrefab(offset: usize, size: usize) type {
     };
 
     return Platform.Prefab(
+        platform_type,
         hitbox,
         sprite_offset,
         Sprite.Prefab(
             size * 16,
-            16,
+            15,
             loadTexture,
             an.getNoAnimationsBuffer(),
             an.NoAnimationsType.Idle,
@@ -50,11 +51,11 @@ fn BuildPrefab(offset: usize, size: usize) type {
     );
 }
 
-pub const Platform1 = BuildPrefab(0, 1);
-pub const Platform2 = BuildPrefab(1, 2);
-pub const Platform3 = BuildPrefab(4, 1);
-pub const Platform4 = BuildPrefab(5, 2);
-pub const Platform5 = BuildPrefab(8, 1);
-pub const Platform6 = BuildPrefab(9, 2);
-pub const Platform7 = BuildPrefab(12, 1);
-pub const Platform8 = BuildPrefab(13, 2);
+pub const Platform1 = BuildPrefab(0, 0, 1);
+pub const Platform2 = BuildPrefab(1, 1, 2);
+pub const Platform3 = BuildPrefab(2, 4, 1);
+pub const Platform4 = BuildPrefab(3, 5, 2);
+pub const Platform5 = BuildPrefab(4, 8, 1);
+pub const Platform6 = BuildPrefab(5, 9, 2);
+pub const Platform7 = BuildPrefab(6, 12, 1);
+pub const Platform8 = BuildPrefab(7, 13, 2);

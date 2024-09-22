@@ -50,6 +50,7 @@ const FallSprite = SpritePrefab(64, false);
 const WinterSprite = SpritePrefab(96, false);
 
 pub const QSpringC5 = MysteryBox.Prefab(
+    0,
     &.{
         .{
             .prefab_idx = 0,

@@ -20,8 +20,28 @@ fn spawnMysteryBox(scene: *Scene, item_idx: usize, pos: rl.Vector2) anyerror!voi
     _ = try scene.spawnMysteryBox(item_idx, pos);
 }
 
-pub const MobOverlay = PrefabOverlay(Palette.MobPalette, spawnMob, constants.MAX_AMOUNT_OF_MOBS);
-pub const CollectableOverlay = PrefabOverlay(Palette.CollectablePalette, spawnCollectable, constants.MAX_AMOUNT_OF_COLLECTABLES);
-pub const PlatformOverlay = PrefabOverlay(Palette.PlatformPalette, spawnPlatform, constants.MAX_AMOUNT_OF_PLATFORMS);
-pub const MysteryBoxOverlay = PrefabOverlay(Palette.MysteryBoxPalette, spawnMysteryBox, constants.MAX_AMOUNT_OF_MYSTERY_BOXES);
+pub const MobOverlay = PrefabOverlay(
+    Palette.MobPalette,
+    spawnMob,
+    Scene.deleteMob,
+    constants.MAX_AMOUNT_OF_MOBS,
+);
+pub const CollectableOverlay = PrefabOverlay(
+    Palette.CollectablePalette,
+    spawnCollectable,
+    Scene.deleteCollectable,
+    constants.MAX_AMOUNT_OF_COLLECTABLES,
+);
+pub const PlatformOverlay = PrefabOverlay(
+    Palette.PlatformPalette,
+    spawnPlatform,
+    Scene.deletePlatform,
+    constants.MAX_AMOUNT_OF_PLATFORMS,
+);
+pub const MysteryBoxOverlay = PrefabOverlay(
+    Palette.MysteryBoxPalette,
+    spawnMysteryBox,
+    Scene.deleteMysteryBox,
+    constants.MAX_AMOUNT_OF_MYSTERY_BOXES,
+);
 pub const TileOverlay = @import("tile_overlay.zig");

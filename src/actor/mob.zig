@@ -27,16 +27,17 @@ pub const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{
     .Hit,
 }, 6);
 
+behavior: MobBehavior,
+did_huntjump: bool = false,
 initial_hitbox: rl.Rectangle,
-rigid_body: RigidBody,
-sprite: Sprite,
-sprite_offset: rl.Vector2,
-speed: rl.Vector2,
 is_hunting: bool = false,
 is_jumping: bool = false,
-did_huntjump: bool = false,
+mob_type: u8,
 next_huntjump_distance: f32 = 80,
-behavior: MobBehavior,
+rigid_body: RigidBody,
+speed: rl.Vector2,
+sprite: Sprite,
+sprite_offset: rl.Vector2,
 
 is_deleted: bool = false,
 is_dead: bool = false,
@@ -51,6 +52,7 @@ pub const MobBehavior = struct {
 };
 
 pub fn Prefab(
+    mob_type: u8,
     hitbox: rl.Rectangle,
     sprite_offset: rl.Vector2,
     behavior: MobBehavior,
@@ -68,13 +70,14 @@ pub fn Prefab(
             mob_hitbox.x = @floatFromInt(pos.x);
             mob_hitbox.y = @floatFromInt(pos.y);
 
-            return Mob.init(mob_hitbox, sprite, sprite_offset, behavior);
+            return Mob.init(mob_type, mob_hitbox, sprite, sprite_offset, behavior);
         }
     };
 }
 
-pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2, mob_attributes: MobBehavior) Mob {
+pub fn init(mob_type: u8, hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2, mob_attributes: MobBehavior) Mob {
     var mob = Mob{
+        .mob_type = mob_type,
         .initial_hitbox = hitbox,
         .speed = rl.Vector2.init(0, 0),
         .sprite = sprite,
@@ -127,7 +130,7 @@ pub fn reset(self: *Mob) void {
         return;
     }
 
-    self.* = Mob.init(self.initial_hitbox, self.sprite, self.sprite_offset, self.behavior);
+    self.* = Mob.init(self.mob_type, self.initial_hitbox, self.sprite, self.sprite_offset, self.behavior);
     self.sprite.reset();
 }
 

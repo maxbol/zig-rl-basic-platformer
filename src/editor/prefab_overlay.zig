@@ -13,9 +13,13 @@ pub fn PrefabOverlay(
     PaletteType: type,
     spawn_fn: fn (
         scene: *Scene,
-        item_idx: usize,
+        item_type: usize,
         pos: rl.Vector2,
     ) anyerror!void,
+    remove_fn: fn (
+        scene: *Scene,
+        item_idx: usize,
+    ) void,
     max_amount_of_items: usize,
 ) type {
     return struct {
@@ -78,7 +82,7 @@ pub fn PrefabOverlay(
                 if (rl.isMouseButtonPressed(rl.MouseButton.mouse_button_left)) {
                     for (0..self.scene_data.items.len) |i| {
                         if (self.marked_for_deletion[i]) {
-                            _ = self.scene_data.swapRemove(i);
+                            remove_fn(editor.scene, i);
                         }
                     }
                 }

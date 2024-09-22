@@ -19,8 +19,9 @@ is_deleted: bool = false,
 sprite: Sprite,
 sprite_offset: rl.Vector2,
 speed: rl.Vector2 = .{ .x = 0, .y = 0 },
+platform_type: u8,
 
-pub fn Prefab(hitbox: rl.Rectangle, sprite_offset: rl.Vector2, SpritePrefab: anytype, behaviors: anytype) type {
+pub fn Prefab(platform_type: u8, hitbox: rl.Rectangle, sprite_offset: rl.Vector2, SpritePrefab: anytype, behaviors: anytype) type {
     return struct {
         pub const Sprite = SpritePrefab;
         pub const hitbox_static = hitbox;
@@ -40,12 +41,20 @@ pub fn Prefab(hitbox: rl.Rectangle, sprite_offset: rl.Vector2, SpritePrefab: any
                 behaviors_any[i].setup();
             }
 
-            return Platform.init(platform_hitbox, sprite, sprite_offset, behaviors_any, behaviors_amount);
+            return Platform.init(
+                platform_type,
+                platform_hitbox,
+                sprite,
+                sprite_offset,
+                behaviors_any,
+                behaviors_amount,
+            );
         }
     };
 }
 
 pub fn init(
+    platform_type: u8,
     hitbox: rl.Rectangle,
     sprite: Sprite,
     sprite_offset: rl.Vector2,
@@ -57,6 +66,7 @@ pub fn init(
         .behaviors_amount = behaviors_amount,
         .rigid_body = RigidBody.init(hitbox),
         .initial_hitbox = hitbox,
+        .platform_type = platform_type,
         .sprite = sprite,
         .sprite_offset = sprite_offset,
     };

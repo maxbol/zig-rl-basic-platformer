@@ -85,6 +85,7 @@ pub const SceneActorIterator = struct {
         if (idx < self.scene.mobs.items.len) {
             for (idx..self.scene.mobs.items.len) |i| {
                 self.idx += 1;
+                idx += 1;
                 if (!self.scene.mobs.items[i].is_deleted and !self.scene.mobs.items[i].is_dead) {
                     return self.scene.mobs.items[i].actor();
                 }
@@ -186,6 +187,14 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
     if (verbose > 0) try reader.skipBytes(BYTE_NO_COLLECTABLES_HEADER.len, .{});
     const collectables_amount: usize = @intCast(try reader.readInt(u16, .big));
 
+    // Read number of platforms
+    if (verbose > 0) try reader.skipBytes(BYTE_NO_PLATFORMS_HEADER.len, .{});
+    const platforms_amount: usize = @intCast(try reader.readInt(u16, .big));
+
+    // Read number of mystery_boxes
+    if (verbose > 0) try reader.skipBytes(BYTE_NO_MYSTERY_BOXES_HEADER.len, .{});
+    const mystery_boxes_amount: usize = @intCast(try reader.readInt(u16, .big));
+
     // Read main layer
     if (verbose > 0) try reader.skipBytes(BYTE_MAIN_LAYER_HEADER.len, .{});
     const main_layer = try TileLayer.readBytes(allocator, reader);
@@ -210,6 +219,10 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
             const layer = try TileLayer.readBytes(allocator, reader);
             try fg_layers.?.append(layer);
         }
+    } else {
+        fg_layers = std.ArrayList(TileLayer).init(allocator);
+        const layer = (try TileLayer.XsTileLayer.create(allocator, .{ .x = 200, .y = 40 }, 1, "data/tilesets/default.tileset", &.{}, 0)).tileLayer();
+        try fg_layers.?.append(layer);
     }
 
     // Read mobs
@@ -220,7 +233,12 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
         const mob_type = try reader.readByte();
         const mob_pos_bytes = try reader.readBytesNoEof(8);
         const mob_pos = std.mem.bytesToValue(rl.Vector2, &mob_pos_bytes);
-        try mobs.append(try Actor.Mob.initMobByIndex(mob_type, mob_pos));
+        try mobs.append(
+            try Actor.Mob.initMobByIndex(
+                mob_type,
+                mob_pos,
+            ),
+        );
     }
 
     // Read collectables
@@ -231,11 +249,43 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
         const collectable_type = try reader.readByte();
         const collectable_pos_bytes = try reader.readBytesNoEof(8);
         const collectable_pos = std.mem.bytesToValue(rl.Vector2, &collectable_pos_bytes);
-        try collectables.append(try Actor.Collectable.initCollectableByIndex(collectable_type, collectable_pos));
+        try collectables.append(
+            try Actor.Collectable.initCollectableByIndex(
+                collectable_type,
+                collectable_pos,
+            ),
+        );
     }
 
-    const platforms = std.ArrayList(Solid.Platform).init(allocator);
-    const mystery_boxes = std.ArrayList(Solid.MysteryBox).init(allocator);
+    // Read platforms
+    if (verbose > 0) try reader.skipBytes(BYTE_PLATFORM_HEADER.len, .{});
+    var platforms = std.ArrayList(Solid.Platform).init(allocator);
+    for (0..platforms_amount) |_| {
+        const platform_type = try reader.readByte();
+        const platform_pos_bytes = try reader.readBytesNoEof(8);
+        const platform_pos = std.mem.bytesToValue(rl.Vector2, &platform_pos_bytes);
+        try platforms.append(
+            try Solid.Platform.initPlatformByIndex(
+                platform_type,
+                shapes.IPos.fromVec2(platform_pos),
+            ),
+        );
+    }
+
+    // Read mystery_boxes
+    if (verbose > 0) try reader.skipBytes(BYTE_MYSTERY_BOX_HEADER.len, .{});
+    var mystery_boxes = std.ArrayList(Solid.MysteryBox).init(allocator);
+    for (0..mystery_boxes_amount) |_| {
+        const mystery_box_type = try reader.readByte();
+        const mystery_box_pos_bytes = try reader.readBytesNoEof(8);
+        const mystery_box_pos = std.mem.bytesToValue(rl.Vector2, &mystery_box_pos_bytes);
+        try mystery_boxes.append(
+            try Solid.MysteryBox.initMysteryBoxByIndex(
+                mystery_box_type,
+                shapes.IPos.fromVec2(mystery_box_pos),
+            ),
+        );
+    }
 
     return Scene.create(
         allocator,
@@ -277,25 +327,27 @@ pub fn writeBytes(self: *const Scene, writer: anytype, verbose: bool) !void {
     if (verbose) {
         _ = try writer.write(BYTE_NO_MOBS_HEADER);
     }
-    var mobs_amount: u16 = 0;
-    for (0..self.mobs.items.len) |i| {
-        if (!self.mobs.items[i].is_deleted) {
-            mobs_amount += 1;
-        }
-    }
+    const mobs_amount: u16 = @intCast(self.mobs.items.len);
     try writer.writeInt(u16, mobs_amount, .big);
 
     // Write number of collectables
     if (verbose) {
         _ = try writer.write(BYTE_NO_COLLECTABLES_HEADER);
     }
-    var collectables_amount: u16 = 0;
-    for (0..self.collectables.items.len) |i| {
-        if (!self.collectables.items[i].is_deleted) {
-            collectables_amount += 1;
-        }
-    }
+    const collectables_amount: u16 = @intCast(self.collectables.items.len);
     try writer.writeInt(u16, collectables_amount, .big);
+
+    if (verbose) {
+        _ = try writer.write(BYTE_NO_PLATFORMS_HEADER);
+    }
+    const platforms_amount: u16 = @intCast(self.platforms.items.len);
+    try writer.writeInt(u16, platforms_amount, .big);
+
+    if (verbose) {
+        _ = try writer.write(BYTE_NO_MYSTERY_BOXES_HEADER);
+    }
+    const mystery_boxes_amount: u16 = @intCast(self.mystery_boxes.items.len);
+    try writer.writeInt(u16, mystery_boxes_amount, .big);
 
     // Write main layer
     if (verbose) {
@@ -329,7 +381,7 @@ pub fn writeBytes(self: *const Scene, writer: anytype, verbose: bool) !void {
         }
 
         // Mob type
-        try writer.writeByte(0);
+        try writer.writeByte(self.mobs.items[i].mob_type);
 
         // Mob position
         const mob_pos = self.mobs.items[i].getInitialPos();
@@ -347,12 +399,48 @@ pub fn writeBytes(self: *const Scene, writer: anytype, verbose: bool) !void {
         }
 
         // Collectable type
-        try writer.writeByte(0);
+        try writer.writeByte(self.collectables.items[i].collectable_type);
 
         // Collectable position
         const collectable_pos = self.collectables.items[i].getInitialPos();
         const collectable_pos_bytes = std.mem.toBytes(collectable_pos);
         _ = try writer.write(&collectable_pos_bytes);
+    }
+
+    // Write platforms locations
+    if (verbose) {
+        _ = try writer.write(BYTE_PLATFORM_HEADER);
+    }
+    for (0..self.platforms.items.len) |i| {
+        if (self.platforms.items[i].is_deleted) {
+            continue;
+        }
+
+        // platform type
+        try writer.writeByte(self.platforms.items[i].platform_type);
+
+        // platform position
+        const platform_pos = self.platforms.items[i].getInitialPos();
+        const platform_pos_bytes = std.mem.toBytes(platform_pos);
+        _ = try writer.write(&platform_pos_bytes);
+    }
+
+    // Write mystery box locations
+    if (verbose) {
+        _ = try writer.write(BYTE_MYSTERY_BOX_HEADER);
+    }
+    for (0..self.mystery_boxes.items.len) |i| {
+        if (self.mystery_boxes.items[i].is_deleted) {
+            continue;
+        }
+
+        // mystery_boxe type
+        try writer.writeByte(self.mystery_boxes.items[i].mystery_box_type);
+
+        // mystery_boxe position
+        const mystery_box_pos = self.mystery_boxes.items[i].getInitialPos();
+        const mystery_box_pos_bytes = std.mem.toBytes(mystery_box_pos);
+        _ = try writer.write(&mystery_box_pos_bytes);
     }
 }
 
@@ -384,6 +472,22 @@ pub fn getActorIterator(self: *Scene) SceneActorIterator {
 
 pub fn getSolidIterator(self: *Scene) SceneSolidIterator {
     return SceneSolidIterator{ .scene = self };
+}
+
+pub fn deleteCollectable(self: *Scene, collectable_idx: usize) void {
+    _ = self.collectables.swapRemove(collectable_idx);
+}
+
+pub fn deleteMob(self: *Scene, mob_idx: usize) void {
+    _ = self.mobs.swapRemove(mob_idx);
+}
+
+pub fn deletePlatform(self: *Scene, platform_idx: usize) void {
+    _ = self.platforms.swapRemove(platform_idx);
+}
+
+pub fn deleteMysteryBox(self: *Scene, mystery_box_idx: usize) void {
+    _ = self.mystery_boxes.swapRemove(mystery_box_idx);
 }
 
 pub fn spawnCollectable(self: *Scene, collectable_type: usize, pos: rl.Vector2) !*Actor.Collectable {
@@ -717,11 +821,15 @@ const BYTE_NO_BG_LAYERS_HEADER = "\nNO_BG_LAYERS\n";
 const BYTE_NO_FG_LAYERS_HEADER = "\nNO_FG_LAYERS\n";
 const BYTE_NO_MOBS_HEADER = "\nNO_MOBS\n";
 const BYTE_NO_COLLECTABLES_HEADER = "\nNO_COLLECTABLES\n";
+const BYTE_NO_PLATFORMS_HEADER = "\nNO_PLATFORMS\n";
+const BYTE_NO_MYSTERY_BOXES_HEADER = "\nNO_PLATFORMS\n";
 const BYTE_MAIN_LAYER_HEADER = "\nMAIN_LAYER\n";
 const BYTE_BG_LAYERS_HEADER = "\nBG_LAYERS\n";
 const BYTE_FG_LAYERS_HEADER = "\nFG_LAYERS\n";
 const BYTE_MOB_HEADER = "\nMOBS\n";
 const BYTE_COLLECTABLE_HEADER = "\nCOLLECTABLES\n";
+const BYTE_PLATFORM_HEADER = "\nPLATFORMS\n";
+const BYTE_MYSTERY_BOX_HEADER = "\nMYSTERY_BOXES\n";
 
 pub const data_format_version = 1;
 pub const game_over_screen_duration = 1;

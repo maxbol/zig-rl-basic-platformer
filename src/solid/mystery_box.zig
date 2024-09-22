@@ -25,6 +25,7 @@ pub const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{
 }, 1);
 
 pub fn Prefab(
+    mystery_box_type: u8,
     contents: []const Content,
     hitbox: rl.Rectangle,
     sprite_offset: rl.Vector2,
@@ -45,7 +46,7 @@ pub fn Prefab(
 
             const sound_dud = loadSoundDud();
 
-            return MysteryBox.init(contents, mystery_box_hitbox, sprite, sprite_offset, sound_dud);
+            return MysteryBox.init(mystery_box_type, contents, mystery_box_hitbox, sprite, sprite_offset, sound_dud);
         }
     };
 }
@@ -65,6 +66,7 @@ initial_hitbox: rl.Rectangle,
 is_collidable: bool = true,
 is_depleted: bool = false,
 is_deleted: bool = false,
+mystery_box_type: u8,
 hitbox: rl.Rectangle,
 sprite: Sprite,
 sprite_offset: rl.Vector2,
@@ -73,6 +75,7 @@ sound_dud: rl.Sound,
 pub const launch_speed: f32 = -3 * 60;
 
 pub fn init(
+    mystery_box_type: u8,
     contents: []const Content,
     hitbox: rl.Rectangle,
     sprite: Sprite,
@@ -89,6 +92,7 @@ pub fn init(
         .contents_amount = contents_amount,
         .hitbox = hitbox,
         .initial_hitbox = hitbox,
+        .mystery_box_type = mystery_box_type,
         .sprite = sprite,
         .sprite_offset = sprite_offset,
         .sound_dud = sound_dud,
