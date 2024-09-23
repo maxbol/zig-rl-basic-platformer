@@ -54,7 +54,9 @@ pub fn Prefab(
 
         pub fn init() Sprite {
             const size = rl.Vector2.init(size_x, size_y);
+            std.debug.print("Loading texture for sprite\n", .{});
             const texture = loadTexture();
+            std.debug.print("Texture loaded for sprite\n", .{});
             return Sprite.init(
                 texture,
                 size,

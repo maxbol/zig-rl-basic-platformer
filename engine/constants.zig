@@ -4,9 +4,6 @@ const rl = @import("raylib");
 
 pub const RAD2DEG = 180.0 / std.math.pi;
 
-pub const WINDOW_SIZE_X = 1600;
-pub const WINDOW_SIZE_Y = 900;
-
 pub const GAME_SIZE_X = 720;
 pub const GAME_SIZE_Y = 405;
 

@@ -62,7 +62,9 @@ pub fn Prefab(
 ) type {
     return struct {
         pub fn init(pos: shapes.IPos) Player {
+            std.debug.print("Initing player sprite\n", .{});
             const sprite = SpritePrefab.init();
+            std.debug.print("Player sprite inited\n", .{});
 
             var player_hitbox = hitbox;
             player_hitbox.x = @floatFromInt(pos.x);

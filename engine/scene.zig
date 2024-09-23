@@ -196,10 +196,12 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
     const mystery_boxes_amount: usize = @intCast(try reader.readInt(u16, .big));
 
     // Read main layer
+    std.debug.print("Reading main layer\n", .{});
     if (verbose > 0) try reader.skipBytes(BYTE_MAIN_LAYER_HEADER.len, .{});
     const main_layer = try TileLayer.readBytes(allocator, reader);
 
     // Read bg layers
+    std.debug.print("Reading bg layers\n", .{});
     if (verbose > 0) try reader.skipBytes(BYTE_BG_LAYERS_HEADER.len, .{});
     var bg_layers: ?std.ArrayList(TileLayer) = null;
     if (bg_layers_len > 0) {
@@ -211,6 +213,7 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
     }
 
     // Read fg layers
+    std.debug.print("Reading fg layers\n", .{});
     if (verbose > 0) try reader.skipBytes(BYTE_FG_LAYERS_HEADER.len, .{});
     var fg_layers: ?std.ArrayList(TileLayer) = null;
     if (fg_layers_len > 0) {
@@ -226,6 +229,7 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
     }
 
     // Read mobs
+    std.debug.print("Reading mobs\n", .{});
     if (verbose > 0) try reader.skipBytes(BYTE_MOB_HEADER.len, .{});
     // var mobs: [constants.MAX_AMOUNT_OF_MOBS]Actor.Mob = undefined;
     var mobs = std.ArrayList(Actor.Mob).init(allocator);
@@ -242,6 +246,7 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
     }
 
     // Read collectables
+    std.debug.print("Reading collectables\n", .{});
     if (verbose > 0) try reader.skipBytes(BYTE_COLLECTABLE_HEADER.len, .{});
     var collectables = std.ArrayList(Actor.Collectable).init(allocator);
     for (0..collectables_amount) |i| {
@@ -258,6 +263,7 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
     }
 
     // Read platforms
+    std.debug.print("Reading platforms\n", .{});
     if (verbose > 0) try reader.skipBytes(BYTE_PLATFORM_HEADER.len, .{});
     var platforms = std.ArrayList(Solid.Platform).init(allocator);
     for (0..platforms_amount) |_| {
@@ -272,6 +278,7 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
         );
     }
 
+    std.debug.print("Reading mystery boxes\n", .{});
     // Read mystery_boxes
     if (verbose > 0) try reader.skipBytes(BYTE_MYSTERY_BOX_HEADER.len, .{});
     var mystery_boxes = std.ArrayList(Solid.MysteryBox).init(allocator);
