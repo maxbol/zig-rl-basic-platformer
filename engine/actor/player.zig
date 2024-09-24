@@ -75,7 +75,7 @@ pub fn Prefab(
 
 const fall_speed: f32 = 3.6 * 60;
 const fly_reduce: f32 = 6 * 60;
-const jump_speed: f32 = -10 * 60;
+const jump_speed: f32 = -4 * 60;
 const knockback_x_speed: f32 = 6 * 60;
 const knockback_y_speed: f32 = -2 * 60;
 const roll_reduce: f32 = 2 * 60;
