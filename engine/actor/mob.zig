@@ -1,4 +1,5 @@
 const Actor = @import("actor.zig");
+const GameState = @import("../gamestate.zig");
 const Mob = @This();
 const RigidBody = @import("rigid_body.zig");
 const Scene = @import("../scene.zig");
@@ -6,7 +7,6 @@ const Solid = @import("../solid/solid.zig");
 const Sprite = @import("../sprite.zig");
 const Tileset = @import("../tileset/tileset.zig");
 const an = @import("../animation.zig");
-const globals = @import("../globals.zig");
 const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
@@ -34,6 +34,7 @@ is_hunting: bool = false,
 is_jumping: bool = false,
 mob_type: u8,
 next_huntjump_distance: f32 = 80,
+rand: std.Random,
 rigid_body: RigidBody,
 speed: rl.Vector2,
 sprite: Sprite,
@@ -63,19 +64,19 @@ pub fn Prefab(
         pub const Hitbox = hitbox;
         pub const spr_offset = sprite_offset;
 
-        pub fn init(pos: shapes.IPos) Mob {
+        pub fn init(pos: shapes.IPos, gamestate: *GameState) Mob {
             const sprite = SpritePrefab.init();
 
             var mob_hitbox = hitbox;
             mob_hitbox.x = @floatFromInt(pos.x);
             mob_hitbox.y = @floatFromInt(pos.y);
 
-            return Mob.init(mob_type, mob_hitbox, sprite, sprite_offset, behavior);
+            return Mob.init(mob_type, mob_hitbox, sprite, sprite_offset, behavior, gamestate.rand.random());
         }
     };
 }
 
-pub fn init(mob_type: u8, hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2, mob_attributes: MobBehavior) Mob {
+pub fn init(mob_type: u8, hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2, mob_attributes: MobBehavior, rand: std.Random) Mob {
     var mob = Mob{
         .mob_type = mob_type,
         .initial_hitbox = hitbox,
@@ -84,6 +85,7 @@ pub fn init(mob_type: u8, hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: r
         .sprite_offset = sprite_offset,
         .rigid_body = RigidBody.init(hitbox),
         .behavior = mob_attributes,
+        .rand = rand,
     };
 
     mob.randomlyAcquireNextHuntjumpDistance();
@@ -130,7 +132,7 @@ pub fn reset(self: *Mob) void {
         return;
     }
 
-    self.* = Mob.init(self.mob_type, self.initial_hitbox, self.sprite, self.sprite_offset, self.behavior);
+    self.* = Mob.init(self.mob_type, self.initial_hitbox, self.sprite, self.sprite_offset, self.behavior, self.rand);
     self.sprite.reset();
 }
 
@@ -202,7 +204,7 @@ inline fn detectPlayerOnNextTile(lookahead: i32, sign: i8, mob_gridbox: shapes.I
 }
 
 fn detectNearbyPlayer(self: *Mob, scene: *Scene, delta_time: f32) void {
-    const player_gridbox = scene.player.actor().getGridRect();
+    const player_gridbox = scene.gamestate.player.actor().getGridRect();
     const mob_gridbox = getGridRect(self);
     var lookahead = self.behavior.line_of_sight;
     var is_hunting = false;
@@ -223,7 +225,7 @@ fn detectNearbyPlayer(self: *Mob, scene: *Scene, delta_time: f32) void {
 }
 
 fn randomlyAcquireNextHuntjumpDistance(self: *Mob) void {
-    self.next_huntjump_distance = @floatFromInt(globals.rand.random().intRangeAtMostBiased(u8, 80, 160));
+    self.next_huntjump_distance = @floatFromInt(self.rand.intRangeAtMostBiased(u8, 80, 160));
 }
 
 pub inline fn setPos(self: *Mob, pos: rl.Vector2) void {
@@ -263,7 +265,7 @@ pub fn update(self: *Mob, scene: *Scene, delta_time: f32) !void {
             self.did_huntjump = false;
         }
         if (self.is_hunting and !self.did_huntjump) {
-            const player_hitbox = scene.player.actor().getHitboxRect();
+            const player_hitbox = scene.gamestate.player.actor().getHitboxRect();
             const mob_hitbox = getHitboxRect(self);
 
             if (@abs(player_hitbox.x - mob_hitbox.x) < self.next_huntjump_distance) {
@@ -297,6 +299,7 @@ pub fn update(self: *Mob, scene: *Scene, delta_time: f32) !void {
     }
 
     // Move the mob
+    std.debug.print("Move mob\n", .{});
     self.rigid_body.move(scene, types.Axis.X, self.speed.x * delta_time, self);
     self.rigid_body.move(scene, types.Axis.Y, self.speed.y * delta_time, self);
 
@@ -326,10 +329,10 @@ pub const GreenSlime = @import("mob/slime.zig").GreenSlime;
 pub const prefabs: [1]type = .{
     GreenSlime,
 };
-pub fn initMobByIndex(index: usize, pos: rl.Vector2) Scene.SpawnError!Mob {
+pub fn initMobByIndex(index: usize, pos: rl.Vector2, gamestate: *GameState) Scene.SpawnError!Mob {
     inline for (prefabs, 0..) |MobPrefab, i| {
         if (i == index) {
-            return MobPrefab.init(shapes.IPos.fromVec2(pos));
+            return MobPrefab.init(shapes.IPos.fromVec2(pos), gamestate);
         }
     }
     return Scene.SpawnError.NoSuchItem;

@@ -17,7 +17,6 @@ const std = @import("std");
 
 export fn gameInit() callconv(.C) *anyopaque {
     const game_state = GameState.create() catch @panic("Failed to create game state");
-    std.debug.print("created game state with scene_file={s}\n", .{game_state.scene_file});
     return game_state;
 }
 
@@ -33,8 +32,6 @@ export fn gameReload(ctx: *anyopaque) callconv(.C) void {
 
 export fn gameSetupRaylib(ctx: *anyopaque) callconv(.C) void {
     const game_state: *GameState = @ptrCast(@alignCast(ctx));
-
-    std.debug.print("setuping up raylib for game state with scene_file={s}\n", .{game_state.scene_file});
 
     rl.setWindowMinSize(constants.GAME_SIZE_X, constants.GAME_SIZE_Y);
     rl.setTargetFPS(120); // Set our game to run at 60 frames-per-second

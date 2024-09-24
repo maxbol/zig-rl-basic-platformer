@@ -46,6 +46,7 @@ fn moveRigid(
     amount: f32,
     collider: anytype,
 ) void {
+    std.debug.print("moveRigid()\n", .{});
     const remainder = if (axis == types.Axis.X) &self.x_remainder else &self.y_remainder;
 
     remainder.* += amount;
@@ -70,11 +71,16 @@ fn moveRigid(
         } else {
             next_hitbox.y += sign;
         }
+        std.debug.print("next_hitbox {any}\n", .{next_hitbox});
+
+        std.debug.print("Getting tile size\n", .{});
 
         grid_rect = helpers.getGridRect(
             shapes.IPos.fromVec2(scene.main_layer.getTileset().getTileSize()),
             next_hitbox,
         );
+
+        std.debug.print("Checking collideAt() with grid_rect {any}\n", .{grid_rect});
 
         if (scene.collideAt(next_hitbox, grid_rect)) |c| {
             switch (@typeInfo(@TypeOf(collider))) {
@@ -98,6 +104,8 @@ fn moveRigid(
     // Store the grid rect to be able to display it with drawDebug()
     // TODO 09/09/2024: Remove?
     self.grid_rect = grid_rect;
+
+    std.debug.print("moveRigid() end\n", .{});
 }
 
 pub fn drawDebug(self: *const RigidBody, scene: *const Scene) void {

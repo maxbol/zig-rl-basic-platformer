@@ -36,11 +36,38 @@ fn loadGameDll() !void {
     gameTeardownRaylib = dyn_lib.lookup(@TypeOf(gameTeardownRaylib), "gameTeardownRaylib") orelse return error.LookupFailed;
     gameUpdate = dyn_lib.lookup(@TypeOf(gameUpdate), "gameUpdate") orelse return error.LookupFailed;
     gameDraw = dyn_lib.lookup(@TypeOf(gameDraw), "gameDraw") orelse return error.LookupFailed;
-    std.debug.print("Loaded game dll\n", .{});
 }
 
-fn unloadGameDll() void {}
-fn recompileGameDll() void {}
+fn unloadGameDll() !void {
+    if (game_dyn_lib) |*dyn_lib| {
+        dyn_lib.close();
+        game_dyn_lib = null;
+    } else {
+        return error.AlreadyUnloaded;
+    }
+}
+fn recompileGameDll(allocator: std.mem.Allocator) !void {
+    const process_args = [_][]const u8{
+        "zig",
+        "build",
+        "-Dgame_only=true",
+        "--search-prefix",
+        "./zig-out",
+    };
+
+    var build_process = std.process.Child.init(&process_args, allocator);
+    try build_process.spawn();
+
+    const term = try build_process.wait();
+    switch (term) {
+        .Exited => |exit_code| {
+            if (exit_code == 2) {
+                return error.RecompileFailed;
+            }
+        },
+        else => return,
+    }
+}
 
 pub fn main() anyerror!void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -63,9 +90,11 @@ pub fn main() anyerror!void {
 
     while (!rl.windowShouldClose()) { // Detect window close button or ESC key
         if (rl.isKeyPressed(rl.KeyboardKey.key_f5)) {
-            unloadGameDll();
-            recompileGameDll();
-            try loadGameDll();
+            unloadGameDll() catch unreachable;
+            recompileGameDll(allocator) catch {
+                std.debug.print("Failed to recompile game dll\n", .{});
+            };
+            loadGameDll() catch @panic("Failed to load game dll");
             gameReload(game_state);
         }
 

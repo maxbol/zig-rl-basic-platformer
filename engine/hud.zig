@@ -3,21 +3,22 @@ const Player = @import("actor/player.zig");
 const HUD = @This();
 const Scene = @import("scene.zig");
 const Sprite = @import("sprite.zig");
-const globals = @import("globals.zig");
 const rl = @import("raylib");
 const std = @import("std");
 
 player: *Player,
 sprite_lives: Sprite,
 sprite_points: Sprite,
+font: rl.Font = undefined,
 
-pub fn init(player: *Player) HUD {
+pub fn init(player: *Player, font: rl.Font) HUD {
     const sprite_lives = Collectable.HealthGrape.Sprite.init();
     const sprite_points = Collectable.Coin.Sprite.init();
     return .{
         .player = player,
         .sprite_lives = sprite_lives,
         .sprite_points = sprite_points,
+        .font = font,
     };
 }
 
@@ -30,11 +31,11 @@ pub fn draw(self: *HUD, scene: *const Scene) void {
     const lives_left = self.player.lives;
     const points_gained = self.player.score;
 
-    const lives_draw_x = scene.viewport.rectangle.x + 10;
-    const lives_draw_y = scene.viewport.rectangle.y + 10;
+    const lives_draw_x = scene.gamestate.viewport.rectangle.x + 10;
+    const lives_draw_y = scene.gamestate.viewport.rectangle.y + 10;
 
-    const points_draw_x = scene.viewport.rectangle.x + scene.viewport.rectangle.width - self.sprite_points.size.x - 10;
-    const points_draw_y = scene.viewport.rectangle.y + 10;
+    const points_draw_x = scene.gamestate.viewport.rectangle.x + scene.gamestate.viewport.rectangle.width - self.sprite_points.size.x - 10;
+    const points_draw_y = scene.gamestate.viewport.rectangle.y + 10;
 
     for (0..Player.max_lives) |i| {
         const pos = .{ .x = lives_draw_x + @as(f32, @floatFromInt(i * 20)), .y = lives_draw_y };
@@ -50,7 +51,7 @@ pub fn draw(self: *HUD, scene: *const Scene) void {
     };
 
     rl.drawTextEx(
-        globals.font,
+        self.font,
         points_str,
         .{ .x = points_draw_x - 50 + 1, .y = points_draw_y + 3 + 1 },
         9,
@@ -58,7 +59,7 @@ pub fn draw(self: *HUD, scene: *const Scene) void {
         rl.Color.black,
     );
     rl.drawTextEx(
-        globals.font,
+        self.font,
         points_str,
         .{ .x = points_draw_x - 50, .y = points_draw_y + 3 },
         9,

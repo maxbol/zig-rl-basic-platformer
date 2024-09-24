@@ -37,7 +37,7 @@ pub const VirtualMouse = struct {
     }
 
     pub fn getLayerPosition(self: *const VirtualMouse, scene: *const Scene, layer: TileLayer) ?rl.Vector2 {
-        if (!rl.checkCollisionPointRec(self.pos, scene.viewport.rectangle)) {
+        if (!rl.checkCollisionPointRec(self.pos, scene.gamestate.viewport.rectangle)) {
             return null;
         }
 

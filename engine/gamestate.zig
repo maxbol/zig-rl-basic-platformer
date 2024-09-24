@@ -80,17 +80,13 @@ pub fn create() !*GameState {
     game_state.music_gameover.looping = false;
     game_state.current_music = &game_state.music_level;
 
-    std.debug.print("setting current_music: {any}\n", .{game_state.current_music});
-
     // Init viewport
     game_state.viewport = Viewport.init(constants.VIEWPORT_BIG_RECT);
 
     // Init player actor
-    std.debug.print("Creating player actor\n", .{});
     game_state.player = Actor.Player.Knight.init(.{ .x = 0, .y = 0 });
 
     // Init virtual mouse
-    std.debug.print("Creating virtual mouse\n", .{});
     game_state.vmouse = controls.VirtualMouse{};
 
     // Uncomment this to regenerate the tileset:
@@ -98,23 +94,18 @@ pub fn create() !*GameState {
 
     // Init scene
     game_state.scene_file = "data/scenes/level1.scene";
-    std.debug.print("Loading scene from file: {s}\n", .{game_state.scene_file});
-    game_state.scene = Scene.loadSceneFromFile(game_state.allocator, game_state.scene_file) catch |err| {
+    game_state.scene = Scene.loadSceneFromFile(game_state.allocator, game_state.scene_file, game_state) catch |err| {
         std.log.err("Error loading scene from file: {!}\n", .{err});
         std.process.exit(1);
     };
     game_state.scene.scroll_state = .{ .x = 0, .y = 1 };
 
     // Editor
-    std.debug.print("Creating editor\n", .{});
-    game_state.editor = try Editor.create(game_state.allocator, game_state.scene, &game_state.vmouse);
+    game_state.editor = try Editor.create(game_state.allocator, game_state.scene, &game_state.vmouse, game_state.font, game_state.on_save_sfx, game_state.scene_file);
     game_state.editor_mode = false;
 
     // Hud
-    std.debug.print("Creating HUD\n", .{});
-    game_state.hud = HUD.init(&game_state.player);
-
-    std.debug.print("Game state created\n", .{});
+    game_state.hud = HUD.init(&game_state.player, game_state.font);
 
     return game_state;
 }
@@ -130,18 +121,12 @@ pub fn reload(self: *GameState) void {
 }
 
 pub fn update(self: *GameState) !void {
-    std.debug.print("running GameState.update()\n", .{});
     if (self.current_music == &self.music_gameover and !rl.isMusicStreamPlaying(self.current_music.*)) {
         self.current_music = &self.music_level;
         rl.seekMusicStream(self.current_music.*, 0);
         rl.playMusicStream(self.current_music.*);
     }
-    std.debug.print("updating music stream\n", .{});
-
-    std.debug.print("scene_file: {s}\n", .{self.scene_file});
-    std.debug.print("current_music: {any}\n", .{self.current_music});
     rl.updateMusicStream(self.current_music.*);
-    std.debug.print("music stream updated\n", .{});
     // Update
     //----------------------------------------------------------------------------------
     // TODO: Update your variables here
@@ -178,7 +163,7 @@ pub fn update(self: *GameState) !void {
 
         self.viewport.update(delta_time);
         self.scene.layer_visibility_treshold = null;
-        try self.scene.update(delta_time);
+        try self.scene.update(delta_time, self);
         try self.hud.update(self.scene, delta_time);
 
         if (self.editor_mode) {
@@ -201,7 +186,7 @@ pub fn draw(self: *GameState) void {
     self.vmouse.update(scale);
 
     self.viewport.draw();
-    self.scene.draw();
+    self.scene.draw(self);
     self.hud.draw(self.scene);
 
     self.scene.drawDebug();

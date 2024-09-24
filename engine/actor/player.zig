@@ -1,5 +1,6 @@
 const Actor = @import("actor.zig");
 const Effect = @import("../effect.zig");
+const GameState = @import("../gamestate.zig");
 const Player = @This();
 const RigidBody = @import("rigid_body.zig");
 const Scene = @import("../scene.zig");
@@ -10,7 +11,6 @@ const an = @import("../animation.zig");
 const constants = @import("../constants.zig");
 const controls = @import("../controls.zig");
 const debug = @import("../debug.zig");
-const globals = @import("../globals.zig");
 const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
@@ -62,9 +62,7 @@ pub fn Prefab(
 ) type {
     return struct {
         pub fn init(pos: shapes.IPos) Player {
-            std.debug.print("Initing player sprite\n", .{});
             const sprite = SpritePrefab.init();
-            std.debug.print("Player sprite inited\n", .{});
 
             var player_hitbox = hitbox;
             player_hitbox.x = @floatFromInt(pos.x);
@@ -150,14 +148,15 @@ fn handleSquish(ctx: *anyopaque, scene: *Scene, _: types.Axis, _: i8, _: u8) voi
 }
 
 inline fn die(self: *Player, scene: *Scene) void {
+    const gamestate = scene.gamestate;
     self.lives = 0;
     self.rigid_body.mode = .Static;
     self.sprite.setAnimation(AnimationType.Death, .{
-        .on_animation_finished = .{ .context = self, .call = handleGameOver },
+        .on_animation_finished = .{ .context = self, .call_ptr = handleGameOver },
     });
     scene.game_over_screen_elapsed = 0;
-    globals.current_music = &globals.music_gameover;
-    rl.playMusicStream(globals.current_music.*);
+    gamestate.current_music = &gamestate.music_gameover;
+    rl.playMusicStream(gamestate.current_music.*);
 }
 
 pub fn handleCollision(self: *Player, scene: *Scene, axis: types.Axis, sign: i8, flags: u8, solid: ?Solid) void {
@@ -179,7 +178,7 @@ pub fn handleCollision(self: *Player, scene: *Scene, axis: types.Axis, sign: i8,
                         .y = self.rigid_body.hitbox.y + self.rigid_body.hitbox.height - (Effect.Dust.height),
                     },
                     .{
-                        .call = handleEffectOver,
+                        .call_ptr = handleEffectOver,
                         .context = self,
                     },
                     self.face_dir == 1,
@@ -238,15 +237,18 @@ fn isCurrentAnimation(self: *Player, animation: AnimationType) bool {
 
 fn handleEffectOver(ctx: *anyopaque, _: *Sprite, _: *Scene) void {
     const self: *Player = @ptrCast(@alignCast(ctx));
+    std.debug.print("Player handling effect over\n", .{});
     self.current_effect = null;
 }
 
 pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
+    std.debug.print("Player update\n", .{});
     if (self.isCurrentAnimation(.Death)) {
         try self.sprite.update(scene, delta_time);
         return;
     }
 
+    std.debug.print("Jumping\n", .{});
     // Jumping
     if (!self.is_stunlocked and controls.isKeyboardControlPressed(controls.KBD_JUMP) and self.jump_counter < 2) {
         rl.playSound(self.sfx_jump);
@@ -256,13 +258,15 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
     const is_grounded = self.jump_counter == 0;
     const is_slipping = self.is_slipping and is_grounded;
 
+    std.debug.print("Rolling\n", .{});
     // Rolling
     if (self.speed.x != 0 and self.isCurrentAnimation(.Roll) and !self.is_stunlocked and is_grounded and controls.isKeyboardControlPressed(controls.KBD_ROLL)) {
-        self.sprite.setAnimation(AnimationType.Roll, .{ .on_animation_finished = .{ .context = self, .call = revertToIdle } });
+        self.sprite.setAnimation(AnimationType.Roll, .{ .on_animation_finished = .{ .context = self, .call_ptr = revertToIdle } });
         self.speed.x = std.math.sign(self.speed.x) * roll_speed;
     }
     const is_rolling = self.isCurrentAnimation(.Roll);
 
+    std.debug.print("Left/right movement\n", .{});
     // Left/right movement
     if (self.is_stunlocked) {
         self.speed.x = approach(self.speed.x, 0, fly_reduce * delta_time);
@@ -289,9 +293,11 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
         }
     }
 
+    std.debug.print("Gravity\n", .{});
     // Gravity
     self.speed.y = approach(self.speed.y, fall_speed, scene.gravity * delta_time);
 
+    std.debug.print("Animation and direction\n", .{});
     // Set animation and direction
     if (self.is_stunlocked) {
         self.sprite.setAnimation(AnimationType.Hit, .{});
@@ -307,12 +313,14 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
         }
     }
 
+    std.debug.print("Sprite flipping\n", .{});
     if (self.is_stunlocked) {
         self.sprite.setFlip(.XFlip, self.speed.x > 0);
     } else {
         self.sprite.setFlip(Sprite.FlipState.XFlip, self.face_dir == 0);
     }
 
+    std.debug.print("Collision with hostiles\n", .{});
     // Collision with hostile actors
     if (!self.is_stunlocked and !debug.isPaused()) {
         var actor_iter = scene.getActorIterator();
@@ -352,6 +360,7 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
         }
     }
 
+    std.debug.print("Moving player hitbox\n", .{});
     // Move the player hitbox
     if (self.speed.x != 0) {
         self.rigid_body.move(scene, types.Axis.X, self.speed.x * delta_time, self);
@@ -360,15 +369,20 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
         self.rigid_body.move(scene, types.Axis.Y, self.speed.y * delta_time, self);
     }
 
+    std.debug.print("Center viewport on player pos\n", .{});
     // if (rl.isKeyPressed(rl.KeyboardKey.key_q)) {
     scene.centerViewportOnPos(self.rigid_body.hitbox);
     // }
 
+    std.debug.print("Update player sprite\n", .{});
     try self.sprite.update(scene, delta_time);
 
+    std.debug.print("Play effect\n", .{});
     if (self.current_effect != null) {
         try self.current_effect.?.update(scene, delta_time);
     }
+
+    std.debug.print("Player update end\n", .{});
 }
 
 pub fn draw(self: *const Player, scene: *const Scene) void {

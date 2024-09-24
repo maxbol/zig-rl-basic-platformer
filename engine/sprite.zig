@@ -26,7 +26,11 @@ pub const SpriteTextureMap = [128]?rl.Rectangle;
 
 pub const Callback = struct {
     context: *anyopaque,
-    call: *const fn (*anyopaque, *Sprite, *Scene) void,
+    call_ptr: *const fn (*anyopaque, *Sprite, *Scene) void,
+
+    pub fn call(self: Callback, sprite: *Sprite, scene: *Scene) void {
+        self.call_ptr(self.context, sprite, scene);
+    }
 };
 
 pub const SetAnimationParam = struct {
@@ -54,9 +58,7 @@ pub fn Prefab(
 
         pub fn init() Sprite {
             const size = rl.Vector2.init(size_x, size_y);
-            std.debug.print("Loading texture for sprite\n", .{});
             const texture = loadTexture();
-            std.debug.print("Texture loaded for sprite\n", .{});
             return Sprite.init(
                 texture,
                 size,
@@ -176,7 +178,7 @@ pub fn update(self: *Sprite, scene: *Scene, delta_time: f32) !void {
 
     if (self.animation_clock > self.current_animation.duration) {
         if (self.on_animation_finished) |callback| {
-            callback.call(callback.context, self, scene);
+            callback.call(self, scene);
         } else if (self.freeze_animation_on_last_frame) {
             self.animation_clock = self.current_animation.duration;
         } else {
