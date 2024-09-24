@@ -16,7 +16,7 @@ fn addDeps(b: *std.Build, m: *std.Build.Module, dep_opts: anytype) void {
 // declaratively construct a build graph that will be executed by an external
 // runner.
 pub fn build(b: *std.Build) void {
-    const game_only = b.option(bool, "game-only", "Build only the game, not the dev environment") orelse false;
+    const game_only = b.option(bool, "game_only", "Build only the game, not the dev environment") orelse false;
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options

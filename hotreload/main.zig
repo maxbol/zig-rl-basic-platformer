@@ -74,7 +74,7 @@ pub fn main() anyerror!void {
     const allocator = gpa.allocator();
 
     rl.setConfigFlags(.{
-        // .fullscreen_mode = true,
+        .fullscreen_mode = true,
         .vsync_hint = true,
         .window_resizable = true,
     });

@@ -1,5 +1,6 @@
 const Actor = @import("actor/actor.zig");
 const Editor = @This();
+const GameState = @import("gamestate.zig");
 const Overlay = @import("editor/overlay.zig");
 const Palette = @import("editor/palette.zig");
 const Scene = @import("scene.zig");
@@ -16,9 +17,8 @@ const std = @import("std");
 
 allocator: std.mem.Allocator,
 
-font: rl.Font,
-
 active_layer_idx: i16,
+gamestate: *GameState,
 scene: *Scene,
 vmouse: *controls.VirtualMouse,
 
@@ -38,12 +38,10 @@ overlay_tiles: Overlay.TileOverlay,
 
 save_btn_rect: rl.Rectangle = undefined,
 save_btn_hover: bool = false,
-save_btn_sfx: rl.Sound,
-scene_file: []const u8,
 
 const tile_palette_cols_per_row = 9;
 
-pub fn create(allocator: std.mem.Allocator, scene: *Scene, vmouse: *controls.VirtualMouse, font: rl.Font, save_btn_sfx: rl.Sound, scene_file: []const u8) !*Editor {
+pub fn create(allocator: std.mem.Allocator, gamestate: *GameState, scene: *Scene, vmouse: *controls.VirtualMouse) !*Editor {
     const palette_mob = try allocator.create(Palette.MobPalette);
     const palette_collectables = try allocator.create(Palette.CollectablePalette);
     const palette_platform = try allocator.create(Palette.PlatformPalette);
@@ -88,7 +86,7 @@ pub fn create(allocator: std.mem.Allocator, scene: *Scene, vmouse: *controls.Vir
         .active_layer_idx = 0,
         .active_palette = .None,
         .allocator = allocator,
-        .font = font,
+        .gamestate = gamestate,
         .overlay_collectables = overlay_collectables,
         .overlay_mob = overlay_mob,
         .overlay_mysterybox = overlay_mysterybox,
@@ -99,9 +97,7 @@ pub fn create(allocator: std.mem.Allocator, scene: *Scene, vmouse: *controls.Vir
         .palette_mysterybox = palette_mysterybox,
         .palette_platform = palette_platform,
         .palette_tiles = palette_tiles,
-        .save_btn_sfx = save_btn_sfx,
         .scene = scene,
-        .scene_file = scene_file,
         .vmouse = vmouse,
     };
 
@@ -146,8 +142,8 @@ fn updateSaveButton(self: *Editor) void {
     self.save_btn_hover = rl.checkCollisionPointRec(self.vmouse.pos, self.save_btn_rect);
 
     if (rl.isMouseButtonPressed(rl.MouseButton.mouse_button_left) and self.save_btn_hover) {
-        const file = helpers.openFile(self.scene_file, .{ .mode = .write_only }) catch {
-            std.log.err("Failed to open file {s}\n", .{self.scene_file});
+        const file = helpers.openFile(self.scene.gamestate.scene_file, .{ .mode = .write_only }) catch {
+            std.log.err("Failed to open file {s}\n", .{self.scene.gamestate.scene_file});
             std.process.exit(1);
         };
         self.scene.writeBytes(file.writer(), false) catch |err| {
@@ -155,13 +151,13 @@ fn updateSaveButton(self: *Editor) void {
             std.process.exit(1);
         };
 
-        rl.playSound(self.save_btn_sfx);
+        rl.playSound(self.gamestate.on_save_sfx);
     }
 }
 
 fn drawSaveButton(self: *const Editor) void {
     const color = if (self.save_btn_hover) rl.Color.green else rl.Color.white;
-    rl.drawTextEx(self.font, "Save", rl.Vector2.init(self.save_btn_rect.x + 5, self.save_btn_rect.y + 5), 18, 2, color);
+    rl.drawTextEx(self.gamestate.font, "Save", rl.Vector2.init(self.save_btn_rect.x + 5, self.save_btn_rect.y + 5), 18, 2, color);
     rl.drawRectangleLinesEx(self.save_btn_rect, 2, color);
 }
 

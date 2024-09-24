@@ -75,7 +75,7 @@ pub fn Prefab(
 
 const fall_speed: f32 = 3.6 * 60;
 const fly_reduce: f32 = 6 * 60;
-const jump_speed: f32 = -4 * 60;
+const jump_speed: f32 = -10 * 60;
 const knockback_x_speed: f32 = 6 * 60;
 const knockback_y_speed: f32 = -2 * 60;
 const roll_reduce: f32 = 2 * 60;
@@ -237,18 +237,15 @@ fn isCurrentAnimation(self: *Player, animation: AnimationType) bool {
 
 fn handleEffectOver(ctx: *anyopaque, _: *Sprite, _: *Scene) void {
     const self: *Player = @ptrCast(@alignCast(ctx));
-    std.debug.print("Player handling effect over\n", .{});
     self.current_effect = null;
 }
 
 pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
-    std.debug.print("Player update\n", .{});
     if (self.isCurrentAnimation(.Death)) {
         try self.sprite.update(scene, delta_time);
         return;
     }
 
-    std.debug.print("Jumping\n", .{});
     // Jumping
     if (!self.is_stunlocked and controls.isKeyboardControlPressed(controls.KBD_JUMP) and self.jump_counter < 2) {
         rl.playSound(self.sfx_jump);
@@ -258,7 +255,6 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
     const is_grounded = self.jump_counter == 0;
     const is_slipping = self.is_slipping and is_grounded;
 
-    std.debug.print("Rolling\n", .{});
     // Rolling
     if (self.speed.x != 0 and self.isCurrentAnimation(.Roll) and !self.is_stunlocked and is_grounded and controls.isKeyboardControlPressed(controls.KBD_ROLL)) {
         self.sprite.setAnimation(AnimationType.Roll, .{ .on_animation_finished = .{ .context = self, .call_ptr = revertToIdle } });
@@ -266,7 +262,6 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
     }
     const is_rolling = self.isCurrentAnimation(.Roll);
 
-    std.debug.print("Left/right movement\n", .{});
     // Left/right movement
     if (self.is_stunlocked) {
         self.speed.x = approach(self.speed.x, 0, fly_reduce * delta_time);
@@ -293,11 +288,9 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
         }
     }
 
-    std.debug.print("Gravity\n", .{});
     // Gravity
     self.speed.y = approach(self.speed.y, fall_speed, scene.gravity * delta_time);
 
-    std.debug.print("Animation and direction\n", .{});
     // Set animation and direction
     if (self.is_stunlocked) {
         self.sprite.setAnimation(AnimationType.Hit, .{});
@@ -313,14 +306,12 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
         }
     }
 
-    std.debug.print("Sprite flipping\n", .{});
     if (self.is_stunlocked) {
         self.sprite.setFlip(.XFlip, self.speed.x > 0);
     } else {
         self.sprite.setFlip(Sprite.FlipState.XFlip, self.face_dir == 0);
     }
 
-    std.debug.print("Collision with hostiles\n", .{});
     // Collision with hostile actors
     if (!self.is_stunlocked and !debug.isPaused()) {
         var actor_iter = scene.getActorIterator();
@@ -360,7 +351,6 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
         }
     }
 
-    std.debug.print("Moving player hitbox\n", .{});
     // Move the player hitbox
     if (self.speed.x != 0) {
         self.rigid_body.move(scene, types.Axis.X, self.speed.x * delta_time, self);
@@ -369,20 +359,15 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
         self.rigid_body.move(scene, types.Axis.Y, self.speed.y * delta_time, self);
     }
 
-    std.debug.print("Center viewport on player pos\n", .{});
     // if (rl.isKeyPressed(rl.KeyboardKey.key_q)) {
     scene.centerViewportOnPos(self.rigid_body.hitbox);
     // }
 
-    std.debug.print("Update player sprite\n", .{});
     try self.sprite.update(scene, delta_time);
 
-    std.debug.print("Play effect\n", .{});
     if (self.current_effect != null) {
         try self.current_effect.?.update(scene, delta_time);
     }
-
-    std.debug.print("Player update end\n", .{});
 }
 
 pub fn draw(self: *const Player, scene: *const Scene) void {

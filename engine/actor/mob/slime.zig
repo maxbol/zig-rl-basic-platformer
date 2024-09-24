@@ -22,6 +22,15 @@ fn getAnimations() Mob.AnimationBuffer {
     return buffer;
 }
 
+pub const green_slime_behavior = Mob.MobBehavior{
+    .walk_speed = 3 * 60,
+    .fall_speed = 3.6 * 60,
+    .hunt_speed = 2 * 60,
+    .jump_speed = -4 * 60,
+    .hunt_acceleration = 10 * 60,
+    .line_of_sight = 10, // See 10 tiles ahead
+};
+
 pub const GreenSlime = Mob.Prefab(
     // ID
     0,
@@ -38,14 +47,7 @@ pub const GreenSlime = Mob.Prefab(
         .y = 12,
     },
     // Behavior
-    .{
-        .walk_speed = 1 * 60,
-        .fall_speed = 3.6 * 60,
-        .hunt_speed = 2 * 60,
-        .jump_speed = -4 * 60,
-        .hunt_acceleration = 10 * 60,
-        .line_of_sight = 10, // See 10 tiles ahead
-    },
+    &green_slime_behavior,
     // Sprite
     Sprite.Prefab(
         // Width

@@ -27,7 +27,7 @@ pub const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{
     .Hit,
 }, 6);
 
-behavior: MobBehavior,
+behavior: *const MobBehavior,
 did_huntjump: bool = false,
 initial_hitbox: rl.Rectangle,
 is_hunting: bool = false,
@@ -56,7 +56,7 @@ pub fn Prefab(
     mob_type: u8,
     hitbox: rl.Rectangle,
     sprite_offset: rl.Vector2,
-    behavior: MobBehavior,
+    behavior: *const MobBehavior,
     SpritePrefab: anytype,
 ) type {
     return struct {
@@ -66,7 +66,6 @@ pub fn Prefab(
 
         pub fn init(pos: shapes.IPos, gamestate: *GameState) Mob {
             const sprite = SpritePrefab.init();
-
             var mob_hitbox = hitbox;
             mob_hitbox.x = @floatFromInt(pos.x);
             mob_hitbox.y = @floatFromInt(pos.y);
@@ -76,7 +75,7 @@ pub fn Prefab(
     };
 }
 
-pub fn init(mob_type: u8, hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2, mob_attributes: MobBehavior, rand: std.Random) Mob {
+pub fn init(mob_type: u8, hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2, behavior: *const MobBehavior, rand: std.Random) Mob {
     var mob = Mob{
         .mob_type = mob_type,
         .initial_hitbox = hitbox,
@@ -84,7 +83,7 @@ pub fn init(mob_type: u8, hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: r
         .sprite = sprite,
         .sprite_offset = sprite_offset,
         .rigid_body = RigidBody.init(hitbox),
-        .behavior = mob_attributes,
+        .behavior = behavior,
         .rand = rand,
     };
 
@@ -299,7 +298,6 @@ pub fn update(self: *Mob, scene: *Scene, delta_time: f32) !void {
     }
 
     // Move the mob
-    std.debug.print("Move mob\n", .{});
     self.rigid_body.move(scene, types.Axis.X, self.speed.x * delta_time, self);
     self.rigid_body.move(scene, types.Axis.Y, self.speed.y * delta_time, self);
 

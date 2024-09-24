@@ -42,11 +42,9 @@ pub fn init(pos: rl.Vector2, sprite: Sprite, onEffectFinished: Sprite.Callback) 
 }
 
 fn onAnimationFinished(ctx: *anyopaque, sprite: *Sprite, scene: *Scene) void {
-    std.debug.print("Effect animation finished\n", .{});
     const self: *Effect = @ptrCast(@alignCast(ctx));
 
     sprite.setAnimation(AnimationType.Invisible, .{});
-    std.debug.print("Sprite animation reverted to invisible, calling onEffectFinished\n", .{});
 
     self.onEffectFinished.call(
         sprite,
@@ -55,9 +53,7 @@ fn onAnimationFinished(ctx: *anyopaque, sprite: *Sprite, scene: *Scene) void {
 }
 
 pub fn update(self: *Effect, scene: *Scene, dt: f32) !void {
-    std.debug.print("Effect update\n", .{});
     if (!self.initialized) {
-        std.debug.print("Setting animation\n", .{});
         self.sprite.setAnimation(
             AnimationType.Playing,
             .{
@@ -69,9 +65,7 @@ pub fn update(self: *Effect, scene: *Scene, dt: f32) !void {
         );
         self.initialized = true;
     }
-    std.debug.print("Updating effect sprite\n", .{});
     try self.sprite.update(scene, dt);
-    std.debug.print("Effect updated\n", .{});
 }
 
 pub fn draw(self: *const Effect, scene: *const Scene) void {

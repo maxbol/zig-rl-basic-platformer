@@ -37,12 +37,12 @@ var gpa: std.heap.GeneralPurposeAllocator(.{}) = undefined;
 pub fn create() !*GameState {
     gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
-    var game_state = try allocator.create(GameState);
+    var gamestate = try allocator.create(GameState);
 
-    game_state.allocator = allocator;
+    gamestate.allocator = allocator;
 
     // Init randomizer
-    game_state.rand = helpers.createRandomizer() catch {
+    gamestate.rand = helpers.createRandomizer() catch {
         std.log.err("Error initializing randomizer, quitting...", .{});
         std.process.exit(1);
     };
@@ -54,60 +54,60 @@ pub fn create() !*GameState {
         "You a disgrace!",
     };
     var slots: [all_game_over_texts.len]bool = .{false} ** all_game_over_texts.len;
-    game_state.game_over_texts = try game_state.allocator.alloc([*:0]const u8, all_game_over_texts.len);
+    gamestate.game_over_texts = try gamestate.allocator.alloc([*:0]const u8, all_game_over_texts.len);
     for (all_game_over_texts) |text| {
         while (true) {
-            const idx = game_state.rand.random().intRangeAtMost(usize, 0, game_state.game_over_texts.len - 1);
+            const idx = gamestate.rand.random().intRangeAtMost(usize, 0, gamestate.game_over_texts.len - 1);
             if (!slots[idx]) {
                 slots[idx] = true;
-                game_state.game_over_texts[idx] = text;
+                gamestate.game_over_texts[idx] = text;
                 break;
             }
         }
     }
 
     // Init debug flags
-    game_state.debug_flags = &.{ .ShowHitboxes, .ShowScrollState, .ShowFps, .ShowSpriteOutlines, .ShowTestedTiles, .ShowCollidedTiles, .ShowGridBoxes, .ShowTilemapDebug };
+    gamestate.debug_flags = &.{ .ShowHitboxes, .ShowScrollState, .ShowFps, .ShowSpriteOutlines, .ShowTestedTiles, .ShowCollidedTiles, .ShowGridBoxes, .ShowTilemapDebug };
     // debug.setDebugFlags(self.debug_flags);
 
     // Init game font
-    game_state.font = rl.loadFont("assets/fonts/PixelOperator8-Bold.ttf");
+    gamestate.font = rl.loadFont("assets/fonts/PixelOperator8-Bold.ttf");
 
     // Init audio
-    game_state.on_save_sfx = rl.loadSound("assets/sounds/power_up.wav");
-    game_state.music_level = rl.loadMusicStream("assets/music/time_for_adventure.mp3");
-    game_state.music_gameover = rl.loadMusicStream("assets/music/game_over.mp3");
-    game_state.music_gameover.looping = false;
-    game_state.current_music = &game_state.music_level;
+    gamestate.on_save_sfx = rl.loadSound("assets/sounds/power_up.wav");
+    gamestate.music_level = rl.loadMusicStream("assets/music/time_for_adventure.mp3");
+    gamestate.music_gameover = rl.loadMusicStream("assets/music/game_over.mp3");
+    gamestate.music_gameover.looping = false;
+    gamestate.current_music = &gamestate.music_level;
 
     // Init viewport
-    game_state.viewport = Viewport.init(constants.VIEWPORT_BIG_RECT);
+    gamestate.viewport = Viewport.init(constants.VIEWPORT_BIG_RECT);
 
     // Init player actor
-    game_state.player = Actor.Player.Knight.init(.{ .x = 0, .y = 0 });
+    gamestate.player = Actor.Player.Knight.init(.{ .x = 0, .y = 0 });
 
     // Init virtual mouse
-    game_state.vmouse = controls.VirtualMouse{};
+    gamestate.vmouse = controls.VirtualMouse{};
 
     // Uncomment this to regenerate the tileset:
     // rebuildAndStoreDefaultTileset(allocator, "data/tilesets/default.tileset");
 
     // Init scene
-    game_state.scene_file = "data/scenes/level1.scene";
-    game_state.scene = Scene.loadSceneFromFile(game_state.allocator, game_state.scene_file, game_state) catch |err| {
+    gamestate.scene_file = "data/scenes/level1.scene";
+    gamestate.scene = Scene.loadSceneFromFile(gamestate.allocator, gamestate.scene_file, gamestate) catch |err| {
         std.log.err("Error loading scene from file: {!}\n", .{err});
         std.process.exit(1);
     };
-    game_state.scene.scroll_state = .{ .x = 0, .y = 1 };
+    gamestate.scene.scroll_state = .{ .x = 0, .y = 1 };
 
     // Editor
-    game_state.editor = try Editor.create(game_state.allocator, game_state.scene, &game_state.vmouse, game_state.font, game_state.on_save_sfx, game_state.scene_file);
-    game_state.editor_mode = false;
+    gamestate.editor = try Editor.create(gamestate.allocator, gamestate, gamestate.scene, &gamestate.vmouse);
+    gamestate.editor_mode = false;
 
     // Hud
-    game_state.hud = HUD.init(&game_state.player, game_state.font);
+    gamestate.hud = HUD.init(&gamestate.player, gamestate.font);
 
-    return game_state;
+    return gamestate;
 }
 
 pub fn deinit(self: *GameState) void {
