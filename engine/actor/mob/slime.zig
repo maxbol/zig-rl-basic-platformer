@@ -12,7 +12,8 @@ fn loadTexture() rl.Texture {
     };
 }
 
-fn getAnimations() Mob.AnimationBuffer {
+fn getAnimationBuffer() Mob.AnimationBuffer {
+    // @compileLog("Building mob/slime animation buffer...");
     var buffer = Mob.AnimationBuffer{};
 
     buffer.writeAnimation(.Walk, 1, &.{ 1, 2, 3, 4, 3, 2 });
@@ -23,7 +24,7 @@ fn getAnimations() Mob.AnimationBuffer {
 }
 
 pub const green_slime_behavior = Mob.MobBehavior{
-    .walk_speed = 3 * 60,
+    .walk_speed = 1 * 60,
     .fall_speed = 3.6 * 60,
     .hunt_speed = 2 * 60,
     .jump_speed = -4 * 60,
@@ -57,7 +58,7 @@ pub const GreenSlime = Mob.Prefab(
         // Texture path
         loadTexture,
         // Animation buffer
-        getAnimations(),
+        getAnimationBuffer(),
         // Initial animation
         Mob.AnimationType.Walk,
         rl.Vector2{ .x = 0, .y = 0 },

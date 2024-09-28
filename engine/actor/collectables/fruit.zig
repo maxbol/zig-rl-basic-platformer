@@ -9,7 +9,7 @@ const AnimationType = enum(u8) {
     Idle,
 };
 
-const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{.Idle}, 1);
+const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{.Idle}, .{}, 1);
 
 var sound: ?rl.Sound = null;
 var texture: ?rl.Texture = null;
@@ -30,7 +30,8 @@ fn loadTexture() rl.Texture2D {
     return texture.?;
 }
 
-fn getAnimationBuffer(offset: usize) AnimationBuffer {
+fn getAnimationBuffer(offset: u16) AnimationBuffer {
+    // @compileLog("Building collectable/fruit animation buffer...");
     var buffer = AnimationBuffer{};
     buffer.writeAnimation(.Idle, 1, &.{offset});
     return buffer;
@@ -40,7 +41,7 @@ fn onHealthGrapeCollected(_: *Collectable, player: *Player) bool {
     return player.gainLives(1);
 }
 
-pub fn Fruit(offset: usize, on_collected: fn (*Collectable, *Player) bool) type {
+pub fn Fruit(offset: u16, on_collected: fn (*Collectable, *Player) bool) type {
     return Collectable.Prefab(
         1,
         .{

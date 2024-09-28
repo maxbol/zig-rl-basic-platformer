@@ -22,7 +22,7 @@ pub const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{
     .Initial,
     .Active,
     .Depleted,
-}, 1);
+}, .{}, 1);
 
 pub fn Prefab(
     mystery_box_type: u8,
@@ -224,7 +224,7 @@ fn handlePlayerCollision(ctx: *anyopaque, scene: *Scene, axis: types.Axis, sign:
 }
 
 fn isPlayingAnimation(self: *MysteryBox, animation: AnimationType) bool {
-    return self.sprite.current_animation.type == @as(u8, @intFromEnum(animation));
+    return self.sprite.current_animation.data.type == @as(u8, @intFromEnum(animation));
 }
 
 pub fn update(self: *MysteryBox, scene: *Scene, delta_time: f32) !void {

@@ -46,14 +46,39 @@ pub const AnimationType = enum(u8) {
     Jump,
 };
 
-pub const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{
-    .Idle,
-    .Hit,
-    .Walk,
-    .Death,
-    .Roll,
-    .Jump,
-}, 16);
+// pub const AnimationTransform = union {
+//     rotation: f32,
+//
+//     pub fn transform(self: AnimationTransform, )
+// };
+
+pub const AnimationBuffer = an.AnimationBuffer(
+    AnimationType,
+    &.{
+        .Idle,
+        .Hit,
+        .Walk,
+        .Death,
+        .Roll,
+        .Jump,
+    },
+    .{
+        // Rotate 45 deg
+        struct {
+            pub fn rotate45Deg(frame_data: an.PackedFrame, prev: an.RenderableFrame) an.RenderableFrame {
+                _ = frame_data; // autofix
+                return .{
+                    .src = prev.src,
+                    .dest = prev.dest,
+                    .offset = prev.offset,
+                    .rotation = prev.rotation + 45,
+                    .tint = prev.tint,
+                };
+            }
+        }.rotate45Deg,
+    },
+    16,
+);
 
 pub fn Prefab(
     hitbox: rl.Rectangle,
@@ -223,19 +248,20 @@ fn setPos(ctx: *anyopaque, pos: rl.Vector2) void {
     self.rigid_body.hitbox.y = pos.y;
 }
 
-fn revertToIdle(_: *anyopaque, sprite: *Sprite, _: *Scene) void {
-    sprite.setAnimation(AnimationType.Idle, .{});
+fn revertToIdle(ctx: *anyopaque, _: *an.AnyAnimation) void {
+    const self: *Player = @ptrCast(@alignCast(ctx));
+    self.sprite.setAnimation(AnimationType.Idle, .{});
 }
 
-fn handleGameOver(_: *anyopaque, _: *Sprite, _: *Scene) void {
+fn handleGameOver(_: *anyopaque, _: *an.AnyAnimation) void {
     // Do nothing (for now)
 }
 
 fn isCurrentAnimation(self: *Player, animation: AnimationType) bool {
-    return self.sprite.current_animation.type == @intFromEnum(animation);
+    return self.sprite.current_animation.data.type == @intFromEnum(animation);
 }
 
-fn handleEffectOver(ctx: *anyopaque, _: *Sprite, _: *Scene) void {
+fn handleEffectOver(ctx: *anyopaque, _: *an.AnyAnimation) void {
     const self: *Player = @ptrCast(@alignCast(ctx));
     self.current_effect = null;
 }

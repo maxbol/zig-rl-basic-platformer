@@ -234,7 +234,6 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype, gamestate: *Game
             try Actor.Mob.initMobByIndex(
                 mob_type,
                 mob_pos,
-                gamestate,
             ),
         );
     }
@@ -466,6 +465,12 @@ pub fn reset(self: *Scene) void {
     self.gamestate.player.reset();
 }
 
+pub fn hotReload(self: *Scene) void {
+    for (self.mobs.items) |*mob| {
+        mob.hotReload();
+    }
+}
+
 pub fn getActorIterator(self: *Scene) SceneActorIterator {
     return SceneActorIterator{ .scene = self };
 }
@@ -497,7 +502,7 @@ pub fn spawnCollectable(self: *Scene, collectable_type: usize, pos: rl.Vector2) 
 }
 
 pub fn spawnMob(self: *Scene, mob_type: usize, pos: rl.Vector2) !*Actor.Mob {
-    const mob: Actor.Mob = try Actor.Mob.initMobByIndex(mob_type, pos, self.gamestate);
+    const mob: Actor.Mob = try Actor.Mob.initMobByIndex(mob_type, pos);
     try self.mobs.append(mob);
     return &self.mobs.items[self.mobs.items.len - 1];
 }

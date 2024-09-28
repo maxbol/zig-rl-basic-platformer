@@ -9,6 +9,7 @@ const Solid = @import("../solid/solid.zig");
 const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
+const std = @import("std");
 const types = @import("../types.zig");
 
 const approach = helpers.approach;

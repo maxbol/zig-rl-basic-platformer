@@ -14,13 +14,13 @@ sprite_texture_map_r: SpriteTextureMap,
 sprite_texture_map_l: SpriteTextureMap,
 animation_buffer: an.AnimationBufferReader,
 initial_animation: u8,
-current_animation: an.AnimationData,
+current_animation: an.AnyAnimation,
 queued_animation: ?u8 = null,
 freeze_animation_on_last_frame: bool = false,
 on_animation_finished: ?Callback = null,
 animation_speed: f32 = 1,
 animation_clock: f32 = 0,
-current_display_frame: u8 = 0,
+current_display_frame: an.PackedFrame = an.PackedFrame.zero(),
 
 pub const SpriteTextureMap = [128]?rl.Rectangle;
 
@@ -35,7 +35,7 @@ pub const Callback = struct {
 
 pub const SetAnimationParam = struct {
     animation_speed: f32 = 1,
-    on_animation_finished: ?Callback = null,
+    on_animation_finished: ?an.AnyAnimation.Callback = null,
     freeze_animation_on_last_frame: bool = false,
 };
 
@@ -132,16 +132,17 @@ pub fn reset(self: *Sprite) void {
 
 pub fn setAnimation(self: *Sprite, animation: anytype, param: SetAnimationParam) void {
     const anim_int: u8 = @intFromEnum(animation);
-    if (self.current_animation.type != anim_int) {
+    if (self.current_animation.data.type != anim_int) {
         self.current_animation = self.animation_buffer.readAnimation(anim_int) catch |err| {
             std.log.err("Error setting animation: {!}\n", .{err});
             std.process.exit(1);
         };
-        self.animation_clock = 0;
-    }
-    self.animation_speed = param.animation_speed;
-    if (param.on_animation_finished) |cb| {
-        self.on_animation_finished = cb;
+        self.current_animation.clock = 0;
+        self.current_animation.freeze_on_last_frame = param.freeze_animation_on_last_frame;
+        self.current_animation.speed = param.animation_speed;
+        if (param.on_animation_finished) |cb| {
+            self.current_animation.on_finished = cb;
+        }
     }
 }
 
@@ -150,54 +151,58 @@ pub fn setFlip(self: *Sprite, flip: FlipState, state: bool) void {
 }
 
 pub fn getSourceRect(self: *const Sprite) ?rl.Rectangle {
+    const display_frame = self.current_animation.getFrame();
     if (self.flip_mask & @intFromEnum(FlipState.XFlip) == 0) {
-        return self.sprite_texture_map_r[self.current_display_frame];
+        return self.sprite_texture_map_r[display_frame.frame_idx];
     } else {
-        return self.sprite_texture_map_l[self.current_display_frame];
+        return self.sprite_texture_map_l[display_frame.frame_idx];
     }
 }
 
 pub fn update(self: *Sprite, scene: *Scene, delta_time: f32) !void {
-    // Animation
-    if (self.current_animation.frames.len == 0) {
-        self.current_display_frame = 0;
-        return;
-    }
-
-    const current_animation_duration: f32 = @floatCast(self.current_animation.duration);
-    const anim_length: f32 = @floatFromInt(self.current_animation.frames.len);
-
-    const frame_duration: f32 = current_animation_duration / anim_length;
-    const frame_idx: usize = @min(
-        @as(usize, @intFromFloat(@floor(self.animation_clock / frame_duration))),
-        self.current_animation.frames.len - 1,
-    );
-
-    self.animation_clock += delta_time * self.animation_speed;
-    self.current_display_frame = self.current_animation.frames[frame_idx];
-
-    if (self.animation_clock > self.current_animation.duration) {
-        if (self.on_animation_finished) |callback| {
-            callback.call(self, scene);
-        } else if (self.freeze_animation_on_last_frame) {
-            self.animation_clock = self.current_animation.duration;
-        } else {
-            self.animation_clock = @mod(self.animation_clock, self.current_animation.duration);
-        }
-    }
+    _ = scene; // autofix
+    self.current_animation.update(delta_time);
+    // // Animation
+    // if (self.current_animation.frames.len == 0) {
+    //     self.current_display_frame = an.PackedFrame.zero();
+    //     return;
+    // }
+    //
+    // const current_animation_duration: f32 = @floatCast(self.current_animation.duration);
+    // const anim_length: f32 = @floatFromInt(self.current_animation.frames.len);
+    //
+    // const frame_duration: f32 = current_animation_duration / anim_length;
+    // const frame_idx: usize = @min(
+    //     @as(usize, @intFromFloat(@floor(self.animation_clock / frame_duration))),
+    //     self.current_animation.frames.len - 1,
+    // );
+    //
+    // self.animation_clock += delta_time * self.animation_speed;
+    // self.current_display_frame = self.current_animation.frames[frame_idx];
+    //
+    // if (self.animation_clock > self.current_animation.duration) {
+    //     if (self.on_animation_finished) |callback| {
+    //         callback.call(self, scene);
+    //     } else if (self.freeze_animation_on_last_frame) {
+    //         self.animation_clock = self.current_animation.duration;
+    //     } else {
+    //         self.animation_clock = @mod(self.animation_clock, self.current_animation.duration);
+    //     }
+    // }
 }
 
 pub fn draw(self: *const Sprite, scene: *const Scene, pos: rl.Vector2, color: rl.Color) void {
     // Don't render if no animation frame
-    if (self.current_display_frame == 0) {
-        return;
-    }
+    // if (self.current_display_frame.frame_idx == 0) {
+    //     return;
+    // }
+    const dst = helpers.v2r(pos, self.size);
 
     // Don't render if out of viewport bounds
-    if (pos.x + self.size.x < scene.viewport_x_offset or pos.x > scene.viewport_x_limit) {
+    if (dst.x + dst.width < scene.viewport_x_offset or dst.x > scene.viewport_x_limit) {
         return;
     }
-    if (pos.y + self.size.y < scene.viewport_y_offset or pos.y > scene.viewport_y_limit) {
+    if (dst.y + dst.height < scene.viewport_y_offset or dst.y > scene.viewport_y_limit) {
         return;
     }
 
@@ -225,10 +230,10 @@ pub fn draw(self: *const Sprite, scene: *const Scene, pos: rl.Vector2, color: rl
     };
 
     // Get viewport adjusted destination position
-    const dest = scene.getViewportAdjustedPos(rl.Vector2, pos);
+    const dst_adjusted = scene.getViewportAdjustedPos(rl.Rectangle, dst);
 
     // Do a culled rectangle draw
-    _ = helpers.culledRectDraw(self.texture, rect, dest, color, cull_x, cull_y);
+    _ = helpers.culledRectDraw(self.texture, rect, dst_adjusted, color, cull_x, cull_y);
 }
 
 pub fn drawDirect(self: *Sprite, pos: rl.Vector2, color: rl.Color) void {
@@ -244,9 +249,9 @@ pub fn drawDebug(self: *const Sprite, scene: *const Scene, pos: rl.Vector2) void
 
     const rect = blk: {
         if (self.flip_mask & @intFromEnum(FlipState.XFlip) == 0) {
-            break :blk self.sprite_texture_map_r[self.current_display_frame];
+            break :blk self.sprite_texture_map_r[self.current_display_frame.frame_idx];
         } else {
-            break :blk self.sprite_texture_map_l[self.current_display_frame];
+            break :blk self.sprite_texture_map_l[self.current_display_frame.frame_idx];
         }
     } orelse {
         return;

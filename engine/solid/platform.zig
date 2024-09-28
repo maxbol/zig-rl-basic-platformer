@@ -8,6 +8,7 @@ const Sprite = @import("../sprite.zig");
 const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
+const std = @import("std");
 
 pub const MAX_NO_OF_BEHAVIORS = 5;
 

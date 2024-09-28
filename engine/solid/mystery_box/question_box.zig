@@ -21,6 +21,7 @@ fn loadSoundDud() rl.Sound {
 }
 
 fn getAnimationBuffer(hidden_box: bool) MysteryBox.AnimationBuffer {
+    // @compileLog("Building mysterybox/question_box animation buffer...");
     var buffer = MysteryBox.AnimationBuffer{};
 
     buffer.writeAnimation(.Initial, 1, &.{if (hidden_box) 2 else 1});

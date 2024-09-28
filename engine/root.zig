@@ -59,3 +59,13 @@ export fn gameDraw(ctx: *anyopaque) callconv(.C) void {
     const game_state: *GameState = @ptrCast(@alignCast(ctx));
     return game_state.draw();
 }
+
+export fn gameNotifyHRStarted(ctx: *anyopaque) callconv(.C) void {
+    const game_state: *GameState = @ptrCast(@alignCast(ctx));
+    return game_state.notifyHRStarted();
+}
+
+export fn gameNotifyHRDone(ctx: *anyopaque) callconv(.C) void {
+    const game_state: *GameState = @ptrCast(@alignCast(ctx));
+    return game_state.notifyHRDone();
+}

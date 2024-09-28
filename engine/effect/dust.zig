@@ -13,6 +13,7 @@ fn loadTexture() rl.Texture2D {
 }
 
 fn getAnimationBuffer() Effect.AnimationBuffer {
+    // @compileLog("Building effect/dust animation buffer...");
     var buffer = Effect.AnimationBuffer{};
     buffer.writeAnimation(.Invisible, 1, &.{});
     buffer.writeAnimation(.Playing, 0.3, &.{ 2, 3, 4, 5, 6 });

@@ -25,7 +25,9 @@ pub const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{
     .Walk,
     .Attack,
     .Hit,
-}, 6);
+}, .{}, 6);
+
+pub const RespawnFn = *const fn (pos: shapes.IPos) Mob;
 
 behavior: *const MobBehavior,
 did_huntjump: bool = false,
@@ -34,7 +36,7 @@ is_hunting: bool = false,
 is_jumping: bool = false,
 mob_type: u8,
 next_huntjump_distance: f32 = 80,
-rand: std.Random,
+respawn: RespawnFn,
 rigid_body: RigidBody,
 speed: rl.Vector2,
 sprite: Sprite,
@@ -44,12 +46,12 @@ is_deleted: bool = false,
 is_dead: bool = false,
 
 pub const MobBehavior = struct {
-    walk_speed: f32 = 1 * 60,
-    fall_speed: f32 = 3.6 * 60,
-    hunt_speed: f32 = 2 * 60,
-    jump_speed: f32 = -4 * 60,
-    hunt_acceleration: f32 = 10 * 60,
-    line_of_sight: i32 = 10, // See 10 tiles ahead
+    walk_speed: f32,
+    fall_speed: f32,
+    hunt_speed: f32,
+    jump_speed: f32,
+    hunt_acceleration: f32,
+    line_of_sight: i32, // See 10 tiles ahead
 };
 
 pub fn Prefab(
@@ -64,19 +66,33 @@ pub fn Prefab(
         pub const Hitbox = hitbox;
         pub const spr_offset = sprite_offset;
 
-        pub fn init(pos: shapes.IPos, gamestate: *GameState) Mob {
+        pub fn init(pos: shapes.IPos) Mob {
             const sprite = SpritePrefab.init();
             var mob_hitbox = hitbox;
             mob_hitbox.x = @floatFromInt(pos.x);
             mob_hitbox.y = @floatFromInt(pos.y);
 
-            return Mob.init(mob_type, mob_hitbox, sprite, sprite_offset, behavior, gamestate.rand.random());
+            return Mob.init(
+                mob_type,
+                mob_hitbox,
+                sprite,
+                sprite_offset,
+                behavior,
+                @This().init,
+            );
         }
     };
 }
 
-pub fn init(mob_type: u8, hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2, behavior: *const MobBehavior, rand: std.Random) Mob {
-    var mob = Mob{
+pub fn init(
+    mob_type: u8,
+    hitbox: rl.Rectangle,
+    sprite: Sprite,
+    sprite_offset: rl.Vector2,
+    behavior: *const MobBehavior,
+    respawn: RespawnFn,
+) Mob {
+    return .{
         .mob_type = mob_type,
         .initial_hitbox = hitbox,
         .speed = rl.Vector2.init(0, 0),
@@ -84,12 +100,12 @@ pub fn init(mob_type: u8, hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: r
         .sprite_offset = sprite_offset,
         .rigid_body = RigidBody.init(hitbox),
         .behavior = behavior,
-        .rand = rand,
+        .respawn = respawn,
     };
 
-    mob.randomlyAcquireNextHuntjumpDistance();
+    // mob.randomlyAcquireNextHuntjumpDistance();
 
-    return mob;
+    // return mob;
 }
 
 pub fn actor(self: *Mob) Actor {
@@ -131,8 +147,22 @@ pub fn reset(self: *Mob) void {
         return;
     }
 
-    self.* = Mob.init(self.mob_type, self.initial_hitbox, self.sprite, self.sprite_offset, self.behavior, self.rand);
+    self.* = Mob.init(self.mob_type, self.initial_hitbox, self.sprite, self.sprite_offset, self.behavior, self.respawn);
     self.sprite.reset();
+}
+
+pub fn hotReload(self: *Mob) void {
+    if (self.is_deleted) {
+        return;
+    }
+
+    const is_dead = self.is_dead;
+
+    self.* = self.respawn(.{
+        .x = @intFromFloat(self.rigid_body.hitbox.x),
+        .y = @intFromFloat(self.rigid_body.hitbox.y),
+    });
+    self.is_dead = is_dead;
 }
 
 pub fn handleCollision(self: *Mob, scene: *Scene, axis: types.Axis, sign: i8, flags: u8, _: ?Solid) void {
@@ -223,8 +253,8 @@ fn detectNearbyPlayer(self: *Mob, scene: *Scene, delta_time: f32) void {
     self.is_hunting = is_hunting;
 }
 
-fn randomlyAcquireNextHuntjumpDistance(self: *Mob) void {
-    self.next_huntjump_distance = @floatFromInt(self.rand.intRangeAtMostBiased(u8, 80, 160));
+fn randomlyAcquireNextHuntjumpDistance(self: *Mob, scene: *const Scene) void {
+    self.next_huntjump_distance = @floatFromInt(scene.gamestate.rand.random().intRangeAtMostBiased(u8, 80, 160));
 }
 
 pub inline fn setPos(self: *Mob, pos: rl.Vector2) void {
@@ -271,7 +301,7 @@ pub fn update(self: *Mob, scene: *Scene, delta_time: f32) !void {
                 self.speed.y = self.behavior.jump_speed;
                 self.is_jumping = true;
                 self.did_huntjump = true;
-                self.randomlyAcquireNextHuntjumpDistance();
+                self.randomlyAcquireNextHuntjumpDistance(scene);
             }
         }
     }
@@ -327,10 +357,10 @@ pub const GreenSlime = @import("mob/slime.zig").GreenSlime;
 pub const prefabs: [1]type = .{
     GreenSlime,
 };
-pub fn initMobByIndex(index: usize, pos: rl.Vector2, gamestate: *GameState) Scene.SpawnError!Mob {
+pub fn initMobByIndex(index: usize, pos: rl.Vector2) Scene.SpawnError!Mob {
     inline for (prefabs, 0..) |MobPrefab, i| {
         if (i == index) {
-            return MobPrefab.init(shapes.IPos.fromVec2(pos), gamestate);
+            return MobPrefab.init(shapes.IPos.fromVec2(pos));
         }
     }
     return Scene.SpawnError.NoSuchItem;

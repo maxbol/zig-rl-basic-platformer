@@ -41,47 +41,67 @@ pub fn buildRectMap(comptime size: usize, source_width: f32, source_height: f32,
     return map;
 }
 
-pub fn culledRectDraw(texture: rl.Texture2D, rect: rl.Rectangle, dest: rl.Vector2, tint: rl.Color, cull_x: f32, cull_y: f32) struct { rl.Rectangle, rl.Vector2 } {
+pub fn culledRectDraw(texture: rl.Texture2D, rect: rl.Rectangle, dest: rl.Rectangle, tint: rl.Color, cull_x: f32, cull_y: f32) struct { rl.Rectangle, rl.Rectangle } {
     var r = rect;
     var d = dest;
+    const rot: f32 = 90;
 
     const width_dir = std.math.sign(r.width);
     const height_dir = std.math.sign(r.height);
 
     std.debug.assert(rect.width != 0);
+    std.debug.assert(rect.height != 0);
+    std.debug.assert(dest.width >= 0);
+    std.debug.assert(dest.height >= 0);
 
     // Some of this logic is somewhat convoluted and hard to understand.
     // Basically we swap some parts of the logic around based on whether the source
     // rect has a negative width or height, which indicates that is should be drawn
     // flipped. A flipped sprite needs to be culled somewhat differently.
+    //
+    const wscale = d.width / r.width;
+    _ = wscale; // autofix
+    const hscale = d.height / r.height;
+    _ = hscale; // autofix
 
-    if (width_dir * cull_x > 0) {
-        r.x += width_dir * cull_x;
+    const wcx = width_dir * cull_x;
+    const hcy = height_dir * cull_y;
+
+    if (wcx > 0) {
+        r.x += wcx;
         r.width -= cull_x;
+        d.width -= wcx;
         if (r.width >= 0) {
             d.x += cull_x;
         }
-    } else if (width_dir * cull_x < 0) {
+    } else if (wcx < 0) {
         r.width += cull_x;
+        d.width += wcx;
         if (r.width < 0) {
             d.x += cull_x;
         }
     }
 
-    if (height_dir * cull_y > 0) {
-        r.y += height_dir * cull_y;
+    if (hcy > 0) {
+        r.y += hcy;
         r.height -= cull_y;
+        d.height -= hcy;
         if (r.height >= 0) {
             d.y += cull_y;
         }
-    } else if (height_dir * cull_y < 0) {
+    } else if (hcy < 0) {
         r.height += cull_y;
+        d.height += hcy;
         if (r.height < 0) {
             d.y += cull_y;
         }
     }
 
-    texture.drawRec(r, d, tint);
+    d.x += d.width / 2;
+    d.y += d.height / 2;
+
+    texture.drawPro(r, d, .{ .x = d.width / 2, .y = d.height / 2 }, rot, tint);
+    // texture.drawPro(r, d, .{ .x = 0, .y = 0 }, rot, tint);
 
     return .{ r, d };
 }
@@ -192,8 +212,16 @@ pub fn openFile(path: []const u8, flags: std.fs.File.OpenFlags) !std.fs.File {
     };
 
     if (exists == false) {
-        _ = try cwd.createFile(path, .{});
+        if (flags.mode != .read_only) {
+            _ = try cwd.createFile(path, .{});
+        } else {
+            return error.FileNotFound;
+        }
     }
 
     return cwd.openFile(path, flags);
+}
+
+pub fn v2r(pos: rl.Vector2, size: rl.Vector2) rl.Rectangle {
+    return rl.Rectangle.init(pos.x, pos.y, size.x, size.y);
 }

@@ -57,7 +57,8 @@ pub fn drawRect(self: Tileset, tile_index: usize, dest: rl.Vector2, cull_x: f32,
         return;
     };
 
-    const drawn = helpers.culledRectDraw(self.getTexture(), rect, dest, tint, cull_x, cull_y);
+    const dst_rect = rl.Rectangle.init(dest.x, dest.y, rect.width, rect.height);
+    const drawn = helpers.culledRectDraw(self.getTexture(), rect, dst_rect, tint, cull_x, cull_y);
 
     if (debug.isDebugFlagSet(.ShowTilemapDebug)) {
         const r = drawn[0];

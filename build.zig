@@ -17,6 +17,7 @@ fn addDeps(b: *std.Build, m: *std.Build.Module, dep_opts: anytype) void {
 // runner.
 pub fn build(b: *std.Build) void {
     const game_only = b.option(bool, "game_only", "Build only the game, not the dev environment") orelse false;
+    const engine_dll_ts = b.option([]const u8, "engine_dll_ts", "Timestamp of the engine DLL") orelse null;
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -30,8 +31,13 @@ pub fn build(b: *std.Build) void {
 
     const dep_opts = .{ .target = target, .optimize = optimize, .shared = true };
 
+    const engine_lib_name = if (engine_dll_ts) |ts| blk: {
+        var name_buf: [256]u8 = undefined;
+        break :blk std.fmt.bufPrint(&name_buf, "engine-hr-{s}", .{ts}) catch @panic("Out of memory");
+    } else "engine";
+
     const engine_lib = b.addSharedLibrary(.{
-        .name = "engine",
+        .name = engine_lib_name,
         .root_source_file = b.path("engine/root.zig"),
         .target = target,
         .optimize = optimize,
@@ -39,6 +45,11 @@ pub fn build(b: *std.Build) void {
     });
     addDeps(b, &engine_lib.root_module, dep_opts);
     b.installArtifact(engine_lib);
+
+    const run_step = b.step("run", "Run the app");
+    const check = b.step("check", "Check if the program compiles");
+
+    check.dependOn(&engine_lib.step);
 
     if (!game_only) {
         const exe = b.addExecutable(.{
@@ -69,19 +80,8 @@ pub fn build(b: *std.Build) void {
         // This creates a build step. It will be visible in the `zig build --help` menu,
         // and can be selected like this: `zig build run`
         // This will evaluate the `run` step rather than the default, which is "install".
-        const run_step = b.step("run", "Run the app");
         run_step.dependOn(&run_cmd.step);
-
-        // ~~~ ZLS stuff ~~~
-        const check = b.step("check", "Check if the program compiles");
-        const check_exe = b.addExecutable(.{
-            .name = "knight-jumper-check",
-            .root_source_file = b.path("hotreload/root.zig"),
-            .target = target,
-            .optimize = optimize,
-        });
-        addDeps(b, &check_exe.root_module, dep_opts);
-        check.dependOn(&check_exe.step);
+        check.dependOn(&exe.step);
     }
 
     const engine_unit_tests = b.addTest(.{

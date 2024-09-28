@@ -14,12 +14,14 @@ const Tileset = @import("tileset/tileset.zig");
 
 allocator: std.mem.Allocator = undefined,
 current_music: *rl.Music = undefined,
+debug_mode: i16 = undefined,
 debug_flags: []const debug.DebugFlag = undefined,
 editor: *Editor = undefined,
 editor_mode: bool = false,
 font: rl.Font = undefined,
 game_over_counter: u32 = 0,
 game_over_texts: [][*:0]const u8 = undefined,
+hr_recompiling: bool = false,
 hud: HUD = undefined,
 music_gameover: rl.Music = undefined,
 music_level: rl.Music = undefined,
@@ -68,6 +70,7 @@ pub fn create() !*GameState {
 
     // Init debug flags
     gamestate.debug_flags = &.{ .ShowHitboxes, .ShowScrollState, .ShowFps, .ShowSpriteOutlines, .ShowTestedTiles, .ShowCollidedTiles, .ShowGridBoxes, .ShowTilemapDebug };
+    gamestate.debug_mode = -2;
     // debug.setDebugFlags(self.debug_flags);
 
     // Init game font
@@ -117,7 +120,16 @@ pub fn deinit(self: *GameState) void {
 }
 
 pub fn reload(self: *GameState) void {
-    _ = self; // autofix
+    self.scene.hotReload();
+    self.setDebugMode();
+}
+
+pub fn notifyHRStarted(self: *GameState) void {
+    self.hr_recompiling = true;
+}
+
+pub fn notifyHRDone(self: *GameState) void {
+    self.hr_recompiling = false;
 }
 
 pub fn update(self: *GameState) !void {
@@ -126,12 +138,17 @@ pub fn update(self: *GameState) !void {
         rl.seekMusicStream(self.current_music.*, 0);
         rl.playMusicStream(self.current_music.*);
     }
-    rl.updateMusicStream(self.current_music.*);
+    // rl.updateMusicStream(self.current_music.*);
     // Update
     //----------------------------------------------------------------------------------
     // TODO: Update your variables here
     //----------------------------------------------------------------------------------
     const delta_time = rl.getFrameTime();
+
+    if (delta_time > DT_TRESHOLD) {
+        std.debug.print("Stutter detected, throwing away frame\n", .{});
+        return;
+    }
 
     // Only run update jobs if window is not currently being resized to avoid weirdness/miscalculations
     // std.debug.print("{d} isWindowResized: {any}\n", .{ delta_time, rl.isWindowResized() });
@@ -149,11 +166,8 @@ pub fn update(self: *GameState) !void {
         }
 
         if (rl.isKeyPressed(rl.KeyboardKey.key_o)) {
-            if (debug.isDebugFlagSet(self.debug_flags[0])) {
-                debug.clearDebugFlags();
-            } else {
-                debug.setDebugFlags(self.debug_flags);
-            }
+            self.debug_mode = if (self.debug_mode == self.debug_flags.len - 1) -2 else self.debug_mode + 1;
+            self.setDebugMode();
         }
 
         if (rl.isKeyDown(rl.KeyboardKey.key_left_shift) and rl.isKeyPressed(rl.KeyboardKey.key_t)) {
@@ -197,6 +211,10 @@ pub fn draw(self: *GameState) void {
 
     if (debug.isDebugFlagSet(.ShowFps)) {
         rl.drawFPS(constants.GAME_SIZE_X - 150, constants.GAME_SIZE_Y - 20);
+    }
+
+    if (self.hr_recompiling) {
+        rl.drawTextEx(self.font, "Recompiling...", .{ .x = 30, .y = 30 }, 30, 0, rl.Color.white);
     }
 
     rl.endTextureMode();
@@ -275,3 +293,16 @@ fn generateTilesetTileFlagMap() [512]u8 {
 
     return fg_collision_data;
 }
+
+fn setDebugMode(self: *const GameState) void {
+    std.debug.print("Setting debug mode {d}\n", .{self.debug_mode});
+    debug.clearDebugFlags();
+    if (self.debug_mode == -1) {
+        debug.setDebugFlags(self.debug_flags);
+    } else if (self.debug_mode >= 0) {
+        debug.setDebugFlags(self.debug_flags[@as(usize, @intCast(self.debug_mode)) .. @as(usize, @intCast(self.debug_mode)) + 1]);
+    }
+}
+
+pub const MIN_ACCEPTABLE_FPS = 20;
+pub const DT_TRESHOLD: f32 = 1.0 / @as(f32, @floatFromInt(MIN_ACCEPTABLE_FPS));

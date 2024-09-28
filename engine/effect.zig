@@ -16,6 +16,7 @@ pub const AnimationBuffer = an.AnimationBuffer(
         .Invisible,
         .Playing,
     },
+    .{},
     6,
 );
 
@@ -24,7 +25,7 @@ pub fn Prefab(SpritePrefab: type) type {
         pub const width = SpritePrefab.SIZE_X;
         pub const height = SpritePrefab.SIZE_Y;
 
-        pub fn init(pos: rl.Vector2, onEffectFinished: Sprite.Callback, x_flip: bool) Effect {
+        pub fn init(pos: rl.Vector2, onEffectFinished: an.AnyAnimation.Callback, x_flip: bool) Effect {
             var sprite = SpritePrefab.init();
             sprite.setFlip(.XFlip, x_flip);
             return Effect.init(pos, sprite, onEffectFinished);
@@ -32,24 +33,21 @@ pub fn Prefab(SpritePrefab: type) type {
     };
 }
 
-onEffectFinished: Sprite.Callback,
+onEffectFinished: an.AnyAnimation.Callback,
 position: rl.Vector2,
 sprite: Sprite,
 initialized: bool = false,
 
-pub fn init(pos: rl.Vector2, sprite: Sprite, onEffectFinished: Sprite.Callback) Effect {
+pub fn init(pos: rl.Vector2, sprite: Sprite, onEffectFinished: an.AnyAnimation.Callback) Effect {
     return .{ .position = pos, .sprite = sprite, .onEffectFinished = onEffectFinished };
 }
 
-fn onAnimationFinished(ctx: *anyopaque, sprite: *Sprite, scene: *Scene) void {
+fn onAnimationFinished(ctx: *anyopaque, animation: *an.AnyAnimation) void {
     const self: *Effect = @ptrCast(@alignCast(ctx));
 
-    sprite.setAnimation(AnimationType.Invisible, .{});
+    self.sprite.setAnimation(AnimationType.Invisible, .{});
 
-    self.onEffectFinished.call(
-        sprite,
-        scene,
-    );
+    self.onEffectFinished.call(animation);
 }
 
 pub fn update(self: *Effect, scene: *Scene, dt: f32) !void {
@@ -65,6 +63,7 @@ pub fn update(self: *Effect, scene: *Scene, dt: f32) !void {
         );
         self.initialized = true;
     }
+
     try self.sprite.update(scene, dt);
 }
 
