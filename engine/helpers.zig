@@ -44,7 +44,7 @@ pub fn buildRectMap(comptime size: usize, source_width: f32, source_height: f32,
 pub fn culledRectDraw(texture: rl.Texture2D, rect: rl.Rectangle, dest: rl.Rectangle, tint: rl.Color, cull_x: f32, cull_y: f32) struct { rl.Rectangle, rl.Rectangle } {
     var r = rect;
     var d = dest;
-    const rot: f32 = 90;
+    const rot: f32 = 0;
 
     const width_dir = std.math.sign(r.width);
     const height_dir = std.math.sign(r.height);
