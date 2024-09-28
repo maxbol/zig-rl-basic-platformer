@@ -1,5 +1,6 @@
 const Actor = @import("actor.zig");
 const Effect = @import("../effect.zig");
+const GameState = @import("../gamestate.zig");
 const Player = @This();
 const RigidBody = @import("rigid_body.zig");
 const Scene = @import("../scene.zig");
@@ -10,7 +11,6 @@ const an = @import("../animation.zig");
 const constants = @import("../constants.zig");
 const controls = @import("../controls.zig");
 const debug = @import("../debug.zig");
-const globals = @import("../globals.zig");
 const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
@@ -148,14 +148,15 @@ fn handleSquish(ctx: *anyopaque, scene: *Scene, _: types.Axis, _: i8, _: u8) voi
 }
 
 inline fn die(self: *Player, scene: *Scene) void {
+    const gamestate = scene.gamestate;
     self.lives = 0;
     self.rigid_body.mode = .Static;
     self.sprite.setAnimation(AnimationType.Death, .{
-        .on_animation_finished = .{ .context = self, .call = handleGameOver },
+        .on_animation_finished = .{ .context = self, .call_ptr = handleGameOver },
     });
     scene.game_over_screen_elapsed = 0;
-    globals.current_music = &globals.music_gameover;
-    rl.playMusicStream(globals.current_music.*);
+    gamestate.current_music = &gamestate.music_gameover;
+    rl.playMusicStream(gamestate.current_music.*);
 }
 
 pub fn handleCollision(self: *Player, scene: *Scene, axis: types.Axis, sign: i8, flags: u8, solid: ?Solid) void {
@@ -177,7 +178,7 @@ pub fn handleCollision(self: *Player, scene: *Scene, axis: types.Axis, sign: i8,
                         .y = self.rigid_body.hitbox.y + self.rigid_body.hitbox.height - (Effect.Dust.height),
                     },
                     .{
-                        .call = handleEffectOver,
+                        .call_ptr = handleEffectOver,
                         .context = self,
                     },
                     self.face_dir == 1,
@@ -256,7 +257,7 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
 
     // Rolling
     if (self.speed.x != 0 and self.isCurrentAnimation(.Roll) and !self.is_stunlocked and is_grounded and controls.isKeyboardControlPressed(controls.KBD_ROLL)) {
-        self.sprite.setAnimation(AnimationType.Roll, .{ .on_animation_finished = .{ .context = self, .call = revertToIdle } });
+        self.sprite.setAnimation(AnimationType.Roll, .{ .on_animation_finished = .{ .context = self, .call_ptr = revertToIdle } });
         self.speed.x = std.math.sign(self.speed.x) * roll_speed;
     }
     const is_rolling = self.isCurrentAnimation(.Roll);

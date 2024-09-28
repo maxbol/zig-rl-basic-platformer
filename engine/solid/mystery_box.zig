@@ -1,11 +1,11 @@
 const Actor = @import("../actor/actor.zig");
+const GameState = @import("../gamestate.zig");
 const MysteryBox = @This();
 const Scene = @import("../scene.zig");
 const Solid = @import("solid.zig");
 const Sprite = @import("../sprite.zig");
 const an = @import("../animation.zig");
 const constants = @import("../constants.zig");
-const globals = @import("../globals.zig");
 const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const types = @import("../types.zig");
@@ -253,7 +253,7 @@ pub const prefabs = [_]type{
     QSpringC5,
 };
 
-pub fn initMysteryBoxByIndex(index: usize, pos: shapes.IPos) !MysteryBox {
+pub fn initMysteryBoxByIndex(index: usize, pos: shapes.IPos, _: *GameState) !MysteryBox {
     inline for (prefabs, 0..) |MysteryBoxPrefab, i| {
         if (i == index) {
             return MysteryBoxPrefab.init(pos);

@@ -1,5 +1,6 @@
 const Actor = @import("actor.zig");
 const Collectable = @This();
+const GameState = @import("../gamestate.zig");
 const Player = @import("player.zig");
 const RigidBody = @import("rigid_body.zig");
 const Scene = @import("../scene.zig");
@@ -197,8 +198,8 @@ pub fn update(self: *Collectable, scene: *Scene, delta_time: f32) !void {
         return;
     }
 
-    if (rl.checkCollisionRecs(scene.player.actor().getHitboxRect(), self.rigid_body.hitbox)) {
-        if (self.onCollected(self, scene.player)) {
+    if (rl.checkCollisionRecs(scene.gamestate.player.actor().getHitboxRect(), self.rigid_body.hitbox)) {
+        if (self.onCollected(self, &scene.gamestate.player)) {
             self.is_collected = true;
             rl.playSound(self.sound);
         }
@@ -235,7 +236,7 @@ pub const prefabs: [2]type = .{
     HealthGrape,
 };
 
-pub fn initCollectableByIndex(index: usize, pos: rl.Vector2) !Collectable {
+pub fn initCollectableByIndex(index: usize, pos: rl.Vector2, _: *GameState) !Collectable {
     inline for (prefabs, 0..) |CollectablePrefab, i| {
         if (i == index) {
             return CollectablePrefab.init(shapes.IPos.fromVec2(pos));

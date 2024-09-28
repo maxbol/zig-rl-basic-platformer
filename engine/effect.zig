@@ -3,6 +3,7 @@ const Scene = @import("scene.zig");
 const Sprite = @import("sprite.zig");
 const an = @import("animation.zig");
 const rl = @import("raylib");
+const std = @import("std");
 
 pub const AnimationType = enum(u8) {
     Invisible,
@@ -46,7 +47,6 @@ fn onAnimationFinished(ctx: *anyopaque, sprite: *Sprite, scene: *Scene) void {
     sprite.setAnimation(AnimationType.Invisible, .{});
 
     self.onEffectFinished.call(
-        self.onEffectFinished.context,
         sprite,
         scene,
     );
@@ -58,7 +58,7 @@ pub fn update(self: *Effect, scene: *Scene, dt: f32) !void {
             AnimationType.Playing,
             .{
                 .on_animation_finished = .{
-                    .call = onAnimationFinished,
+                    .call_ptr = onAnimationFinished,
                     .context = self,
                 },
             },

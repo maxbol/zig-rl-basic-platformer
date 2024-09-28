@@ -1,5 +1,6 @@
 const Actor = @import("actor/actor.zig");
 const Editor = @This();
+const GameState = @import("gamestate.zig");
 const Overlay = @import("editor/overlay.zig");
 const Palette = @import("editor/palette.zig");
 const Scene = @import("scene.zig");
@@ -8,7 +9,6 @@ const TileLayer = @import("tile_layer/tile_layer.zig");
 const an = @import("animation.zig");
 const constants = @import("constants.zig");
 const controls = @import("controls.zig");
-const globals = @import("globals.zig");
 const helpers = @import("helpers.zig");
 const rg = @import("raygui");
 const rl = @import("raylib");
@@ -18,6 +18,7 @@ const std = @import("std");
 allocator: std.mem.Allocator,
 
 active_layer_idx: i16,
+gamestate: *GameState,
 scene: *Scene,
 vmouse: *controls.VirtualMouse,
 
@@ -40,7 +41,7 @@ save_btn_hover: bool = false,
 
 const tile_palette_cols_per_row = 9;
 
-pub fn create(allocator: std.mem.Allocator, scene: *Scene, vmouse: *controls.VirtualMouse) !*Editor {
+pub fn create(allocator: std.mem.Allocator, gamestate: *GameState, scene: *Scene, vmouse: *controls.VirtualMouse) !*Editor {
     const palette_mob = try allocator.create(Palette.MobPalette);
     const palette_collectables = try allocator.create(Palette.CollectablePalette);
     const palette_platform = try allocator.create(Palette.PlatformPalette);
@@ -85,15 +86,16 @@ pub fn create(allocator: std.mem.Allocator, scene: *Scene, vmouse: *controls.Vir
         .active_layer_idx = 0,
         .active_palette = .None,
         .allocator = allocator,
+        .gamestate = gamestate,
         .overlay_collectables = overlay_collectables,
         .overlay_mob = overlay_mob,
-        .overlay_platform = overlay_platform,
         .overlay_mysterybox = overlay_mysterybox,
+        .overlay_platform = overlay_platform,
         .overlay_tiles = overlay_tiles,
         .palette_collectables = palette_collectables,
         .palette_mob = palette_mob,
-        .palette_platform = palette_platform,
         .palette_mysterybox = palette_mysterybox,
+        .palette_platform = palette_platform,
         .palette_tiles = palette_tiles,
         .scene = scene,
         .vmouse = vmouse,
@@ -140,8 +142,8 @@ fn updateSaveButton(self: *Editor) void {
     self.save_btn_hover = rl.checkCollisionPointRec(self.vmouse.pos, self.save_btn_rect);
 
     if (rl.isMouseButtonPressed(rl.MouseButton.mouse_button_left) and self.save_btn_hover) {
-        const file = helpers.openFile(globals.scene_file, .{ .mode = .write_only }) catch {
-            std.log.err("Failed to open file {s}\n", .{globals.scene_file});
+        const file = helpers.openFile(self.scene.gamestate.scene_file, .{ .mode = .write_only }) catch {
+            std.log.err("Failed to open file {s}\n", .{self.scene.gamestate.scene_file});
             std.process.exit(1);
         };
         self.scene.writeBytes(file.writer(), false) catch |err| {
@@ -149,13 +151,13 @@ fn updateSaveButton(self: *Editor) void {
             std.process.exit(1);
         };
 
-        rl.playSound(globals.on_save_sfx);
+        rl.playSound(self.gamestate.on_save_sfx);
     }
 }
 
 fn drawSaveButton(self: *const Editor) void {
     const color = if (self.save_btn_hover) rl.Color.green else rl.Color.white;
-    rl.drawTextEx(globals.font, "Save", rl.Vector2.init(self.save_btn_rect.x + 5, self.save_btn_rect.y + 5), 18, 2, color);
+    rl.drawTextEx(self.gamestate.font, "Save", rl.Vector2.init(self.save_btn_rect.x + 5, self.save_btn_rect.y + 5), 18, 2, color);
     rl.drawRectangleLinesEx(self.save_btn_rect, 2, color);
 }
 

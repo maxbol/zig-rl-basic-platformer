@@ -1,4 +1,5 @@
 const Behavior = @import("platform_behaviors.zig");
+const GameState = @import("../gamestate.zig");
 const Platform = @import("platform.zig");
 const RigidBody = @import("rigid_body.zig");
 const Scene = @import("../scene.zig");
@@ -158,7 +159,8 @@ pub const prefabs: [8]type = .{
     Platform7,
     Platform8,
 };
-pub fn initPlatformByIndex(index: usize, pos: shapes.IPos) !Platform {
+pub fn initPlatformByIndex(index: usize, pos: shapes.IPos, gamestate: *GameState) !Platform {
+    _ = gamestate; // autofix
     inline for (prefabs, 0..) |PlatformPrefab, i| {
         if (i == index) {
             return PlatformPrefab.init(pos);

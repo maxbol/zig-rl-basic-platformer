@@ -18,7 +18,7 @@ scroll_x_pixels: f32 = 0,
 scroll_y_pixels: f32 = 0,
 
 pub fn update(self: *Scrollable, scene: *Scene, layer: TileLayer) an.AnimationBufferError!void {
-    const viewport = scene.viewport;
+    const viewport = scene.gamestate.viewport;
     const scroll_state = scene.scroll_state;
 
     const tile_size = layer.getTileset().getTileSize();

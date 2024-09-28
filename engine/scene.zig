@@ -1,4 +1,5 @@
 const Actor = @import("actor/actor.zig");
+const GameState = @import("gamestate.zig");
 const Scene = @This();
 const Sprite = @import("sprite.zig");
 const Solid = @import("solid/solid.zig");
@@ -6,7 +7,6 @@ const Tileset = @import("tileset/tileset.zig");
 const Viewport = @import("viewport.zig");
 const constants = @import("constants.zig");
 const debug = @import("debug.zig");
-const globals = @import("globals.zig");
 const helpers = @import("helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("shapes.zig");
@@ -15,11 +15,10 @@ const TileLayer = @import("tile_layer/tile_layer.zig");
 
 // Initial state
 allocator: std.mem.Allocator,
-viewport: *Viewport,
+gamestate: *GameState,
 main_layer: TileLayer,
 bg_layers: std.ArrayList(TileLayer),
 fg_layers: std.ArrayList(TileLayer),
-player: *Actor.Player = undefined,
 player_starting_pos: rl.Vector2,
 mobs: std.ArrayList(Actor.Mob),
 collectables: std.ArrayList(Actor.Collectable),
@@ -77,7 +76,7 @@ pub const SceneActorIterator = struct {
 
         if (idx == 0) {
             self.idx += 1;
-            return self.scene.player.actor();
+            return self.scene.gamestate.player.actor();
         }
 
         idx -= 1;
@@ -110,8 +109,7 @@ pub fn create(
     main_layer: TileLayer,
     bg_layers: ?std.ArrayList(TileLayer),
     fg_layers: ?std.ArrayList(TileLayer),
-    viewport: *Viewport,
-    player: *Actor.Player,
+    gamestate: *GameState,
     player_starting_pos: rl.Vector2,
     mobs: std.ArrayList(Actor.Mob),
     collectables: std.ArrayList(Actor.Collectable),
@@ -125,10 +123,9 @@ pub fn create(
         .main_layer = main_layer,
         .bg_layers = bg_layers orelse std.ArrayList(TileLayer).init(allocator),
         .fg_layers = fg_layers orelse std.ArrayList(TileLayer).init(allocator),
-        .viewport = viewport,
+        .gamestate = gamestate,
 
         // Actors
-        .player = player,
         .player_starting_pos = player_starting_pos,
         .mobs = mobs,
         .collectables = collectables,
@@ -158,7 +155,7 @@ pub fn destroy(self: *const Scene) void {
     self.allocator.destroy(self);
 }
 
-pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
+pub fn readBytes(allocator: std.mem.Allocator, reader: anytype, gamestate: *GameState) !*Scene {
     // Read version
     const version = try reader.readByte();
 
@@ -237,6 +234,7 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
             try Actor.Mob.initMobByIndex(
                 mob_type,
                 mob_pos,
+                gamestate,
             ),
         );
     }
@@ -253,6 +251,7 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
             try Actor.Collectable.initCollectableByIndex(
                 collectable_type,
                 collectable_pos,
+                gamestate,
             ),
         );
     }
@@ -268,6 +267,7 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
             try Solid.Platform.initPlatformByIndex(
                 platform_type,
                 shapes.IPos.fromVec2(platform_pos),
+                gamestate,
             ),
         );
     }
@@ -283,6 +283,7 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
             try Solid.MysteryBox.initMysteryBoxByIndex(
                 mystery_box_type,
                 shapes.IPos.fromVec2(mystery_box_pos),
+                gamestate,
             ),
         );
     }
@@ -292,8 +293,7 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype) !*Scene {
         main_layer,
         bg_layers,
         fg_layers,
-        &globals.viewport,
-        &globals.player,
+        gamestate,
         rl.Vector2.init(0, 0),
         mobs,
         collectables,
@@ -463,7 +463,7 @@ pub fn reset(self: *Scene) void {
         self.collectables.items[i].reset();
     }
 
-    self.player.reset();
+    self.gamestate.player.reset();
 }
 
 pub fn getActorIterator(self: *Scene) SceneActorIterator {
@@ -491,13 +491,13 @@ pub fn deleteMysteryBox(self: *Scene, mystery_box_idx: usize) void {
 }
 
 pub fn spawnCollectable(self: *Scene, collectable_type: usize, pos: rl.Vector2) !*Actor.Collectable {
-    const collectable: Actor.Collectable = try Actor.Collectable.initCollectableByIndex(collectable_type, pos);
+    const collectable: Actor.Collectable = try Actor.Collectable.initCollectableByIndex(collectable_type, pos, self.gamestate);
     try self.collectables.append(collectable);
     return &self.collectables.items[self.collectables.items.len - 1];
 }
 
 pub fn spawnMob(self: *Scene, mob_type: usize, pos: rl.Vector2) !*Actor.Mob {
-    const mob: Actor.Mob = try Actor.Mob.initMobByIndex(mob_type, pos);
+    const mob: Actor.Mob = try Actor.Mob.initMobByIndex(mob_type, pos, self.gamestate);
     try self.mobs.append(mob);
     return &self.mobs.items[self.mobs.items.len - 1];
 }
@@ -506,6 +506,7 @@ pub fn spawnPlatform(self: *Scene, platform_type: usize, pos: rl.Vector2) !*Soli
     const platform: Solid.Platform = try Solid.Platform.initPlatformByIndex(
         platform_type,
         shapes.IPos.fromVec2(pos),
+        self.gamestate,
     );
     try self.platforms.append(platform);
     return &self.platforms.items[self.platforms.items.len - 1];
@@ -515,6 +516,7 @@ pub fn spawnMysteryBox(self: *Scene, mystery_box_type: usize, pos: rl.Vector2) !
     const mystery_box: Solid.MysteryBox = try Solid.MysteryBox.initMysteryBoxByIndex(
         mystery_box_type,
         shapes.IPos.fromVec2(pos),
+        self.gamestate,
     );
     try self.mystery_boxes.append(mystery_box);
     return &self.mystery_boxes.items[self.mystery_boxes.items.len - 1];
@@ -543,21 +545,21 @@ pub fn removeMob(self: *Scene, mob_idx: usize) void {
     self.mobs[mob_idx].delete();
 }
 
-pub fn update(self: *Scene, delta_time: f32) !void {
+pub fn update(self: *Scene, delta_time: f32, game_state: *GameState) !void {
     if (!self.first_frame_initialization_done) {
         self.first_frame_initialization_done = true;
-        self.player.actor().setPos(self.player_starting_pos);
+        self.gamestate.player.actor().setPos(self.player_starting_pos);
     }
 
     const pixel_size = self.main_layer.getPixelSize();
-    self.max_x_scroll = @max(pixel_size.x - self.viewport.rectangle.width, 0);
-    self.max_y_scroll = @max(pixel_size.y - self.viewport.rectangle.height, 0);
+    self.max_x_scroll = @max(pixel_size.x - self.gamestate.viewport.rectangle.width, 0);
+    self.max_y_scroll = @max(pixel_size.y - self.gamestate.viewport.rectangle.height, 0);
 
     self.scroll_state.x = @min(@max(self.viewport_x_offset / self.max_x_scroll, 0), 1);
     self.scroll_state.y = @min(@max(self.viewport_y_offset / self.max_y_scroll, 0), 1);
 
-    self.viewport_x_limit = self.viewport_x_offset + self.viewport.rectangle.width;
-    self.viewport_y_limit = self.viewport_y_offset + self.viewport.rectangle.height;
+    self.viewport_x_limit = self.viewport_x_offset + self.gamestate.viewport.rectangle.width;
+    self.viewport_y_limit = self.viewport_y_offset + self.gamestate.viewport.rectangle.height;
 
     var layer_tint: ?rl.Color = null;
     if (self.game_over_screen_elapsed != -1) {
@@ -601,17 +603,17 @@ pub fn update(self: *Scene, delta_time: f32) !void {
         try self.collectables.items[i].update(self, delta_time);
     }
 
-    try self.player.update(self, delta_time);
+    try self.gamestate.player.update(self, delta_time);
 
     if (self.game_over_screen_elapsed >= game_over_screen_duration + game_over_screen_delay) {
         // Post game over handler
         self.game_over_screen_elapsed = -1;
-        globals.game_over_counter += 1;
+        game_state.game_over_counter += 1;
         self.reset();
     }
 }
 
-pub fn draw(self: *const Scene) void {
+pub fn draw(self: *const Scene, game_state: *const GameState) void {
     for (self.bg_layers.items, 0..) |layer, i| {
         const layer_mask_index = -@as(i16, @intCast(self.bg_layers.items.len - i));
         if (self.layer_visibility_treshold != null and layer_mask_index > self.layer_visibility_treshold.?) {
@@ -642,7 +644,7 @@ pub fn draw(self: *const Scene) void {
         }
     }
 
-    self.player.draw(self);
+    self.gamestate.player.draw(self);
 
     for (self.fg_layers.items, 0..) |layer, i| {
         const layer_mask_index: i16 = @intCast(i + 1);
@@ -654,10 +656,10 @@ pub fn draw(self: *const Scene) void {
 
     // Draw gameover text
     if (self.game_over_screen_elapsed >= game_over_screen_duration) {
-        const text = globals.game_over_texts[globals.game_over_counter % globals.game_over_texts.len];
-        const game_over_text_x = self.viewport.rectangle.x + (self.viewport.rectangle.width / 2) - 130;
-        const game_over_text_y = self.viewport.rectangle.y + (self.viewport.rectangle.height / 2) - 30;
-        rl.drawTextEx(globals.font, text, .{ .x = game_over_text_x, .y = game_over_text_y }, 12, 1, rl.Color.white);
+        const text = game_state.game_over_texts[game_state.game_over_counter % game_state.game_over_texts.len];
+        const game_over_text_x = self.gamestate.viewport.rectangle.x + (self.gamestate.viewport.rectangle.width / 2) - 130;
+        const game_over_text_y = self.gamestate.viewport.rectangle.y + (self.gamestate.viewport.rectangle.height / 2) - 30;
+        rl.drawTextEx(game_state.font, text, .{ .x = game_over_text_x, .y = game_over_text_y }, 12, 1, rl.Color.white);
     }
 }
 
@@ -672,7 +674,7 @@ pub fn drawDebug(self: *const Scene) void {
         self.mobs.items[i].drawDebug(self);
     }
 
-    self.player.drawDebug(self);
+    self.gamestate.player.drawDebug(self);
 
     for (self.fg_layers.items) |layer| {
         layer.drawDebug(self);
@@ -689,8 +691,8 @@ pub fn drawDebug(self: *const Scene) void {
     };
     rl.drawText(
         debug_label,
-        @intFromFloat(self.viewport.rectangle.x + self.viewport.rectangle.width - 200),
-        @intFromFloat(self.viewport.rectangle.y + self.viewport.rectangle.height - 100),
+        @intFromFloat(self.gamestate.viewport.rectangle.x + self.gamestate.viewport.rectangle.width - 200),
+        @intFromFloat(self.gamestate.viewport.rectangle.y + self.gamestate.viewport.rectangle.height - 100),
         16,
         rl.Color.red,
     );
@@ -699,10 +701,10 @@ pub fn drawDebug(self: *const Scene) void {
 pub fn getViewportAdjustedPos(self: *const Scene, comptime T: type, pos: T) T {
     var new_pos = pos;
 
-    new_pos.x += self.viewport.rectangle.x;
+    new_pos.x += self.gamestate.viewport.rectangle.x;
     new_pos.x -= self.viewport_x_offset;
 
-    new_pos.y += self.viewport.rectangle.y;
+    new_pos.y += self.gamestate.viewport.rectangle.y;
     new_pos.y -= self.viewport_y_offset;
 
     return new_pos;
@@ -757,8 +759,8 @@ pub fn setViewportOffset(self: *Scene, viewport_offset: rl.Vector2) void {
 
 pub fn centerViewportOnPos(self: *Scene, pos: anytype) void {
     self.setViewportOffset(.{
-        .x = @min(@max(pos.x - (self.viewport.rectangle.width / 2), 0), self.max_x_scroll),
-        .y = @min(@max(pos.y - (self.viewport.rectangle.height / 2), 0), self.max_y_scroll),
+        .x = @min(@max(pos.x - (self.gamestate.viewport.rectangle.width / 2), 0), self.max_x_scroll),
+        .y = @min(@max(pos.y - (self.gamestate.viewport.rectangle.height / 2), 0), self.max_y_scroll),
     });
 }
 
@@ -807,10 +809,10 @@ pub fn collideAt(self: *Scene, rect: shapes.IRect, grid_rect: shapes.IRect) ?Col
     return null;
 }
 
-pub fn loadSceneFromFile(allocator: std.mem.Allocator, file_path: []const u8) !*Scene {
+pub fn loadSceneFromFile(allocator: std.mem.Allocator, file_path: []const u8, gamestate: *GameState) !*Scene {
     const file = try helpers.openFile(file_path, .{ .mode = .read_only });
     defer file.close();
-    return readBytes(allocator, file.reader());
+    return readBytes(allocator, file.reader(), gamestate);
 }
 
 pub const SpawnError = error{
