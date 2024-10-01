@@ -21,12 +21,6 @@ pub const AnimationType = enum(u8) {
     Hit,
 };
 
-pub const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{
-    .Walk,
-    .Attack,
-    .Hit,
-}, .{}, 6);
-
 pub const RespawnFn = *const fn (pos: shapes.IPos) Mob;
 
 behavior: *const MobBehavior,
@@ -39,7 +33,7 @@ next_huntjump_distance: f32 = 80,
 respawn: RespawnFn,
 rigid_body: RigidBody,
 speed: rl.Vector2,
-sprite: Sprite,
+sprite: an.Sprite,
 sprite_offset: rl.Vector2,
 
 is_deleted: bool = false,
@@ -59,15 +53,15 @@ pub fn Prefab(
     hitbox: rl.Rectangle,
     sprite_offset: rl.Vector2,
     behavior: *const MobBehavior,
-    SpritePrefab: anytype,
+    getSpriteReader: *const fn () an.AnySpriteBuffer,
 ) type {
     return struct {
-        pub const Sprite = SpritePrefab;
         pub const Hitbox = hitbox;
+        pub const sprite_reader = getSpriteReader;
         pub const spr_offset = sprite_offset;
 
         pub fn init(pos: shapes.IPos) Mob {
-            const sprite = SpritePrefab.init();
+            const sprite = sprite_reader().sprite() catch @panic("Failed to read sprite");
             var mob_hitbox = hitbox;
             mob_hitbox.x = @floatFromInt(pos.x);
             mob_hitbox.y = @floatFromInt(pos.y);
@@ -87,7 +81,7 @@ pub fn Prefab(
 pub fn init(
     mob_type: u8,
     hitbox: rl.Rectangle,
-    sprite: Sprite,
+    sprite: an.Sprite,
     sprite_offset: rl.Vector2,
     behavior: *const MobBehavior,
     respawn: RespawnFn,
@@ -142,13 +136,13 @@ fn setPosCast(ctx: *anyopaque, pos: rl.Vector2) void {
     self.setPos(pos);
 }
 
-pub fn reset(self: *Mob) void {
+pub fn reset(self: *Mob) !void {
     if (self.is_deleted) {
         return;
     }
 
     self.* = Mob.init(self.mob_type, self.initial_hitbox, self.sprite, self.sprite_offset, self.behavior, self.respawn);
-    self.sprite.reset();
+    try self.sprite.reset();
 }
 
 pub fn hotReload(self: *Mob) void {
@@ -322,23 +316,23 @@ pub fn update(self: *Mob, scene: *Scene, delta_time: f32) !void {
     }
 
     if (self.speed.x > 0) {
-        self.sprite.setFlip(Sprite.FlipState.XFlip, false);
+        self.sprite.flip_mask.x = false;
     } else if (self.speed.x < 0) {
-        self.sprite.setFlip(Sprite.FlipState.XFlip, true);
+        self.sprite.flip_mask.x = true;
     }
 
     // Move the mob
     self.rigid_body.move(scene, types.Axis.X, self.speed.x * delta_time, self);
     self.rigid_body.move(scene, types.Axis.Y, self.speed.y * delta_time, self);
 
-    try self.sprite.update(scene, delta_time);
+    self.sprite.update(delta_time);
 }
 
 pub fn draw(self: *const Mob, scene: *const Scene) void {
     if (self.is_deleted or self.is_dead) {
         return;
     }
-    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.rigid_body.hitbox);
+    const sprite_pos = an.DrawPosition.init(self.rigid_body.hitbox, .TopLeft, self.sprite_offset);
     self.sprite.draw(scene, sprite_pos, rl.Color.white);
 }
 
@@ -346,7 +340,7 @@ pub fn drawDebug(self: *const Mob, scene: *const Scene) void {
     if (self.is_deleted or self.is_dead) {
         return;
     }
-    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.rigid_body.hitbox);
+    const sprite_pos = an.DrawPosition.init(self.rigid_body.hitbox, .TopLeft, self.sprite_offset);
 
     self.sprite.drawDebug(scene, sprite_pos);
     self.rigid_body.drawDebug(scene);

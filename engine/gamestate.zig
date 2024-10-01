@@ -16,6 +16,7 @@ allocator: std.mem.Allocator = undefined,
 current_music: *rl.Music = undefined,
 debug_mode: i16 = undefined,
 debug_flags: []const debug.DebugFlag = undefined,
+debug_sprite_previewer: ?debug.SpriteDebugPreviewer = null,
 editor: *Editor = undefined,
 editor_mode: bool = false,
 font: rl.Font = undefined,
@@ -27,6 +28,7 @@ music_gameover: rl.Music = undefined,
 music_level: rl.Music = undefined,
 on_save_sfx: rl.Sound = undefined,
 player: Actor.Player = undefined,
+post_processing_shader: rl.Shader = undefined,
 rand: std.rand.DefaultPrng = undefined,
 render_texture: rl.RenderTexture2D = undefined,
 scene: *Scene = undefined,
@@ -71,6 +73,7 @@ pub fn create() !*GameState {
     // Init debug flags
     gamestate.debug_flags = &.{ .ShowHitboxes, .ShowScrollState, .ShowFps, .ShowSpriteOutlines, .ShowTestedTiles, .ShowCollidedTiles, .ShowGridBoxes, .ShowTilemapDebug };
     gamestate.debug_mode = -2;
+    gamestate.debug_sprite_previewer = null;
     // debug.setDebugFlags(self.debug_flags);
 
     // Init game font
@@ -92,16 +95,17 @@ pub fn create() !*GameState {
     // Init virtual mouse
     gamestate.vmouse = controls.VirtualMouse{};
 
+    // Init post processing shader
+    gamestate.setupPostProcessing();
+
     // Uncomment this to regenerate the tileset:
     // rebuildAndStoreDefaultTileset(allocator, "data/tilesets/default.tileset");
 
     // Init scene
-    gamestate.scene_file = "data/scenes/level1.scene";
-    gamestate.scene = Scene.loadSceneFromFile(gamestate.allocator, gamestate.scene_file, gamestate) catch |err| {
+    gamestate.loadSceneFromFile("data/scenes/level1.scene") catch |err| {
         std.log.err("Error loading scene from file: {!}\n", .{err});
         std.process.exit(1);
     };
-    gamestate.scene.scroll_state = .{ .x = 0, .y = 1 };
 
     // Editor
     gamestate.editor = try Editor.create(gamestate.allocator, gamestate, gamestate.scene, &gamestate.vmouse);
@@ -113,6 +117,20 @@ pub fn create() !*GameState {
     return gamestate;
 }
 
+pub fn setupPostProcessing(gamestate: *GameState) void {
+    gamestate.post_processing_shader = rl.loadShader("", "assets/shaders/bloom.fs");
+
+    const size_loc = rl.getShaderLocation(gamestate.post_processing_shader, "size");
+    const samples_loc = rl.getShaderLocation(gamestate.post_processing_shader, "samples");
+    const quality_loc = rl.getShaderLocation(gamestate.post_processing_shader, "quality");
+    const size = rl.Vector2.init(constants.GAME_SIZE_X, constants.GAME_SIZE_Y);
+    const samples: f32 = 7;
+    const quality: f32 = 0.1;
+    rl.setShaderValue(gamestate.post_processing_shader, size_loc, &size, rl.ShaderUniformDataType.shader_uniform_vec2);
+    rl.setShaderValue(gamestate.post_processing_shader, samples_loc, &samples, rl.ShaderUniformDataType.shader_uniform_float);
+    rl.setShaderValue(gamestate.post_processing_shader, quality_loc, &quality, rl.ShaderUniformDataType.shader_uniform_float);
+}
+
 pub fn deinit(self: *GameState) void {
     self.scene.destroy();
     self.editor.destroy();
@@ -122,6 +140,7 @@ pub fn deinit(self: *GameState) void {
 pub fn reload(self: *GameState) void {
     self.scene.hotReload();
     self.setDebugMode();
+    self.setupPostProcessing();
 }
 
 pub fn notifyHRStarted(self: *GameState) void {
@@ -162,12 +181,16 @@ pub fn update(self: *GameState) !void {
         }
 
         if (rl.isKeyPressed(rl.KeyboardKey.key_r)) {
-            self.scene.reset();
+            try self.scene.reset();
         }
 
         if (rl.isKeyPressed(rl.KeyboardKey.key_o)) {
             self.debug_mode = if (self.debug_mode == self.debug_flags.len - 1) -2 else self.debug_mode + 1;
             self.setDebugMode();
+        }
+
+        if (rl.isKeyPressed(rl.KeyboardKey.key_u)) {
+            self.debug_sprite_previewer = if (self.debug_sprite_previewer == null) debug.SpriteDebugPreviewer.init(Actor.Player.Knight.sprite_reader()) else null;
         }
 
         if (rl.isKeyDown(rl.KeyboardKey.key_left_shift) and rl.isKeyPressed(rl.KeyboardKey.key_t)) {
@@ -178,7 +201,7 @@ pub fn update(self: *GameState) !void {
         self.viewport.update(delta_time);
         self.scene.layer_visibility_treshold = null;
         try self.scene.update(delta_time, self);
-        try self.hud.update(self.scene, delta_time);
+        self.hud.update(delta_time);
 
         if (self.editor_mode) {
             try self.editor.update(delta_time);
@@ -199,14 +222,19 @@ pub fn draw(self: *GameState) void {
 
     self.vmouse.update(scale);
 
-    self.viewport.draw();
-    self.scene.draw(self);
-    self.hud.draw(self.scene);
+    if (self.debug_sprite_previewer) |previewer| {
+        std.debug.print("Drawing sprite previewer {any}\n", .{previewer});
+        previewer.draw();
+    } else {
+        self.viewport.draw();
+        self.scene.draw(self);
+        self.hud.draw(self.scene);
 
-    self.scene.drawDebug();
+        self.scene.drawDebug();
 
-    if (self.editor_mode) {
-        self.editor.draw();
+        if (self.editor_mode) {
+            self.editor.draw();
+        }
     }
 
     if (debug.isDebugFlagSet(.ShowFps)) {
@@ -224,6 +252,8 @@ pub fn draw(self: *GameState) void {
     rl.beginDrawing();
     defer rl.endDrawing();
 
+    rl.beginShaderMode(self.post_processing_shader);
+
     rl.clearBackground(rl.Color.black);
     rl.drawTexturePro(
         self.render_texture.texture,
@@ -238,6 +268,8 @@ pub fn draw(self: *GameState) void {
         0,
         rl.Color.white,
     );
+
+    rl.endShaderMode();
 }
 
 fn rebuildAndStoreDefaultTileset(allocator: std.mem.Allocator, tileset_path: []const u8) void {
@@ -302,6 +334,13 @@ fn setDebugMode(self: *const GameState) void {
     } else if (self.debug_mode >= 0) {
         debug.setDebugFlags(self.debug_flags[@as(usize, @intCast(self.debug_mode)) .. @as(usize, @intCast(self.debug_mode)) + 1]);
     }
+}
+
+pub fn loadSceneFromFile(gamestate: *GameState, file_path: []const u8) !void {
+    const file = try helpers.openFile(file_path, .{ .mode = .read_only });
+    defer file.close();
+    gamestate.scene = try Scene.readBytes(gamestate.allocator, file.reader(), gamestate);
+    gamestate.scene_file = file_path;
 }
 
 pub const MIN_ACCEPTABLE_FPS = 20;

@@ -3,6 +3,19 @@ const Sprite = @import("../../sprite.zig");
 const an = @import("../../animation.zig");
 const rl = @import("raylib");
 
+pub const SpriteBuffer = an.SpriteBuffer(
+    MysteryBox.AnimationType,
+    &.{
+        .Initial,
+        .Active,
+        .Depleted,
+    },
+    .{},
+    loadTexture,
+    .{ .x = 16, .y = 16 },
+    1,
+);
+
 var sound_dud: ?rl.Sound = null;
 var texture: ?rl.Texture2D = null;
 
@@ -20,35 +33,29 @@ fn loadSoundDud() rl.Sound {
     };
 }
 
-fn getAnimationBuffer(hidden_box: bool) MysteryBox.AnimationBuffer {
+fn getSpriteBuffer(offset: usize, hidden_box: bool) SpriteBuffer {
     // @compileLog("Building mysterybox/question_box animation buffer...");
-    var buffer = MysteryBox.AnimationBuffer{};
+    var buffer = SpriteBuffer{};
 
-    buffer.writeAnimation(.Initial, 1, &.{if (hidden_box) 2 else 1});
-    buffer.writeAnimation(.Active, 1, &.{1});
-    buffer.writeAnimation(.Depleted, 1, &.{2});
+    const active = offset + 1;
+    const depleted = offset + 2;
+
+    buffer.writeAnimation(.Initial, 1, &.{if (hidden_box) depleted else active});
+    buffer.writeAnimation(.Active, 1, &.{active});
+    buffer.writeAnimation(.Depleted, 1, &.{depleted});
 
     return buffer;
 }
 
-fn SpritePrefab(offset: usize, hidden_box: bool) type {
-    return Sprite.Prefab(
-        16,
-        16,
-        loadTexture,
-        getAnimationBuffer(hidden_box),
-        MysteryBox.AnimationType.Initial,
-        .{
-            .x = offset,
-            .y = 0,
-        },
-    );
-}
+var spring_spritebuf = getSpriteBuffer(0, false);
+var summer_spritebuf = getSpriteBuffer(32, false);
+var fall_spritebuf = getSpriteBuffer(64, false);
+var winter_spritebuf = getSpriteBuffer(96, false);
 
-const SpringSprite = SpritePrefab(0, false);
-const SummerSprite = SpritePrefab(32, false);
-const FallSprite = SpritePrefab(64, false);
-const WinterSprite = SpritePrefab(96, false);
+fn getSpringSpriteReader() an.AnySpriteBuffer {
+    spring_spritebuf.prebakeBuffer();
+    return spring_spritebuf.reader();
+}
 
 pub const QSpringC5 = MysteryBox.Prefab(
     0,
@@ -68,6 +75,6 @@ pub const QSpringC5 = MysteryBox.Prefab(
         .x = 0,
         .y = 0,
     },
-    SpringSprite,
+    getSpringSpriteReader,
     loadSoundDud,
 );

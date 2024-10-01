@@ -13,6 +13,8 @@ pub fn PrefabPalette(
     no_cols: usize,
     no_rows: usize,
 ) type {
+    const eraser_sprite_buffer = getEraserSpriteBuffer();
+
     return struct {
         pub const Item = ItemType;
         pub const window_width = item_size * no_cols;
@@ -20,8 +22,8 @@ pub fn PrefabPalette(
 
         on_focus: *const fn (editor: *Editor, palette_type: Palette.ActivePaletteType) void,
         window: rl.Rectangle,
-        sprites: [ItemType.prefabs.len]Sprite,
-        eraser_sprite: Sprite,
+        sprites: [ItemType.prefabs.len]an.Sprite,
+        eraser_sprite: an.Sprite,
         sprite_rects: [ItemType.prefabs.len]rl.Rectangle = undefined,
         sprite_offsets: [ItemType.prefabs.len]rl.Vector2 = undefined,
         hover_item: ?usize = null,
@@ -33,13 +35,13 @@ pub fn PrefabPalette(
         pub fn init(on_focus: *const fn (editor: *Editor, palette_type: Palette.ActivePaletteType) void, offset_x: f32, offset_y: f32) @This() {
             const window = rl.Rectangle.init(offset_x, offset_y, window_width, window_height);
 
-            const eraser_sprite = EraserSprite.init();
+            const eraser_sprite = eraser_sprite_buffer.reader().sprite() catch @panic("Failed to read eraser sprite");
 
-            var sprites: [ItemType.prefabs.len]Sprite = undefined;
+            var sprites: [ItemType.prefabs.len]an.Sprite = undefined;
             var sprite_offsets: [ItemType.prefabs.len]rl.Vector2 = undefined;
 
             inline for (ItemType.prefabs, 0..) |Prefab, i| {
-                sprites[i] = Prefab.Sprite.init();
+                sprites[i] = Prefab.sprite_reader().sprite() catch @panic("Failed to read sprite");
                 sprite_offsets[i] = Prefab.spr_offset;
             }
 
@@ -62,7 +64,7 @@ pub fn PrefabPalette(
                 const row = i % no_cols;
 
                 var rect: *rl.Rectangle = undefined;
-                var sprite: *Sprite = undefined;
+                var sprite: *an.Sprite = undefined;
 
                 if (i == self.sprites.len) {
                     sprite = &self.eraser_sprite;
@@ -72,8 +74,12 @@ pub fn PrefabPalette(
                     rect = &self.sprite_rects[i];
                 }
 
-                const padding_x = (item_size - sprite.size.x) / 2;
-                const padding_y = (item_size - sprite.size.y) / 2;
+                const sprite_frame = sprite.animation.getFrame() orelse continue;
+
+                const sprite_size_x = @as(f32, @floatFromInt(sprite_frame.width));
+                const sprite_size_y = @as(f32, @floatFromInt(sprite_frame.height));
+                const padding_x = (item_size - sprite_size_x) / 2;
+                const padding_y = (item_size - sprite_size_y) / 2;
                 const x = self.window.x + @as(f32, @floatFromInt(row)) * item_size + padding_x;
                 const y = self.window.y + @as(f32, @floatFromInt(col)) * item_size + padding_y;
                 const pos = rl.Vector2{ .x = x, .y = y };
@@ -81,16 +87,16 @@ pub fn PrefabPalette(
                 rect.* = rl.Rectangle.init(
                     pos.x,
                     pos.y,
-                    sprite.size.x,
-                    sprite.size.y,
+                    sprite_size_x,
+                    sprite_size_y,
                 );
             }
 
             for (0..self.sprites.len) |i| {
-                try self.sprites[i].update(editor.scene, delta_time);
+                self.sprites[i].update(delta_time);
             }
 
-            try self.eraser_sprite.update(editor.scene, delta_time);
+            self.eraser_sprite.update(delta_time);
 
             const mouse_pos = editor.vmouse.getMousePosition();
 
@@ -129,7 +135,7 @@ pub fn PrefabPalette(
                 }
 
                 var dest: *const rl.Rectangle = undefined;
-                var sprite: *const Sprite = undefined;
+                var sprite: *const an.Sprite = undefined;
                 var color: rl.Color = undefined;
 
                 if (i == self.sprites.len) {
@@ -159,10 +165,14 @@ pub fn PrefabPalette(
                 }
 
                 // rl.drawRectangleLinesEx(dest.*, 1, color);
-                if (sprite.getSourceRect()) |rect| {
-                    const pos = rl.Vector2{ .x = dest.x, .y = dest.y };
-                    sprite.texture.drawRec(rect, pos, color);
-                }
+                const frame = sprite.animation.anim_data.frames[0] orelse continue;
+
+                rl.drawTexture(
+                    frame.texture,
+                    @intFromFloat(dest.x),
+                    @intFromFloat(dest.y),
+                    color,
+                );
             }
         }
     };
@@ -172,11 +182,12 @@ fn loadEraserTexture() rl.Texture2D {
     return rl.loadTexture("assets/icons/eraser.png");
 }
 
-const EraserSprite = Sprite.Prefab(
-    24,
-    24,
-    loadEraserTexture,
-    an.getNoAnimationsBuffer(),
-    an.NoAnimationsType.Idle,
-    rl.Vector2{ .x = 0, .y = 0 },
-);
+const EraserSpriteAnimationType = enum { None };
+
+const EraserSpriteBuffer = an.SpriteBuffer(EraserSpriteAnimationType, &.{.None}, &.{}, loadEraserTexture, .{ .x = 24, .y = 24 }, 1);
+
+pub fn getEraserSpriteBuffer() EraserSpriteBuffer {
+    var buffer = EraserSpriteBuffer{};
+    buffer.writeAnimation(EraserSpriteAnimationType.None, 1, &.{0});
+    return buffer;
+}

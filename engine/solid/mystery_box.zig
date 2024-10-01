@@ -18,27 +18,21 @@ pub const AnimationType = enum(u8) {
     Depleted,
 };
 
-pub const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{
-    .Initial,
-    .Active,
-    .Depleted,
-}, .{}, 1);
-
 pub fn Prefab(
     mystery_box_type: u8,
     contents: []const Content,
     hitbox: rl.Rectangle,
     sprite_offset: rl.Vector2,
-    SpritePrefab: type,
+    getSpriteReader: *const fn () an.AnySpriteBuffer,
     loadSoundDud: *const fn () rl.Sound,
 ) type {
     return struct {
-        pub const Sprite = SpritePrefab;
         pub const Hitbox = hitbox;
         pub const spr_offset = sprite_offset;
+        pub const sprite_reader = getSpriteReader;
 
         pub fn init(pos: shapes.IPos) MysteryBox {
-            const sprite = SpritePrefab.init();
+            const sprite = sprite_reader().sprite() catch @panic("Failed to read sprite");
 
             var mystery_box_hitbox = hitbox;
             mystery_box_hitbox.x = @floatFromInt(pos.x);
@@ -68,7 +62,7 @@ is_depleted: bool = false,
 is_deleted: bool = false,
 mystery_box_type: u8,
 hitbox: rl.Rectangle,
-sprite: Sprite,
+sprite: an.Sprite,
 sprite_offset: rl.Vector2,
 sound_dud: rl.Sound,
 
@@ -78,7 +72,7 @@ pub fn init(
     mystery_box_type: u8,
     contents: []const Content,
     hitbox: rl.Rectangle,
-    sprite: Sprite,
+    sprite: an.Sprite,
     sprite_offset: rl.Vector2,
     sound_dud: rl.Sound,
 ) MysteryBox {
@@ -224,10 +218,11 @@ fn handlePlayerCollision(ctx: *anyopaque, scene: *Scene, axis: types.Axis, sign:
 }
 
 fn isPlayingAnimation(self: *MysteryBox, animation: AnimationType) bool {
-    return self.sprite.current_animation.data.type == @as(u8, @intFromEnum(animation));
+    return self.sprite.animation.anim_data.type == @as(u8, @intFromEnum(animation));
 }
 
 pub fn update(self: *MysteryBox, scene: *Scene, delta_time: f32) !void {
+    _ = scene; // autofix
     if (self.is_deleted) {
         return;
     }
@@ -236,15 +231,15 @@ pub fn update(self: *MysteryBox, scene: *Scene, delta_time: f32) !void {
             self.sprite.setAnimation(AnimationType.Depleted, .{});
         }
     }
-    try self.sprite.update(scene, delta_time);
+    self.sprite.update(delta_time);
 }
 
 pub fn draw(self: *const MysteryBox, scene: *const Scene) void {
     if (self.is_deleted) {
         return;
     }
-    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.hitbox);
-    self.sprite.draw(scene, sprite_pos, rl.Color.white);
+    const pos = an.DrawPosition.init(self.hitbox, .TopLeft, self.sprite_offset);
+    self.sprite.draw(scene, pos, rl.Color.white);
 }
 
 pub const QSpringC5 = @import("mystery_box/question_box.zig").QSpringC5;

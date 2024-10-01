@@ -5,6 +5,19 @@ const rl = @import("raylib");
 
 var texture: ?rl.Texture = null;
 
+pub const SpriteBuffer = an.SpriteBuffer(
+    Mob.AnimationType,
+    &.{
+        .Walk,
+        .Attack,
+        .Hit,
+    },
+    .{},
+    loadTexture,
+    .{ .x = 24, .y = 24 },
+    6,
+);
+
 fn loadTexture() rl.Texture {
     return texture orelse {
         texture = rl.loadTexture("assets/sprites/slime_green.png");
@@ -12,15 +25,17 @@ fn loadTexture() rl.Texture {
     };
 }
 
-fn getAnimationBuffer() Mob.AnimationBuffer {
-    // @compileLog("Building mob/slime animation buffer...");
-    var buffer = Mob.AnimationBuffer{};
-
+var sprite_buffer = blk: {
+    var buffer = SpriteBuffer{};
     buffer.writeAnimation(.Walk, 1, &.{ 1, 2, 3, 4, 3, 2 });
     buffer.writeAnimation(.Attack, 0.5, &.{ 5, 6, 7, 8 });
     buffer.writeAnimation(.Hit, 0.1, &.{ 9, 10, 11, 12 });
+    break :blk buffer;
+};
 
-    return buffer;
+pub fn getSpriteReader() an.AnySpriteBuffer {
+    sprite_buffer.prebakeBuffer();
+    return sprite_buffer.reader();
 }
 
 pub const green_slime_behavior = Mob.MobBehavior{
@@ -44,23 +59,10 @@ pub const GreenSlime = Mob.Prefab(
     },
     // Sprite offset
     .{
-        .x = 6,
-        .y = 12,
+        .x = -6,
+        .y = -12,
     },
     // Behavior
     &green_slime_behavior,
-    // Sprite
-    Sprite.Prefab(
-        // Width
-        24,
-        // Height
-        24,
-        // Texture path
-        loadTexture,
-        // Animation buffer
-        getAnimationBuffer(),
-        // Initial animation
-        Mob.AnimationType.Walk,
-        rl.Vector2{ .x = 0, .y = 0 },
-    ),
+    getSpriteReader,
 );

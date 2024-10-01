@@ -29,7 +29,7 @@ jump_counter: u2 = 0,
 lives: u8 = max_lives,
 score: u32 = 0,
 speed: rl.Vector2,
-sprite: Sprite,
+sprite: an.Sprite,
 sprite_offset: rl.Vector2,
 
 sfx_hurt: rl.Sound,
@@ -52,42 +52,15 @@ pub const AnimationType = enum(u8) {
 //     pub fn transform(self: AnimationTransform, )
 // };
 
-pub const AnimationBuffer = an.AnimationBuffer(
-    AnimationType,
-    &.{
-        .Idle,
-        .Hit,
-        .Walk,
-        .Death,
-        .Roll,
-        .Jump,
-    },
-    .{
-        // Rotate 45 deg
-        struct {
-            pub fn rotate45Deg(frame_data: an.PackedFrame, prev: an.RenderableFrame) an.RenderableFrame {
-                _ = frame_data; // autofix
-                return .{
-                    .src = prev.src,
-                    .dest = prev.dest,
-                    .offset = prev.offset,
-                    .rotation = prev.rotation + 45,
-                    .tint = prev.tint,
-                };
-            }
-        }.rotate45Deg,
-    },
-    16,
-);
-
 pub fn Prefab(
     hitbox: rl.Rectangle,
     sprite_offset: rl.Vector2,
-    SpritePrefab: anytype,
+    getSpriteReader: *const fn () an.AnySpriteBuffer,
 ) type {
     return struct {
+        pub const sprite_reader = getSpriteReader;
         pub fn init(pos: shapes.IPos) Player {
-            const sprite = SpritePrefab.init();
+            const sprite = sprite_reader().sprite() catch @panic("Failed to read sprite");
 
             var player_hitbox = hitbox;
             player_hitbox.x = @floatFromInt(pos.x);
@@ -115,7 +88,7 @@ const slip_speed: f32 = 4 * 60;
 pub const max_lives = 5;
 pub const max_score = 999999;
 
-pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2) Player {
+pub fn init(hitbox: rl.Rectangle, sprite: an.Sprite, sprite_offset: rl.Vector2) Player {
     const sfx_hurt = rl.loadSound("assets/sounds/hurt.wav");
     const sfx_jump = rl.loadSound("assets/sounds/jump.wav");
     const sfx_land = rl.loadSound("assets/sounds/tap.wav");
@@ -132,9 +105,9 @@ pub fn init(hitbox: rl.Rectangle, sprite: Sprite, sprite_offset: rl.Vector2) Pla
     };
 }
 
-pub fn reset(self: *Player) void {
+pub fn reset(self: *Player) !void {
     self.* = Player.init(self.initial_hitbox, self.sprite, self.sprite_offset);
-    self.sprite.reset();
+    try self.sprite.reset();
 }
 
 pub fn actor(self: *Player) Actor {
@@ -248,27 +221,28 @@ fn setPos(ctx: *anyopaque, pos: rl.Vector2) void {
     self.rigid_body.hitbox.y = pos.y;
 }
 
-fn revertToIdle(ctx: *anyopaque, _: *an.AnyAnimation) void {
+fn revertToIdle(ctx: *anyopaque, _: *an.Animation) void {
     const self: *Player = @ptrCast(@alignCast(ctx));
     self.sprite.setAnimation(AnimationType.Idle, .{});
 }
 
-fn handleGameOver(_: *anyopaque, _: *an.AnyAnimation) void {
+fn handleGameOver(_: *anyopaque, _: *an.Animation) void {
+    std.debug.print("Handling game over\n", .{});
     // Do nothing (for now)
 }
 
 fn isCurrentAnimation(self: *Player, animation: AnimationType) bool {
-    return self.sprite.current_animation.data.type == @intFromEnum(animation);
+    return self.sprite.animation.anim_data.type == @intFromEnum(animation);
 }
 
-fn handleEffectOver(ctx: *anyopaque, _: *an.AnyAnimation) void {
+fn handleEffectOver(ctx: *anyopaque, _: *an.Animation) void {
     const self: *Player = @ptrCast(@alignCast(ctx));
     self.current_effect = null;
 }
 
 pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
     if (self.isCurrentAnimation(.Death)) {
-        try self.sprite.update(scene, delta_time);
+        self.sprite.update(delta_time);
         return;
     }
 
@@ -282,7 +256,7 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
     const is_slipping = self.is_slipping and is_grounded;
 
     // Rolling
-    if (self.speed.x != 0 and self.isCurrentAnimation(.Roll) and !self.is_stunlocked and is_grounded and controls.isKeyboardControlPressed(controls.KBD_ROLL)) {
+    if (self.speed.x != 0 and !self.isCurrentAnimation(.Roll) and !self.is_stunlocked and is_grounded and controls.isKeyboardControlPressed(controls.KBD_ROLL)) {
         self.sprite.setAnimation(AnimationType.Roll, .{ .on_animation_finished = .{ .context = self, .call_ptr = revertToIdle } });
         self.speed.x = std.math.sign(self.speed.x) * roll_speed;
     }
@@ -333,9 +307,9 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
     }
 
     if (self.is_stunlocked) {
-        self.sprite.setFlip(.XFlip, self.speed.x > 0);
+        self.sprite.flip_mask.x = self.speed.x > 0;
     } else {
-        self.sprite.setFlip(Sprite.FlipState.XFlip, self.face_dir == 0);
+        self.sprite.flip_mask.x = self.face_dir == 0;
     }
 
     // Collision with hostile actors
@@ -389,7 +363,7 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
     scene.centerViewportOnPos(self.rigid_body.hitbox);
     // }
 
-    try self.sprite.update(scene, delta_time);
+    self.sprite.update(delta_time);
 
     if (self.current_effect != null) {
         try self.current_effect.?.update(scene, delta_time);
@@ -397,7 +371,7 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
 }
 
 pub fn draw(self: *const Player, scene: *const Scene) void {
-    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.rigid_body.hitbox);
+    const sprite_pos = an.DrawPosition.init(self.rigid_body.hitbox, .TopLeft, self.sprite_offset);
 
     self.sprite.draw(scene, sprite_pos, rl.Color.white);
 
@@ -407,7 +381,7 @@ pub fn draw(self: *const Player, scene: *const Scene) void {
 }
 
 pub fn drawDebug(self: *const Player, scene: *const Scene) void {
-    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.rigid_body.hitbox);
+    const sprite_pos = an.DrawPosition.init(self.rigid_body.hitbox, .TopLeft, self.sprite_offset);
 
     self.sprite.drawDebug(scene, sprite_pos);
     self.rigid_body.drawDebug(scene);

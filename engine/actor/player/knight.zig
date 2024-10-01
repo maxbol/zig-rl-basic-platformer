@@ -6,6 +6,36 @@ const rl = @import("raylib");
 
 var texture: ?rl.Texture = null;
 
+pub const SpriteBuffer = an.SpriteBuffer(
+    Player.AnimationType,
+    &.{
+        .Idle,
+        .Hit,
+        .Walk,
+        .Death,
+        .Roll,
+        .Jump,
+    },
+    .{
+        // Rotate 45 deg
+        // struct {
+        //     pub fn rotate45Deg(frame_data: an.PackedFrame, prev: an.RenderableFrame) an.RenderableFrame {
+        //         _ = frame_data; // autofix
+        //         return .{
+        //             .src = prev.src,
+        //             .dest = prev.dest,
+        //             .offset = prev.offset,
+        //             .rotation = prev.rotation + 45,
+        //             .tint = prev.tint,
+        //         };
+        //     }
+        // }.rotate45Deg,
+    },
+    loadTexture,
+    .{ .x = 32, .y = 32 },
+    16,
+);
+
 fn loadTexture() rl.Texture {
     if (texture) |t| {
         return t;
@@ -14,16 +44,17 @@ fn loadTexture() rl.Texture {
     return texture.?;
 }
 
-fn getAnimationBuffer() Player.AnimationBuffer {
-    // @compileLog("Building player/knight animation buffer...");
-    var buffer = Player.AnimationBuffer{};
+var sprite_buffer: SpriteBuffer = buf: {
+    var buffer = SpriteBuffer{};
 
+    // @compileLog("Building player/knight animation buffer...");
     buffer.writeAnimation(
         .Idle,
         0.5,
         &.{
             1,
-            an.f(.{ .transform_mask = 0b1, .frame_idx = 2 }),
+            2,
+            // an.f(.{ .transform_mask = 0b1, .frame_idx = 2 }),
             3,
             4,
         },
@@ -59,18 +90,16 @@ fn getAnimationBuffer() Player.AnimationBuffer {
         break :blk &data;
     });
 
-    return buffer;
+    break :buf buffer;
+};
+
+fn getSpriteReader() an.AnySpriteBuffer {
+    sprite_buffer.prebakeBuffer();
+    return sprite_buffer.reader();
 }
 
 pub const Knight = Player.Prefab(
     .{ .x = 0, .y = 0, .width = constants.TILE_SIZE, .height = 20 },
-    .{ .x = 8, .y = 8 },
-    Sprite.Prefab(
-        32,
-        32,
-        loadTexture,
-        getAnimationBuffer(),
-        Player.AnimationType.Idle,
-        rl.Vector2{ .x = 0, .y = 0 },
-    ),
+    .{ .x = -8, .y = -8 },
+    getSpriteReader,
 );

@@ -5,6 +5,7 @@ const RigidBody = @import("rigid_body.zig");
 const Scene = @import("../scene.zig");
 const Solid = @import("solid.zig");
 const Sprite = @import("../sprite.zig");
+const an = @import("../animation.zig");
 const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
@@ -18,19 +19,27 @@ rigid_body: RigidBody,
 initial_hitbox: rl.Rectangle,
 is_collidable: bool = true,
 is_deleted: bool = false,
-sprite: Sprite,
+sprite: an.Sprite,
 sprite_offset: rl.Vector2,
 speed: rl.Vector2 = .{ .x = 0, .y = 0 },
 platform_type: u8,
 
-pub fn Prefab(platform_type: u8, hitbox: rl.Rectangle, sprite_offset: rl.Vector2, SpritePrefab: anytype, behaviors: anytype) type {
+pub const AnimationType = enum(u8) { Dull };
+
+pub fn Prefab(
+    platform_type: u8,
+    hitbox: rl.Rectangle,
+    sprite_offset: rl.Vector2,
+    getSpriteReader: *const fn () an.AnySpriteBuffer,
+    behaviors: anytype,
+) type {
     return struct {
-        pub const Sprite = SpritePrefab;
+        pub const sprite_reader = getSpriteReader;
         pub const hitbox_static = hitbox;
         pub const spr_offset = sprite_offset;
 
         pub fn init(pos: shapes.IPos) Platform {
-            const sprite = SpritePrefab.init();
+            const sprite = sprite_reader().sprite() catch @panic("Failed to read sprite");
 
             var platform_hitbox = hitbox;
             platform_hitbox.x += @floatFromInt(pos.x);
@@ -57,7 +66,7 @@ pub fn Prefab(platform_type: u8, hitbox: rl.Rectangle, sprite_offset: rl.Vector2
 pub fn init(
     platform_type: u8,
     hitbox: rl.Rectangle,
-    sprite: Sprite,
+    sprite: an.Sprite,
     sprite_offset: rl.Vector2,
     behaviors: [MAX_NO_OF_BEHAVIORS]Behavior,
     behaviors_amount: usize,
@@ -125,7 +134,7 @@ fn getHitboxRectCast(ctx: *const anyopaque) rl.Rectangle {
 }
 
 pub fn update(self: *Platform, scene: *Scene, delta_time: f32) !void {
-    try self.sprite.update(scene, delta_time);
+    self.sprite.update(delta_time);
 
     for (0..self.behaviors_amount) |i| {
         self.behaviors[i].update(self, delta_time);
@@ -137,7 +146,7 @@ pub fn update(self: *Platform, scene: *Scene, delta_time: f32) !void {
 }
 
 pub fn draw(self: *const Platform, scene: *const Scene) void {
-    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.rigid_body.hitbox);
+    const sprite_pos = an.DrawPosition.init(self.rigid_body.hitbox, .TopLeft, self.sprite_offset);
     self.sprite.draw(scene, sprite_pos, rl.Color.white);
 }
 

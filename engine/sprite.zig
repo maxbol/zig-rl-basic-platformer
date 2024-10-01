@@ -12,9 +12,9 @@ flip_mask: u2 = 0,
 texture: rl.Texture2D,
 sprite_texture_map_r: SpriteTextureMap,
 sprite_texture_map_l: SpriteTextureMap,
-animation_buffer: an.AnimationBufferReader,
+animation_buffer: an.AnySpriteBuffer,
 initial_animation: u8,
-current_animation: an.AnyAnimation,
+current_animation: an.Animation,
 queued_animation: ?u8 = null,
 freeze_animation_on_last_frame: bool = false,
 on_animation_finished: ?Callback = null,
@@ -35,7 +35,7 @@ pub const Callback = struct {
 
 pub const SetAnimationParam = struct {
     animation_speed: f32 = 1,
-    on_animation_finished: ?an.AnyAnimation.Callback = null,
+    on_animation_finished: ?an.Animation.Callback = null,
     freeze_animation_on_last_frame: bool = false,
 };
 
@@ -76,7 +76,7 @@ pub fn Prefab(
 pub fn init(
     texture: rl.Texture2D,
     size: rl.Vector2,
-    animation_buffer: an.AnimationBufferReader,
+    animation_buffer: an.AnySpriteBuffer,
     initial_animation: u8,
     sprite_map_offset: rl.Vector2,
 ) !Sprite {
@@ -132,18 +132,18 @@ pub fn reset(self: *Sprite) void {
 
 pub fn setAnimation(self: *Sprite, animation: anytype, param: SetAnimationParam) void {
     const anim_int: u8 = @intFromEnum(animation);
-    if (self.current_animation.data.type != anim_int) {
+    if (self.current_animation.anim_data.type != anim_int) {
         self.current_animation = self.animation_buffer.readAnimation(anim_int) catch |err| {
             std.log.err("Error setting animation: {!}\n", .{err});
             std.process.exit(1);
         };
-        self.current_animation.clock = 0;
-        self.current_animation.freeze_on_last_frame = param.freeze_animation_on_last_frame;
-        self.current_animation.speed = param.animation_speed;
+        self.current_animation.anim_clock = 0;
         if (param.on_animation_finished) |cb| {
-            self.current_animation.on_finished = cb;
+            self.current_animation.anim_on_finished = cb;
         }
     }
+    self.current_animation.anim_freeze_on_last_frame = param.freeze_animation_on_last_frame;
+    self.current_animation.anim_speed = param.animation_speed;
 }
 
 pub fn setFlip(self: *Sprite, flip: FlipState, state: bool) void {
@@ -248,10 +248,11 @@ pub fn drawDebug(self: *const Sprite, scene: *const Scene, pos: rl.Vector2) void
     }
 
     const rect = blk: {
+        const frame = self.current_animation.getFrame();
         if (self.flip_mask & @intFromEnum(FlipState.XFlip) == 0) {
-            break :blk self.sprite_texture_map_r[self.current_display_frame.frame_idx];
+            break :blk self.sprite_texture_map_r[frame.frame_idx];
         } else {
-            break :blk self.sprite_texture_map_l[self.current_display_frame.frame_idx];
+            break :blk self.sprite_texture_map_l[frame.frame_idx];
         }
     } orelse {
         return;

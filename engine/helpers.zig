@@ -10,11 +10,11 @@ pub fn buildRectMap(comptime size: usize, source_width: f32, source_height: f32,
     const source_read_max_y: f32 = @floor(read_height / rec_height);
 
     if (source_read_max_x * rec_width != read_width) {
-        std.log.warn("Warning: source width is not a multiple of rec width\n", .{});
+        // std.log.warn("Warning: source width is not a multiple of rec width\n", .{});
     }
 
     if (source_read_max_y * rec_height != read_height) {
-        std.log.warn("Warning: source height is not a multiple of rec height\n", .{});
+        // std.log.warn("Warning: source height is not a multiple of rec height\n", .{});
     }
 
     var x_cursor: f32 = 0;
@@ -41,7 +41,14 @@ pub fn buildRectMap(comptime size: usize, source_width: f32, source_height: f32,
     return map;
 }
 
-pub fn culledRectDraw(texture: rl.Texture2D, rect: rl.Rectangle, dest: rl.Rectangle, tint: rl.Color, cull_x: f32, cull_y: f32) struct { rl.Rectangle, rl.Rectangle } {
+pub fn culledRectDraw(
+    texture: rl.Texture2D,
+    rect: rl.Rectangle,
+    dest: rl.Rectangle,
+    tint: rl.Color,
+    cull_x: f32,
+    cull_y: f32,
+) struct { rl.Rectangle, rl.Rectangle } {
     var r = rect;
     var d = dest;
     const rot: f32 = 0;
@@ -97,13 +104,15 @@ pub fn culledRectDraw(texture: rl.Texture2D, rect: rl.Rectangle, dest: rl.Rectan
         }
     }
 
+    const drawn = .{ r, d };
+
     d.x += d.width / 2;
     d.y += d.height / 2;
 
     texture.drawPro(r, d, .{ .x = d.width / 2, .y = d.height / 2 }, rot, tint);
     // texture.drawPro(r, d, .{ .x = 0, .y = 0 }, rot, tint);
 
-    return .{ r, d };
+    return drawn;
 }
 
 // Creates the smallest possible rectangle that contains both rect_a and rect_b

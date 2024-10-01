@@ -3,17 +3,18 @@ const Player = @import("actor/player.zig");
 const HUD = @This();
 const Scene = @import("scene.zig");
 const Sprite = @import("sprite.zig");
+const an = @import("animation.zig");
 const rl = @import("raylib");
 const std = @import("std");
 
 player: *Player,
-sprite_lives: Sprite,
-sprite_points: Sprite,
+sprite_lives: an.Sprite,
+sprite_points: an.Sprite,
 font: rl.Font = undefined,
 
 pub fn init(player: *Player, font: rl.Font) HUD {
-    const sprite_lives = Collectable.HealthGrape.Sprite.init();
-    const sprite_points = Collectable.Coin.Sprite.init();
+    const sprite_lives = Collectable.HealthGrape.sprite_reader().sprite() catch @panic("Failed to read sprite");
+    const sprite_points = Collectable.Coin.sprite_reader().sprite() catch @panic("Failed to read sprite");
     return .{
         .player = player,
         .sprite_lives = sprite_lives,
@@ -22,9 +23,9 @@ pub fn init(player: *Player, font: rl.Font) HUD {
     };
 }
 
-pub fn update(self: *HUD, scene: *Scene, delta_time: f32) !void {
-    try self.sprite_points.update(scene, delta_time);
-    try self.sprite_lives.update(scene, delta_time);
+pub fn update(self: *HUD, delta_time: f32) void {
+    self.sprite_points.update(delta_time);
+    self.sprite_lives.update(delta_time);
 }
 
 pub fn draw(self: *HUD, scene: *const Scene) void {
@@ -34,7 +35,21 @@ pub fn draw(self: *HUD, scene: *const Scene) void {
     const lives_draw_x = scene.gamestate.viewport.rectangle.x + 10;
     const lives_draw_y = scene.gamestate.viewport.rectangle.y + 10;
 
-    const points_draw_x = scene.gamestate.viewport.rectangle.x + scene.gamestate.viewport.rectangle.width - self.sprite_points.size.x - 10;
+    std.debug.print("getting hud animation frames\n", .{});
+    const sprite_points_frame = self.sprite_points.animation.getFrame() orelse return;
+    const sprite_lives_frame = self.sprite_lives.animation.getFrame() orelse return;
+
+    std.debug.print("sprite_points_frame.width: {d}\n", .{sprite_points_frame.width});
+
+    const sprite_points_size_x = @as(f32, @floatFromInt(sprite_points_frame.width));
+    const sprite_points_size_y = @as(f32, @floatFromInt(sprite_points_frame.height));
+    const sprite_lives_size_x = @as(f32, @floatFromInt(sprite_lives_frame.width));
+    const sprite_lives_size_y = @as(f32, @floatFromInt(sprite_lives_frame.height));
+    _ = sprite_lives_size_x; // autofix
+    _ = sprite_lives_size_y; // autofix
+    _ = sprite_points_size_y; // autofix
+
+    const points_draw_x = scene.gamestate.viewport.rectangle.x + scene.gamestate.viewport.rectangle.width - sprite_points_size_x - 10;
     const points_draw_y = scene.gamestate.viewport.rectangle.y + 10;
 
     for (0..Player.max_lives) |i| {

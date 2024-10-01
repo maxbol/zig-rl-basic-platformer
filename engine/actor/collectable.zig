@@ -7,6 +7,7 @@ const Scene = @import("../scene.zig");
 const Sprite = @import("../sprite.zig");
 const Solid = @import("../solid/solid.zig");
 const helpers = @import("../helpers.zig");
+const an = @import("../animation.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
 const std = @import("std");
@@ -19,7 +20,7 @@ onCollected: *const fn (self: *Collectable, player: *Player) bool,
 collectable_type: u8,
 rigid_body: RigidBody,
 initial_hitbox: rl.Rectangle,
-sprite: Sprite,
+sprite: an.Sprite,
 sprite_offset: rl.Vector2,
 is_collected: bool = false,
 is_deleted: bool = false,
@@ -27,6 +28,8 @@ speed: rl.Vector2 = .{ .x = 0, .y = 0 },
 sound: rl.Sound,
 
 const fall_speed: f32 = 3.6 * 60;
+
+pub const AnimationType = enum(u8) { Static };
 
 pub fn stub() Collectable {
     return .{
@@ -46,18 +49,18 @@ pub fn Prefab(
     collectable_type: u8,
     hitbox: rl.Rectangle,
     sprite_offset: rl.Vector2,
-    SpritePrefab: anytype,
+    getSpriteReader: *const fn () an.AnySpriteBuffer,
     loadSound: *const fn () rl.Sound,
     onCollected: *const fn (self: *Collectable, player: *Player) bool,
 ) type {
     return struct {
-        pub const Sprite = SpritePrefab;
         pub const Hitbox = hitbox;
+        pub const sprite_reader = getSpriteReader;
         pub const spr_offset = sprite_offset;
         pub const _loadSound = loadSound;
 
         pub fn init(pos: shapes.IPos) Collectable {
-            const sprite = SpritePrefab.init();
+            const sprite = sprite_reader().sprite() catch @panic("Failed to read sprite");
 
             var collectable_hitbox = hitbox;
             collectable_hitbox.x = @floatFromInt(pos.x);
@@ -80,7 +83,7 @@ pub fn Prefab(
 pub fn init(
     collectable_type: u8,
     hitbox: rl.Rectangle,
-    sprite: Sprite,
+    sprite: an.Sprite,
     sprite_offset: rl.Vector2,
     sound: rl.Sound,
     onCollected: *const fn (
@@ -112,13 +115,13 @@ pub fn actor(self: *Collectable) Actor {
     } };
 }
 
-pub fn reset(self: *Collectable) void {
+pub fn reset(self: *Collectable) !void {
     if (self.is_deleted) {
         return;
     }
 
     self.* = Collectable.init(self.collectable_type, self.initial_hitbox, self.sprite, self.sprite_offset, self.sound, self.onCollected);
-    self.sprite.reset();
+    try self.sprite.reset();
 }
 
 fn getRigidBodyCast(ctx: *anyopaque) *RigidBody {
@@ -218,14 +221,14 @@ pub fn update(self: *Collectable, scene: *Scene, delta_time: f32) !void {
         }
     }
 
-    try self.sprite.update(scene, delta_time);
+    self.sprite.update(delta_time);
 }
 
 pub fn draw(self: *const Collectable, scene: *const Scene) void {
     if (self.is_collected or self.is_deleted) {
         return;
     }
-    const sprite_pos = helpers.getRelativePos(self.sprite_offset, self.rigid_body.hitbox);
+    const sprite_pos = an.DrawPosition.init(self.rigid_body.hitbox, .TopLeft, self.sprite_offset);
     self.sprite.draw(scene, sprite_pos, rl.Color.white);
 }
 

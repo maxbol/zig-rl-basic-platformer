@@ -5,11 +5,14 @@ const an = @import("../../animation.zig");
 const rl = @import("raylib");
 const std = @import("std");
 
-const AnimationType = enum(u8) {
-    Idle,
-};
-
-const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{.Idle}, .{}, 12);
+const SpriteBuffer = an.SpriteBuffer(
+    Collectable.AnimationType,
+    &.{.Static},
+    .{},
+    loadTexture,
+    .{ .x = 16, .y = 16 },
+    12,
+);
 
 var sound: ?rl.Sound = null;
 var texture: ?rl.Texture = null;
@@ -30,13 +33,17 @@ fn loadTexture() rl.Texture2D {
     return texture.?;
 }
 
-fn getAnimationBuffer() AnimationBuffer {
-    // @compileLog("Building collectable/coin animation buffer...");
-    var buffer = AnimationBuffer{};
+var sprite_buffer: SpriteBuffer = blk: {
+    var buffer = SpriteBuffer{};
 
-    buffer.writeAnimation(.Idle, 0.6, &.{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 });
+    buffer.writeAnimation(.Static, 0.6, &.{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 });
 
-    return buffer;
+    break :blk buffer;
+};
+
+fn getSpriteReader() an.AnySpriteBuffer {
+    sprite_buffer.prebakeBuffer();
+    return sprite_buffer.reader();
 }
 
 fn onCollected(_: *Collectable, player: *Player) bool {
@@ -52,17 +59,10 @@ pub const Coin = Collectable.Prefab(
         .height = 10,
     },
     .{
-        .x = 3,
-        .y = 3,
+        .x = -3,
+        .y = -3,
     },
-    Sprite.Prefab(
-        16,
-        16,
-        loadTexture,
-        getAnimationBuffer(),
-        an.NoAnimationsType.Idle,
-        rl.Vector2{ .x = 0, .y = 0 },
-    ),
+    getSpriteReader,
     loadSound,
     onCollected,
 );

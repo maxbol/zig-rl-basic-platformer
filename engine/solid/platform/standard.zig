@@ -30,23 +30,35 @@ fn BuildPrefab(platform_type: u8, offset: usize, size: usize) type {
         .y = 0,
     };
 
-    const sprite_map_offset = rl.Vector2{
-        .x = col * 16,
-        .y = row * 16,
-    };
-
     return Platform.Prefab(
         platform_type,
         hitbox,
         sprite_offset,
-        Sprite.Prefab(
-            size * 16,
-            15,
-            loadTexture,
-            an.getNoAnimationsBuffer(),
-            an.NoAnimationsType.Idle,
-            sprite_map_offset,
-        ),
+        struct {
+            var sprite_buffer = blk: {
+                var buffer = an.SpriteBuffer(
+                    Platform.AnimationType,
+                    &.{.Dull},
+                    .{},
+                    loadTexture,
+                    .{ .x = size * 16, .y = 15 },
+                    1,
+                ){};
+
+                buffer.writeAnimation(.Dull, 1, &.{1});
+
+                buffer.texture_map_offset = rl.Vector2{
+                    .x = col * 16,
+                    .y = row * 16,
+                };
+
+                break :blk buffer;
+            };
+            fn getSpriteReader() an.AnySpriteBuffer {
+                sprite_buffer.prebakeBuffer();
+                return sprite_buffer.reader();
+            }
+        }.getSpriteReader,
         &.{behavior.KeyframedMovement(&.{ .{ .x = 0, .y = 0 }, .{ .x = 100, .y = 0 } }, 60)},
     );
 }

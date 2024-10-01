@@ -443,7 +443,7 @@ pub fn writeBytes(self: *const Scene, writer: anytype, verbose: bool) !void {
     }
 }
 
-pub fn reset(self: *Scene) void {
+pub fn reset(self: *Scene) !void {
     for (0..self.bg_layers.items.len) |i| {
         self.bg_layers.items[i].setTint(rl.Color.white);
     }
@@ -455,14 +455,14 @@ pub fn reset(self: *Scene) void {
     }
 
     for (0..self.mobs.items.len) |i| {
-        self.mobs.items[i].reset();
+        try self.mobs.items[i].reset();
     }
 
     for (0..self.collectables.items.len) |i| {
-        self.collectables.items[i].reset();
+        try self.collectables.items[i].reset();
     }
 
-    self.gamestate.player.reset();
+    try self.gamestate.player.reset();
 }
 
 pub fn hotReload(self: *Scene) void {
@@ -614,7 +614,7 @@ pub fn update(self: *Scene, delta_time: f32, game_state: *GameState) !void {
         // Post game over handler
         self.game_over_screen_elapsed = -1;
         game_state.game_over_counter += 1;
-        self.reset();
+        try self.reset();
     }
 }
 
@@ -812,12 +812,6 @@ pub fn collideAt(self: *Scene, rect: shapes.IRect, grid_rect: shapes.IRect) ?Col
     }
 
     return null;
-}
-
-pub fn loadSceneFromFile(allocator: std.mem.Allocator, file_path: []const u8, gamestate: *GameState) !*Scene {
-    const file = try helpers.openFile(file_path, .{ .mode = .read_only });
-    defer file.close();
-    return readBytes(allocator, file.reader(), gamestate);
 }
 
 pub const SpawnError = error{

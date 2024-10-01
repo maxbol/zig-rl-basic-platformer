@@ -5,11 +5,14 @@ const an = @import("../../animation.zig");
 const rl = @import("raylib");
 const std = @import("std");
 
-const AnimationType = enum(u8) {
-    Idle,
-};
-
-const AnimationBuffer = an.AnimationBuffer(AnimationType, &.{.Idle}, .{}, 1);
+const SpriteBuffer = an.SpriteBuffer(
+    Collectable.AnimationType,
+    &.{Collectable.AnimationType.Static},
+    .{},
+    loadTexture,
+    .{ .x = 16, .y = 16 },
+    1,
+);
 
 var sound: ?rl.Sound = null;
 var texture: ?rl.Texture = null;
@@ -30,10 +33,10 @@ fn loadTexture() rl.Texture2D {
     return texture.?;
 }
 
-fn getAnimationBuffer(offset: u16) AnimationBuffer {
+fn getSpriteBuffer(offset: u16) SpriteBuffer {
     // @compileLog("Building collectable/fruit animation buffer...");
-    var buffer = AnimationBuffer{};
-    buffer.writeAnimation(.Idle, 1, &.{offset});
+    var buffer = SpriteBuffer{};
+    buffer.writeAnimation(.Static, 1, &.{offset});
     return buffer;
 }
 
@@ -54,14 +57,13 @@ pub fn Fruit(offset: u16, on_collected: fn (*Collectable, *Player) bool) type {
             .x = 0,
             .y = 0,
         },
-        Sprite.Prefab(
-            16,
-            16,
-            loadTexture,
-            getAnimationBuffer(offset),
-            an.NoAnimationsType.Idle,
-            rl.Vector2{ .x = 0, .y = 0 },
-        ),
+        struct {
+            var sprite_buffer = getSpriteBuffer(offset);
+            fn getSpriteReader() an.AnySpriteBuffer {
+                sprite_buffer.prebakeBuffer();
+                return sprite_buffer.reader();
+            }
+        }.getSpriteReader,
         loadSound,
         on_collected,
     );
