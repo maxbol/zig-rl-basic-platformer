@@ -675,8 +675,16 @@ pub fn drawDebug(self: *const Scene) void {
 
     self.main_layer.drawDebug(self);
 
-    for (0..self.mobs.items.len) |i| {
-        self.mobs.items[i].drawDebug(self);
+    for (self.collectables.items) |*collectable| {
+        collectable.drawDebug(self);
+    }
+
+    for (self.platforms.items) |*platform| {
+        platform.drawDebug(self);
+    }
+
+    for (self.mobs.items) |*mob| {
+        mob.drawDebug(self);
     }
 
     self.gamestate.player.drawDebug(self);

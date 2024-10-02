@@ -232,6 +232,13 @@ pub fn draw(self: *const Collectable, scene: *const Scene) void {
     self.sprite.draw(scene, sprite_pos, rl.Color.white);
 }
 
+pub fn drawDebug(self: *const Collectable, scene: *const Scene) void {
+    if (self.is_collected or self.is_deleted) {
+        return;
+    }
+    self.rigid_body.drawDebug(scene);
+}
+
 pub const Coin = @import("collectables/coin.zig").Coin;
 pub const HealthGrape = @import("collectables/fruit.zig").HealthGrape;
 

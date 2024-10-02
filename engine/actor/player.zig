@@ -371,7 +371,7 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
 }
 
 pub fn draw(self: *const Player, scene: *const Scene) void {
-    const sprite_pos = an.DrawPosition.init(self.rigid_body.hitbox, .TopLeft, self.sprite_offset);
+    const sprite_pos = an.DrawPosition.init(self.rigid_body.hitbox, .BottomCenter, self.sprite_offset);
 
     self.sprite.draw(scene, sprite_pos, rl.Color.white);
 
@@ -381,7 +381,7 @@ pub fn draw(self: *const Player, scene: *const Scene) void {
 }
 
 pub fn drawDebug(self: *const Player, scene: *const Scene) void {
-    const sprite_pos = an.DrawPosition.init(self.rigid_body.hitbox, .TopLeft, self.sprite_offset);
+    const sprite_pos = an.DrawPosition.init(self.rigid_body.hitbox, .BottomCenter, self.sprite_offset);
 
     self.sprite.drawDebug(scene, sprite_pos);
     self.rigid_body.drawDebug(scene);

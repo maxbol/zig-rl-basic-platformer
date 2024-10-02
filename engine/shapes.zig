@@ -48,3 +48,14 @@ pub const IPos = struct {
         };
     }
 };
+
+pub fn vec2FromTexture(texture: rl.Texture) rl.Vector2 {
+    return .{
+        .x = @floatFromInt(texture.width),
+        .y = @floatFromInt(texture.height),
+    };
+}
+
+pub fn rectFromTexture(texture: rl.Texture) rl.Rectangle {
+    return rl.Rectangle.init(0, 0, @floatFromInt(texture.width), @floatFromInt(texture.height));
+}

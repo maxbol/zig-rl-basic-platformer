@@ -1,7 +1,8 @@
 const Actor = @import("../actor/actor.zig");
 const Scene = @import("../scene.zig");
 const Solid = @import("solid.zig");
-const SolidCollidable = @This();
+const RigidBody = @This();
+const debug = @import("../debug.zig");
 const rl = @import("raylib");
 const std = @import("std");
 const types = @import("../types.zig");
@@ -10,13 +11,13 @@ x_remainder: f32 = 0,
 y_remainder: f32 = 0,
 hitbox: rl.Rectangle,
 
-pub fn init(hitbox: rl.Rectangle) SolidCollidable {
+pub fn init(hitbox: rl.Rectangle) RigidBody {
     return .{
         .hitbox = hitbox,
     };
 }
 
-inline fn moveOnAxis(self: *SolidCollidable, all_actors: []Actor, riding_actors: []usize, scene: *Scene, solid: Solid, axis: types.Axis, amount: i32) void {
+inline fn moveOnAxis(self: *RigidBody, all_actors: []Actor, riding_actors: []usize, scene: *Scene, solid: Solid, axis: types.Axis, amount: i32) void {
     const remainder = if (axis == .X) &self.x_remainder else &self.y_remainder;
     const hitbox_loc = if (axis == .X) &self.hitbox.x else &self.hitbox.y;
     const hitbox_size = if (axis == .X) &self.hitbox.width else &self.hitbox.height;
@@ -59,7 +60,7 @@ inline fn moveOnAxis(self: *SolidCollidable, all_actors: []Actor, riding_actors:
     }
 }
 
-pub fn move(self: *SolidCollidable, scene: *Scene, solid: Solid, x: f32, y: f32) void {
+pub fn move(self: *RigidBody, scene: *Scene, solid: Solid, x: f32, y: f32) void {
     self.x_remainder += x;
     self.y_remainder += y;
 
@@ -109,4 +110,11 @@ pub fn move(self: *SolidCollidable, scene: *Scene, solid: Solid, x: f32, y: f32)
     }
 
     solid.setIsCollidable(true);
+}
+
+pub fn drawDebug(self: *const RigidBody, scene: *const Scene) void {
+    if (debug.isDebugFlagSet(.ShowHitboxes)) {
+        const rect = scene.getViewportAdjustedPos(rl.Rectangle, self.hitbox);
+        rl.drawRectangleLinesEx(rect, 1, rl.Color.red);
+    }
 }

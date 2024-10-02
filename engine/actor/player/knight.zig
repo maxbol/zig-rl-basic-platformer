@@ -6,6 +6,16 @@ const rl = @import("raylib");
 
 var texture: ?rl.Texture = null;
 
+pub const Transforms = struct {
+    pub fn rotate45Deg(frame: rl.RenderTexture) rl.RenderTexture {
+        return an.Transforms.rotate(frame, 45);
+    }
+
+    pub fn scale3X(frame: rl.RenderTexture) rl.RenderTexture {
+        return an.Transforms.scale(frame, 3);
+    }
+};
+
 pub const SpriteBuffer = an.SpriteBuffer(
     Player.AnimationType,
     &.{
@@ -17,19 +27,8 @@ pub const SpriteBuffer = an.SpriteBuffer(
         .Jump,
     },
     .{
-        // Rotate 45 deg
-        // struct {
-        //     pub fn rotate45Deg(frame_data: an.PackedFrame, prev: an.RenderableFrame) an.RenderableFrame {
-        //         _ = frame_data; // autofix
-        //         return .{
-        //             .src = prev.src,
-        //             .dest = prev.dest,
-        //             .offset = prev.offset,
-        //             .rotation = prev.rotation + 45,
-        //             .tint = prev.tint,
-        //         };
-        //     }
-        // }.rotate45Deg,
+        Transforms.rotate45Deg,
+        Transforms.scale3X,
     },
     loadTexture,
     .{ .x = 32, .y = 32 },
@@ -54,12 +53,11 @@ var sprite_buffer: SpriteBuffer = buf: {
         &.{
             1,
             2,
-            // an.f(.{ .transform_mask = 0b1, .frame_idx = 2 }),
             3,
             4,
         },
     );
-    buffer.writeAnimation(.Jump, 0.1, &.{4});
+    buffer.writeAnimation(.Jump, 0.1, &.{an.f(.{ .frame_pointer = 4, .transform_mask = 0b10 })});
     buffer.writeAnimation(.Walk, 1, blk: {
         var data: [16]u32 = undefined;
         for (17..33, 0..) |i, idx| {
@@ -100,6 +98,6 @@ fn getSpriteReader() an.AnySpriteBuffer {
 
 pub const Knight = Player.Prefab(
     .{ .x = 0, .y = 0, .width = constants.TILE_SIZE, .height = 20 },
-    .{ .x = -8, .y = -8 },
+    .{ .x = 0, .y = 4 },
     getSpriteReader,
 );

@@ -150,6 +150,10 @@ pub fn draw(self: *const Platform, scene: *const Scene) void {
     self.sprite.draw(scene, sprite_pos, rl.Color.white);
 }
 
+pub fn drawDebug(self: *const Platform, scene: *const Scene) void {
+    self.rigid_body.drawDebug(scene);
+}
+
 pub const Platform1 = @import("platform/standard.zig").Platform1;
 pub const Platform2 = @import("platform/standard.zig").Platform2;
 pub const Platform3 = @import("platform/standard.zig").Platform3;

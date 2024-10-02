@@ -37,10 +37,8 @@ pub const AnySpriteBuffer = struct {
 
     pub const Interface = struct {
         getInitialAnimationType: *const fn () u8,
-        // listAnimations: *const fn (ctx: *const anyopaque) []usize,
         readAnimation: *const fn (ctx: *const anyopaque, animation_type: u8) SpriteBufferError!Animation,
         readAnimationByIdx: *const fn (ctx: *const anyopaque, animation_idx: usize) SpriteBufferError!Animation,
-        // transformFrame: *const fn (frame_data: PackedFrame, prev: RenderableFrame) RenderableFrame,
     };
 
     pub fn readInitialAnimation(self: *const AnySpriteBuffer) SpriteBufferError!Animation {
@@ -71,9 +69,6 @@ pub const AnySpriteBuffer = struct {
             .animation = try self.impl.readAnimation(self.ptr, initial_animation_type),
         };
     }
-    // pub fn transformFrame(self: AnySpriteBuffer, frame_data: PackedFrame, prev: RenderableFrame) RenderableFrame {
-    //     return self.impl.transformFrame(frame_data, prev);
-    // }
 };
 
 pub const SpriteBufferError = error{
@@ -139,6 +134,10 @@ pub fn SpriteBuffer(
             return &self.texture_map.?;
         }
 
+        pub fn getInitialAnimationType() u8 {
+            return @intFromEnum(animation_types[0]);
+        }
+
         pub fn prebakeBuffer(self: *@This()) void {
             if (self.baked) {
                 return;
@@ -153,15 +152,15 @@ pub fn SpriteBuffer(
                     if (animation.frames[frame_idx].frame_pointer == 0) {
                         break;
                     }
-                    self.rendered_frames[anim_idx][frame_idx] = self.prerenderFrame(animation.frames[frame_idx].frame_pointer);
+                    self.rendered_frames[anim_idx][frame_idx] = self.prerenderFrame(animation.frames[frame_idx]);
                 }
             }
             self.baked = true;
         }
 
-        pub fn prerenderFrame(self: *const @This(), frame_idx: usize) ?rl.RenderTexture {
+        pub fn prerenderFrame(self: *const @This(), frame_data: PackedFrame) ?rl.RenderTexture {
             const texture_map = self.texture_map.?;
-            const src = texture_map[frame_idx] orelse {
+            const src = texture_map[frame_data.frame_pointer] orelse {
                 return null;
             };
 
@@ -179,7 +178,10 @@ pub fn SpriteBuffer(
                 .height = @abs(src.height),
             };
 
-            const render_texture = rl.loadRenderTexture(@intFromFloat(dest.width), @intFromFloat(dest.height));
+            var render_texture = rl.loadRenderTexture(
+                @intFromFloat(dest.width),
+                @intFromFloat(dest.height),
+            );
 
             render_texture.begin();
 
@@ -193,11 +195,15 @@ pub fn SpriteBuffer(
 
             render_texture.end();
 
-            return render_texture;
-        }
+            inline for (transforms, 0..) |transform, transform_idx| {
+                if (frame_data.transform_mask & (@as(u20, 1) << @as(u5, @intCast(transform_idx))) != 0) {
+                    const next_texture = transform(render_texture);
+                    render_texture.unload();
+                    render_texture = next_texture;
+                }
+            }
 
-        pub fn getInitialAnimationType() u8 {
-            return @intFromEnum(animation_types[0]);
+            return render_texture;
         }
 
         pub fn reader(self: *const @This()) AnySpriteBuffer {
@@ -209,71 +215,6 @@ pub fn SpriteBuffer(
                     .getInitialAnimationType = getInitialAnimationType,
                 },
             };
-        }
-
-        // pub fn transformFrame(
-        //     frame_data: PackedFrame,
-        //     prev: RenderableFrame,
-        // ) RenderableFrame {
-        //     var next = prev;
-        //     for (0..transforms.len) |transform_idx| {
-        //         if (frame_data.transform_mask & (@as(u20, 1) << @as(u5, @intCast(transform_idx))) != 0) {
-        //             const transform = inline for (transforms, 0..) |transform, idx| {
-        //                 if (idx == transform_idx) {
-        //                     break transform;
-        //                 }
-        //             } else unreachable;
-        //
-        //             next = transform(frame_data, next);
-        //         }
-        //     }
-        //     return next;
-        // }
-        //
-        pub fn listAnimations() []u8 {
-            var list: [max_no_of_animations]u8 = undefined;
-            for (animation_types) |idx| {
-                list[idx] = @intFromEnum(idx);
-            }
-            return list;
-        }
-
-        pub fn writeAnimation(
-            self: *@This(),
-            comptime animation_type: AnimationType,
-            duration: f32,
-            frames: []const Frame,
-        ) void {
-            const animation_idx = comptime blk: {
-                for (animation_types, 0..) |anim, i| {
-                    if (anim == animation_type) {
-                        break :blk i;
-                    }
-                }
-                @compileError("Invalid animation type referenced in writeAnimation(), make sure the animation type is allowed by the buffer");
-            };
-
-            const t_lim = @as(u20, 0xfffff) << @as(u5, transforms.len);
-            var frame_buffer: [max_no_of_frames]PackedFrame = .{PackedFrame.zero()} ** max_no_of_frames;
-            for (frames, 0..) |frame, i| {
-                frame_buffer[i] = frameFromU16(frame);
-                // @compileLog("setting frame {d}: {d}\n", i, .{frame_buffer[i]});
-                if (frame_buffer[i].transform_mask & t_lim != 0) {
-                    @compileError(
-                        "Trying to write a frame with a transform idx higher than the number of defined transforms in the buffer",
-                    );
-                }
-            }
-
-            // @compileLog("Writing animation:\n", .{@tagName(animation_type)}, frames, frames.len, frame_buffer[0..frames.len]);
-
-            self.data[animation_idx] = .{
-                .frames = frame_buffer,
-                .duration = duration,
-                .len = frames.len,
-            };
-
-            // @compileLog("Animation written:\n", .{self.data[animation_idx]});
         }
 
         pub fn readAnimationByIdx(
@@ -310,6 +251,39 @@ pub fn SpriteBuffer(
                     .frames = self.rendered_frames[animation_idx][0..animation.len],
                     .type = animation_type,
                 },
+            };
+        }
+
+        pub fn writeAnimation(
+            self: *@This(),
+            comptime animation_type: AnimationType,
+            duration: f32,
+            frames: []const Frame,
+        ) void {
+            const animation_idx = comptime blk: {
+                for (animation_types, 0..) |anim, i| {
+                    if (anim == animation_type) {
+                        break :blk i;
+                    }
+                }
+                @compileError("Invalid animation type referenced in writeAnimation(), make sure the animation type is allowed by the buffer");
+            };
+
+            const t_lim = @as(u20, 0xfffff) << @as(u5, transforms.len);
+            var frame_buffer: [max_no_of_frames]PackedFrame = .{PackedFrame.zero()} ** max_no_of_frames;
+            for (frames, 0..) |frame, i| {
+                frame_buffer[i] = frameFromU16(frame);
+                if (frame_buffer[i].transform_mask & t_lim != 0) {
+                    @compileError(
+                        "Trying to write a frame with a transform idx higher than the number of defined transforms in the buffer",
+                    );
+                }
+            }
+
+            self.data[animation_idx] = .{
+                .frames = frame_buffer,
+                .duration = duration,
+                .len = frames.len,
             };
         }
     };
@@ -523,11 +497,16 @@ pub const SpriteTextureMap = [128]?rl.Rectangle;
 pub const DrawPosition = struct {
     anchor: Anchor,
     offset: rl.Vector2,
-    pos: rl.Vector2,
+    body: rl.Rectangle,
 
-    pub fn init(pos: anytype, anchor: Anchor, offset: rl.Vector2) DrawPosition {
+    pub fn init(body: anytype, anchor: Anchor, offset: rl.Vector2) DrawPosition {
         return .{
-            .pos = .{ .x = pos.x, .y = pos.y },
+            .body = blk: {
+                if (@TypeOf(body) == rl.Vector2) {
+                    break :blk rl.Rectangle.init(body.x, body.y, 0, 0);
+                }
+                break :blk body;
+            },
             .anchor = anchor,
             .offset = offset,
         };
@@ -535,8 +514,8 @@ pub const DrawPosition = struct {
 
     pub fn toRect(self: DrawPosition, size: rl.Vector2) rl.Rectangle {
         var p = .{
-            .x = self.pos.x,
-            .y = self.pos.y,
+            .x = self.body.x,
+            .y = self.body.y,
             .width = size.x,
             .height = size.y,
         };
@@ -544,31 +523,43 @@ pub const DrawPosition = struct {
             Anchor.TopLeft => {},
             Anchor.TopCenter => {
                 p.x -= size.x / 2;
+                p.x += self.body.width / 2;
             },
             Anchor.TopRight => {
                 p.x -= size.x;
+                p.x += self.body.width;
             },
             Anchor.CenterLeft => {
                 p.y -= size.y / 2;
+                p.y += self.body.height / 2;
             },
             Anchor.Center => {
                 p.x -= size.x / 2;
+                p.x += self.body.width / 2;
                 p.y -= size.y / 2;
+                p.y += self.body.height / 2;
             },
             Anchor.CenterRight => {
                 p.x -= size.x;
+                p.x += self.body.width;
                 p.y -= size.y / 2;
+                p.y += self.body.height / 2;
             },
             Anchor.BottomLeft => {
                 p.y -= size.y;
+                p.y += self.body.height;
             },
             Anchor.BottomCenter => {
                 p.x -= size.x / 2;
+                p.x += self.body.width / 2;
                 p.y -= size.y;
+                p.y += self.body.height;
             },
             Anchor.BottomRight => {
                 p.x -= size.x;
+                p.x += self.body.width;
                 p.y -= size.y;
+                p.y += self.body.height;
             },
         }
         p.x += self.offset.x;
@@ -577,14 +568,6 @@ pub const DrawPosition = struct {
     }
 };
 
-// pub const NoAnimationsBuffer = AnimationBuffer(NoAnimationsType, &.{.Idle}, .{}, 1);
-// pub fn getNoAnimationsBuffer() NoAnimationsBuffer {
-//     // @compileLog("Building no-animations buffer...");
-//     var buffer = NoAnimationsBuffer{};
-//     buffer.writeAnimation(.Idle, 0.5, &.{1});
-//     return buffer;
-// }
-
 pub fn frameFromU16(frame_int: Frame) PackedFrame {
     return @bitCast(frame_int);
 }
@@ -592,3 +575,52 @@ pub fn frameFromU16(frame_int: Frame) PackedFrame {
 pub fn f(frame: PackedFrame) Frame {
     return @bitCast(frame);
 }
+
+pub const Transforms = struct {
+    pub fn rotate(frame: rl.RenderTexture, degrees: f32) rl.RenderTexture {
+        const next_frame = rl.loadRenderTexture(frame.texture.width, frame.texture.height);
+
+        const tex_size = shapes.vec2FromTexture(frame.texture);
+
+        next_frame.begin();
+        frame.texture.drawPro(
+            .{
+                .x = 0,
+                .y = 0,
+                .width = tex_size.x,
+                .height = -tex_size.y,
+            },
+            .{
+                .x = tex_size.x / 2,
+                .y = tex_size.y / 2,
+                .width = tex_size.x,
+                .height = tex_size.y,
+            },
+            .{
+                .x = tex_size.x / 2,
+                .y = tex_size.y / 2,
+            },
+            degrees,
+            rl.Color.white,
+        );
+        next_frame.end();
+
+        return next_frame;
+    }
+
+    pub fn scale(frame: rl.RenderTexture, multiplier: i32) rl.RenderTexture {
+        const next_frame = rl.loadRenderTexture(frame.texture.width * multiplier, frame.texture.height * multiplier);
+
+        var src_rect = shapes.rectFromTexture(frame.texture);
+        src_rect.height = -src_rect.height;
+        const dst_rect = shapes.rectFromTexture(next_frame.texture);
+
+        next_frame.begin();
+
+        frame.texture.drawPro(src_rect, dst_rect, .{ .x = 0, .y = 0 }, 0, rl.Color.white);
+
+        next_frame.end();
+
+        return next_frame;
+    }
+};
