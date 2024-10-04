@@ -57,7 +57,8 @@ var sprite_buffer: SpriteBuffer = buf: {
             4,
         },
     );
-    buffer.writeAnimation(.Jump, 0.1, &.{an.f(.{ .frame_pointer = 4, .transform_mask = 0b10 })});
+    // buffer.writeAnimation(.Jump, 0.1, &.{an.f(.{ .frame_pointer = 4, .transform_mask = 0b10 })});
+    buffer.writeAnimation(.Jump, 0.1, &.{4});
     buffer.writeAnimation(.Walk, 1, blk: {
         var data: [16]u32 = undefined;
         for (17..33, 0..) |i, idx| {

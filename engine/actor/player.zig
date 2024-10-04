@@ -15,6 +15,7 @@ const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
 const std = @import("std");
+const tracing = @import("../tracing.zig");
 const types = @import("../types.zig");
 
 const approach = helpers.approach;
@@ -241,6 +242,9 @@ fn handleEffectOver(ctx: *anyopaque, _: *an.Animation) void {
 }
 
 pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
+    const zone = tracing.ZoneN(@src(), "Player Update");
+    defer zone.End();
+
     if (self.isCurrentAnimation(.Death)) {
         self.sprite.update(delta_time);
         return;
@@ -371,6 +375,9 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
 }
 
 pub fn draw(self: *const Player, scene: *const Scene) void {
+    const zone = tracing.ZoneN(@src(), "Player Draw");
+    defer zone.End();
+
     const sprite_pos = an.DrawPosition.init(self.rigid_body.hitbox, .BottomCenter, self.sprite_offset);
 
     self.sprite.draw(scene, sprite_pos, rl.Color.white);
@@ -381,6 +388,9 @@ pub fn draw(self: *const Player, scene: *const Scene) void {
 }
 
 pub fn drawDebug(self: *const Player, scene: *const Scene) void {
+    const zone = tracing.ZoneN(@src(), "Player Draw Debug");
+    defer zone.End();
+
     const sprite_pos = an.DrawPosition.init(self.rigid_body.hitbox, .BottomCenter, self.sprite_offset);
 
     self.sprite.drawDebug(scene, sprite_pos);

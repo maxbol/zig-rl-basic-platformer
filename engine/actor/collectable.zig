@@ -11,6 +11,7 @@ const an = @import("../animation.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
 const std = @import("std");
+const tracing = @import("../tracing.zig");
 const types = @import("../types.zig");
 
 const approach = helpers.approach;
@@ -198,6 +199,9 @@ pub fn handleCollision(self: *Collectable, scene: *Scene, axis: types.Axis, sign
 }
 
 pub fn update(self: *Collectable, scene: *Scene, delta_time: f32) !void {
+    const zone = tracing.ZoneN(@src(), "Collectable update");
+    defer zone.End();
+
     if (self.is_collected or self.is_deleted) {
         return;
     }
@@ -225,6 +229,9 @@ pub fn update(self: *Collectable, scene: *Scene, delta_time: f32) !void {
 }
 
 pub fn draw(self: *const Collectable, scene: *const Scene) void {
+    const zone = tracing.ZoneN(@src(), "Collectable Draw");
+    defer zone.End();
+
     if (self.is_collected or self.is_deleted) {
         return;
     }
@@ -233,6 +240,9 @@ pub fn draw(self: *const Collectable, scene: *const Scene) void {
 }
 
 pub fn drawDebug(self: *const Collectable, scene: *const Scene) void {
+    const zone = tracing.ZoneN(@src(), "Collectable Draw Debug");
+    defer zone.End();
+
     if (self.is_collected or self.is_deleted) {
         return;
     }

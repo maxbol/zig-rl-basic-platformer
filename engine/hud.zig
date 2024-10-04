@@ -6,6 +6,7 @@ const Sprite = @import("sprite.zig");
 const an = @import("animation.zig");
 const rl = @import("raylib");
 const std = @import("std");
+const tracing = @import("tracing.zig");
 
 player: *Player,
 sprite_lives: an.Sprite,
@@ -24,22 +25,25 @@ pub fn init(player: *Player, font: rl.Font) HUD {
 }
 
 pub fn update(self: *HUD, delta_time: f32) void {
+    const zone = tracing.ZoneN(@src(), "HUD Update");
+    defer zone.End();
+
     self.sprite_points.update(delta_time);
     self.sprite_lives.update(delta_time);
 }
 
 pub fn draw(self: *HUD, scene: *const Scene) void {
+    const zone = tracing.ZoneN(@src(), "HUD Draw");
+    defer zone.End();
+
     const lives_left = self.player.lives;
     const points_gained = self.player.score;
 
     const lives_draw_x = scene.gamestate.viewport.rectangle.x + 10;
     const lives_draw_y = scene.gamestate.viewport.rectangle.y + 10;
 
-    std.debug.print("getting hud animation frames\n", .{});
     const sprite_points_frame = self.sprite_points.animation.getFrame() orelse return;
     const sprite_lives_frame = self.sprite_lives.animation.getFrame() orelse return;
-
-    std.debug.print("sprite_points_frame.width: {d}\n", .{sprite_points_frame.width});
 
     const sprite_points_size_x = @as(f32, @floatFromInt(sprite_points_frame.width));
     const sprite_points_size_y = @as(f32, @floatFromInt(sprite_points_frame.height));

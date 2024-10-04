@@ -11,6 +11,7 @@ const rl = @import("raylib");
 const types = @import("../types.zig");
 const shapes = @import("../shapes.zig");
 const std = @import("std");
+const tracing = @import("../tracing.zig");
 
 pub const AnimationType = enum(u8) {
     Initial,
@@ -222,6 +223,9 @@ fn isPlayingAnimation(self: *MysteryBox, animation: AnimationType) bool {
 }
 
 pub fn update(self: *MysteryBox, scene: *Scene, delta_time: f32) !void {
+    const zone = tracing.ZoneN(@src(), "MysteryBox Update");
+    defer zone.End();
+
     _ = scene; // autofix
     if (self.is_deleted) {
         return;
@@ -235,6 +239,9 @@ pub fn update(self: *MysteryBox, scene: *Scene, delta_time: f32) !void {
 }
 
 pub fn draw(self: *const MysteryBox, scene: *const Scene) void {
+    const zone = tracing.ZoneN(@src(), "MysteryBox Draw");
+    defer zone.End();
+
     if (self.is_deleted) {
         return;
     }

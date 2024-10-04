@@ -6,6 +6,7 @@ const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
 const std = @import("std");
+const tracing = @import("../tracing.zig");
 
 ptr: *anyopaque,
 impl: *const Interface,
@@ -149,6 +150,9 @@ pub fn drawTileAt(self: TileLayer, tile: u8, row_idx: usize, col_idx: usize, tin
 }
 
 pub fn draw(self: TileLayer, _: *const Scene) void {
+    const zone = tracing.ZoneN(@src(), "TileLayer draw");
+    defer zone.End();
+
     const scroll = self.getScrollState();
     const tileset = self.getTileset();
     const tile_size = tileset.getTileSize();
@@ -162,6 +166,9 @@ pub fn draw(self: TileLayer, _: *const Scene) void {
 }
 
 pub fn drawDebug(layer: TileLayer, scene: *const Scene) void {
+    const zone = tracing.ZoneN(@src(), "TileLayer drawDebug");
+    defer zone.End();
+
     if (!debug.isDebugFlagSet(.ShowCollidedTiles) and !debug.isDebugFlagSet(.ShowTestedTiles)) {
         return;
     }

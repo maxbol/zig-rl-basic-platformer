@@ -15,57 +15,48 @@ const helpers = @import("helpers.zig");
 const rl = @import("raylib");
 const std = @import("std");
 
-export fn gameInit() callconv(.C) *anyopaque {
-    const game_state = GameState.create() catch @panic("Failed to create game state");
+pub fn gameInit(allocator: std.mem.Allocator) *GameState {
+    // tracing.InitThread();
+    const game_state = GameState.create(allocator) catch @panic("Failed to create game state");
     return game_state;
 }
 
-export fn gameDeinit(ctx: *anyopaque) callconv(.C) void {
-    const self: *GameState = @ptrCast(@alignCast(ctx));
-    return self.deinit();
+pub fn gameDeinit(gamestate: *GameState) void {
+    return gamestate.deinit();
 }
 
-export fn gameReload(ctx: *anyopaque) callconv(.C) void {
-    const self: *GameState = @ptrCast(@alignCast(ctx));
-    return self.reload();
+pub fn gameReload(gamestate: *GameState) void {
+    return gamestate.reload();
 }
 
-export fn gameSetupRaylib(ctx: *anyopaque) callconv(.C) void {
-    const game_state: *GameState = @ptrCast(@alignCast(ctx));
-
+pub fn gameSetupRaylib(gamestate: *GameState) void {
     rl.setWindowMinSize(constants.GAME_SIZE_X, constants.GAME_SIZE_Y);
     rl.setTargetFPS(120); // Set our game to run at 60 frames-per-second
 
-    game_state.render_texture = rl.loadRenderTexture(constants.GAME_SIZE_X, constants.GAME_SIZE_Y);
-    rl.setTextureFilter(game_state.render_texture.texture, .texture_filter_bilinear);
+    gamestate.render_texture = rl.loadRenderTexture(constants.GAME_SIZE_X, constants.GAME_SIZE_Y);
+    rl.setTextureFilter(gamestate.render_texture.texture, .texture_filter_bilinear);
 
     // Play music
     // TODO(23/09/2024): Handle this somewhere else
-    rl.playMusicStream(game_state.current_music.*);
+    rl.playMusicStream(gamestate.current_music.*);
 }
 
-export fn gameTeardownRaylib(ctx: *anyopaque) callconv(.C) void {
-    const game_state: *GameState = @ptrCast(@alignCast(ctx));
-
-    rl.unloadRenderTexture(game_state.render_texture);
+pub fn gameTeardownRaylib(gamestate: *GameState) void {
+    rl.unloadRenderTexture(gamestate.render_texture);
 }
 
-export fn gameUpdate(ctx: *anyopaque) callconv(.C) void {
-    const game_state: *GameState = @ptrCast(@alignCast(ctx));
-    return game_state.update() catch @panic("Failed to update game state");
+pub fn gameUpdate(gamestate: *GameState) void {
+    return gamestate.update() catch @panic("Failed to update game state");
 }
 
-export fn gameDraw(ctx: *anyopaque) callconv(.C) void {
-    const game_state: *GameState = @ptrCast(@alignCast(ctx));
-    return game_state.draw();
+pub fn gameDraw(gamestate: *GameState) void {
+    return gamestate.draw();
 }
 
-export fn gameNotifyHRStarted(ctx: *anyopaque) callconv(.C) void {
-    const game_state: *GameState = @ptrCast(@alignCast(ctx));
-    return game_state.notifyHRStarted();
+pub fn gameNotifyHRStarted(gamestate: *GameState) void {
+    return gamestate.notifyHRStarted();
 }
 
-export fn gameNotifyHRDone(ctx: *anyopaque) callconv(.C) void {
-    const game_state: *GameState = @ptrCast(@alignCast(ctx));
-    return game_state.notifyHRDone();
+pub fn gameNotifyHRDone(gamestate: *GameState) void {
+    return gamestate.notifyHRDone();
 }

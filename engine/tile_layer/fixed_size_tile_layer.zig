@@ -5,6 +5,7 @@ const Tileset = @import("../tileset/tileset.zig");
 const debug = @import("../debug.zig");
 const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
+const tracing = @import("../tracing.zig");
 const std = @import("std");
 
 pub fn FixedSizeTileLayer(comptime size: usize) type {
@@ -265,6 +266,9 @@ pub fn FixedSizeTileLayer(comptime size: usize) type {
         }
 
         fn update(ctx: *anyopaque, scene: *Scene, _: f32) !void {
+            const zone = tracing.ZoneN(@src(), "TileLayer Update");
+            defer zone.End();
+
             const self: *@This() = @ptrCast(@alignCast(ctx));
             try self.scrollable.update(scene, self.tileLayer());
         }

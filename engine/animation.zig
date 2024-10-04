@@ -436,7 +436,6 @@ pub const Sprite = struct {
     }
 
     pub fn setAnimation(self: *Sprite, animation_type: anytype, param: SetAnimationParameters) void {
-        std.debug.print("Setting animation: {s}\n", .{@tagName(animation_type)});
         const anim_int: u8 = @intFromEnum(animation_type);
         if (self.animation.anim_data.type != anim_int) {
             self.animation = self.reader.readAnimation(animation_type) catch |err| {
@@ -450,7 +449,6 @@ pub const Sprite = struct {
         }
         self.animation.anim_freeze_on_last_frame = param.freeze_animation_on_last_frame;
         self.animation.anim_speed = param.animation_speed;
-        std.debug.print("Animation set: {s}\n", .{@tagName(animation_type)});
     }
 
     pub fn update(self: *Sprite, delta_time: f32) void {

@@ -11,6 +11,7 @@ const helpers = @import("helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("shapes.zig");
 const std = @import("std");
+const tracing = @import("tracing.zig");
 const TileLayer = @import("tile_layer/tile_layer.zig");
 
 // Initial state
@@ -551,6 +552,9 @@ pub fn removeMob(self: *Scene, mob_idx: usize) void {
 }
 
 pub fn update(self: *Scene, delta_time: f32, game_state: *GameState) !void {
+    const zone = tracing.ZoneN(@src(), "Scene Update");
+    defer zone.End();
+
     if (!self.first_frame_initialization_done) {
         self.first_frame_initialization_done = true;
         self.gamestate.player.actor().setPos(self.player_starting_pos);
@@ -619,6 +623,9 @@ pub fn update(self: *Scene, delta_time: f32, game_state: *GameState) !void {
 }
 
 pub fn draw(self: *const Scene, game_state: *const GameState) void {
+    const zone = tracing.ZoneN(@src(), "Scene Draw");
+    defer zone.End();
+
     for (self.bg_layers.items, 0..) |layer, i| {
         const layer_mask_index = -@as(i16, @intCast(self.bg_layers.items.len - i));
         if (self.layer_visibility_treshold != null and layer_mask_index > self.layer_visibility_treshold.?) {
@@ -660,6 +667,8 @@ pub fn draw(self: *const Scene, game_state: *const GameState) void {
     }
 
     // Draw gameover text
+    const game_over_t_zone = tracing.ZoneN(@src(), "Scene Draw Game Over Text");
+    defer game_over_t_zone.End();
     if (self.game_over_screen_elapsed >= game_over_screen_duration) {
         const text = game_state.game_over_texts[game_state.game_over_counter % game_state.game_over_texts.len];
         const game_over_text_x = self.gamestate.viewport.rectangle.x + (self.gamestate.viewport.rectangle.width / 2) - 130;
@@ -669,6 +678,9 @@ pub fn draw(self: *const Scene, game_state: *const GameState) void {
 }
 
 pub fn drawDebug(self: *const Scene) void {
+    const zone = tracing.ZoneN(@src(), "Scene Draw Debug");
+    defer zone.End();
+
     for (self.bg_layers.items) |layer| {
         layer.drawDebug(self);
     }

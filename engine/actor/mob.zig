@@ -11,6 +11,7 @@ const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
 const std = @import("std");
+const tracing = @import("../tracing.zig");
 const types = @import("../types.zig");
 
 const approach = helpers.approach;
@@ -265,6 +266,9 @@ pub fn kill(self: *Mob) void {
 }
 
 pub fn update(self: *Mob, scene: *Scene, delta_time: f32) !void {
+    const zone = tracing.ZoneN(@src(), "Mob Update");
+    defer zone.End();
+
     if (self.is_deleted or self.is_dead) {
         return;
     }
@@ -329,6 +333,9 @@ pub fn update(self: *Mob, scene: *Scene, delta_time: f32) !void {
 }
 
 pub fn draw(self: *const Mob, scene: *const Scene) void {
+    const zone = tracing.ZoneN(@src(), "Mob Draw");
+    defer zone.End();
+
     if (self.is_deleted or self.is_dead) {
         return;
     }
@@ -337,6 +344,9 @@ pub fn draw(self: *const Mob, scene: *const Scene) void {
 }
 
 pub fn drawDebug(self: *const Mob, scene: *const Scene) void {
+    const zone = tracing.ZoneN(@src(), "Mob Draw Debug");
+    defer zone.End();
+
     if (self.is_deleted or self.is_dead) {
         return;
     }

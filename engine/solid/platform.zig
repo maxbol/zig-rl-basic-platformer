@@ -10,6 +10,7 @@ const helpers = @import("../helpers.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
 const std = @import("std");
+const tracing = @import("../tracing.zig");
 
 pub const MAX_NO_OF_BEHAVIORS = 5;
 
@@ -134,6 +135,9 @@ fn getHitboxRectCast(ctx: *const anyopaque) rl.Rectangle {
 }
 
 pub fn update(self: *Platform, scene: *Scene, delta_time: f32) !void {
+    const zone = tracing.ZoneN(@src(), "Platform Update");
+    defer zone.End();
+
     self.sprite.update(delta_time);
 
     for (0..self.behaviors_amount) |i| {
@@ -146,11 +150,17 @@ pub fn update(self: *Platform, scene: *Scene, delta_time: f32) !void {
 }
 
 pub fn draw(self: *const Platform, scene: *const Scene) void {
+    const zone = tracing.ZoneN(@src(), "Platform Draw");
+    defer zone.End();
+
     const sprite_pos = an.DrawPosition.init(self.rigid_body.hitbox, .TopLeft, self.sprite_offset);
     self.sprite.draw(scene, sprite_pos, rl.Color.white);
 }
 
 pub fn drawDebug(self: *const Platform, scene: *const Scene) void {
+    const zone = tracing.ZoneN(@src(), "Platform Draw Debug");
+    defer zone.End();
+
     self.rigid_body.drawDebug(scene);
 }
 

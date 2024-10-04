@@ -2,6 +2,7 @@ const helpers = @import("helpers.zig");
 const rl = @import("raylib");
 const Viewport = @This();
 const Scene = @import("scene.zig");
+const tracing = @import("tracing.zig");
 
 const approach = helpers.approach;
 
@@ -15,6 +16,9 @@ pub fn init(rectangle: rl.Rectangle) Viewport {
 }
 
 pub fn update(self: *Viewport, delta_time: f32) void {
+    const zone = tracing.ZoneN(@src(), "Viewport Update");
+    defer zone.End();
+
     if (self.target_rect.width != self.rectangle.width or self.target_rect.width != self.rectangle.width) {
         self.rectangle.width = approach(self.rectangle.width, self.target_rect.width, resize_speed * delta_time);
     }
@@ -25,6 +29,9 @@ pub fn update(self: *Viewport, delta_time: f32) void {
 }
 
 pub fn draw(self: *const Viewport) void {
+    const zone = tracing.ZoneN(@src(), "Viewport Draw");
+    defer zone.End();
+
     helpers.drawRectBorder(self.rectangle, 1, rl.Color.white);
 }
 

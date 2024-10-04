@@ -12,6 +12,7 @@ const controls = @import("controls.zig");
 const helpers = @import("helpers.zig");
 const rg = @import("raygui");
 const rl = @import("raylib");
+const tracing = @import("tracing.zig");
 const shapes = @import("shapes.zig");
 const std = @import("std");
 
@@ -224,6 +225,9 @@ pub fn update(self: *Editor, delta_time: f32) !void {
 }
 
 pub fn draw(self: *const Editor) void {
+    const zone = tracing.ZoneN(@src(), "Editor draw");
+    defer zone.End();
+
     self.palette_tiles.draw(self, self.active_palette == .Tile);
     self.palette_mob.draw(self, self.active_palette == .Mob);
     self.palette_collectables.draw(self, self.active_palette == .Collectable);

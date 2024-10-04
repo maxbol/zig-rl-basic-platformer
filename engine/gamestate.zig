@@ -11,6 +11,7 @@ const helpers = @import("helpers.zig");
 const rl = @import("raylib");
 const std = @import("std");
 const Tileset = @import("tileset/tileset.zig");
+const tracing = @import("tracing.zig");
 
 allocator: std.mem.Allocator = undefined,
 current_music: *rl.Music = undefined,
@@ -36,11 +37,7 @@ scene_file: []const u8 = "data/scenes/level1.scene",
 viewport: Viewport = undefined,
 vmouse: controls.VirtualMouse = controls.VirtualMouse{},
 
-var gpa: std.heap.GeneralPurposeAllocator(.{}) = undefined;
-
-pub fn create() !*GameState {
-    gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
+pub fn create(allocator: std.mem.Allocator) !*GameState {
     var gamestate = try allocator.create(GameState);
 
     gamestate.allocator = allocator;
@@ -152,6 +149,9 @@ pub fn notifyHRDone(self: *GameState) void {
 }
 
 pub fn update(self: *GameState) !void {
+    const zone = tracing.ZoneN(@src(), "Game Update");
+    defer zone.End();
+
     if (self.current_music == &self.music_gameover and !rl.isMusicStreamPlaying(self.current_music.*)) {
         self.current_music = &self.music_level;
         rl.seekMusicStream(self.current_music.*, 0);
@@ -210,6 +210,9 @@ pub fn update(self: *GameState) !void {
 }
 
 pub fn draw(self: *GameState) void {
+    const zone = tracing.ZoneN(@src(), "Game Draw");
+    defer zone.End();
+
     const screen_width: f32 = @floatFromInt(rl.getScreenWidth());
     const screen_height: f32 = @floatFromInt(rl.getScreenHeight());
     const scale = @min(
@@ -223,7 +226,6 @@ pub fn draw(self: *GameState) void {
     self.vmouse.update(scale);
 
     if (self.debug_sprite_previewer) |previewer| {
-        std.debug.print("Drawing sprite previewer {any}\n", .{previewer});
         previewer.draw();
     } else {
         self.viewport.draw();
@@ -249,10 +251,17 @@ pub fn draw(self: *GameState) void {
 
     // Draw render texture to screen
     //----------------------------------------------------------------------------------
+    const raylib_draw_zone = tracing.ZoneN(@src(), "Raylib Draw");
+    defer raylib_draw_zone.End();
+
     rl.beginDrawing();
     defer rl.endDrawing();
 
-    rl.beginShaderMode(self.post_processing_shader);
+    // const rl_shader_mode_zone = tracing.ZoneN(@src(), "Raylib Shader Mode");
+    // defer rl_shader_mode_zone.End();
+    //
+    // rl.beginShaderMode(self.post_processing_shader);
+    // defer rl.endShaderMode();
 
     rl.clearBackground(rl.Color.black);
     rl.drawTexturePro(
@@ -268,8 +277,6 @@ pub fn draw(self: *GameState) void {
         0,
         rl.Color.white,
     );
-
-    rl.endShaderMode();
 }
 
 fn rebuildAndStoreDefaultTileset(allocator: std.mem.Allocator, tileset_path: []const u8) void {
@@ -327,7 +334,6 @@ fn generateTilesetTileFlagMap() [512]u8 {
 }
 
 fn setDebugMode(self: *const GameState) void {
-    std.debug.print("Setting debug mode {d}\n", .{self.debug_mode});
     debug.clearDebugFlags();
     if (self.debug_mode == -1) {
         debug.setDebugFlags(self.debug_flags);

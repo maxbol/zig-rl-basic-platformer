@@ -94,7 +94,8 @@ fn recompileGameDll(allocator: std.mem.Allocator, ts: i64) void {
     const process_args = [_][]const u8{
         "zig",
         "build",
-        "-Dgame_only=true",
+        "-Dgame_only",
+        "-Dhotreload",
         ts_arg,
         "--search-prefix",
         "./zig-out",
