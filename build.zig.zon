@@ -27,6 +27,10 @@
             .url = "https://github.com/Not-Nik/raylib-zig/archive/devel.tar.gz",
             .hash = "1220fc554f109a45a77ee5c58b4a847936dc0b24dcbed818b65a02de1b58500041dc",
         },
+        .ziglua = .{
+            .url = "https://github.com/natecraddock/ziglua/archive/master.tar.gz",
+            .hash = "1220cc7329d4dfafb588438a1259c3f286780fc315fbc3d5ecac8fe32133a8862c45",
+        },
     },
     .paths = .{
         "build.zig",

@@ -1,5 +1,4 @@
 const Platform = @import("../platform.zig");
-const Sprite = @import("../../sprite.zig");
 const an = @import("../../animation.zig");
 const behavior = @import("../platform_behaviors.zig");
 const rl = @import("raylib");

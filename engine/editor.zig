@@ -4,7 +4,6 @@ const GameState = @import("gamestate.zig");
 const Overlay = @import("editor/overlay.zig");
 const Palette = @import("editor/palette.zig");
 const Scene = @import("scene.zig");
-const Sprite = @import("sprite.zig");
 const TileLayer = @import("tile_layer/tile_layer.zig");
 const an = @import("animation.zig");
 const constants = @import("constants.zig");

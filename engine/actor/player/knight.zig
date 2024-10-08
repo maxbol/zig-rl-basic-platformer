@@ -1,5 +1,4 @@
 const Player = @import("../player.zig");
-const Sprite = @import("../../sprite.zig");
 const an = @import("../../animation.zig");
 const constants = @import("../../constants.zig");
 const rl = @import("raylib");
@@ -8,7 +7,7 @@ var texture: ?rl.Texture = null;
 
 pub const Transforms = struct {
     pub fn rotate45Deg(frame: rl.RenderTexture) rl.RenderTexture {
-        return an.Transforms.rotate(frame, 45);
+        return an.Transforms.rotate(frame, 45, .Center);
     }
 
     pub fn scale3X(frame: rl.RenderTexture) rl.RenderTexture {

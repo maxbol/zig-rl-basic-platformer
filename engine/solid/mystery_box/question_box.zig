@@ -1,5 +1,4 @@
 const MysteryBox = @import("../mystery_box.zig");
-const Sprite = @import("../../sprite.zig");
 const an = @import("../../animation.zig");
 const rl = @import("raylib");
 

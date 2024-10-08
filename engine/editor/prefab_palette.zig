@@ -1,6 +1,5 @@
 const Editor = @import("../editor.zig");
 const Palette = @import("palette.zig");
-const Sprite = @import("../sprite.zig");
 const an = @import("../animation.zig");
 const helpers = @import("../helpers.zig");
 const rl = @import("raylib");

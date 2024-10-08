@@ -3,7 +3,6 @@ const GameState = @import("../gamestate.zig");
 const MysteryBox = @This();
 const Scene = @import("../scene.zig");
 const Solid = @import("solid.zig");
-const Sprite = @import("../sprite.zig");
 const an = @import("../animation.zig");
 const constants = @import("../constants.zig");
 const helpers = @import("../helpers.zig");

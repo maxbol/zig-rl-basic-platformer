@@ -21,7 +21,7 @@ pub fn addBuildOptions(tb: TracerBuild, b: *std.Build, m: *std.Build.Module) voi
     m.addOptions("build_options", options);
 }
 
-pub fn addTracing(tb: TracerBuild, b: *std.Build, c: *std.Build.Step.Compile, dep_opts: anytype) void {
+pub fn addTracing(tb: TracerBuild, b: *std.Build, c: *std.Build.Step.Compile, target: std.Build.ResolvedTarget) void {
     tb.addBuildOptions(b, &c.root_module);
 
     const path = tb.path_to_tracy orelse {
@@ -47,7 +47,7 @@ pub fn addTracing(tb: TracerBuild, b: *std.Build, c: *std.Build.Step.Compile, de
         "-fno-sanitize=undefined",
     }) catch unreachable;
 
-    if (dep_opts.target.result.isMinGW()) {
+    if (target.result.isMinGW()) {
         c_flags_list.appendSlice(&.{
             "-D_WIN32_WINNT=0x601",
         }) catch unreachable;
@@ -72,7 +72,7 @@ pub fn addTracing(tb: TracerBuild, b: *std.Build, c: *std.Build.Step.Compile, de
     c.linkLibC();
     c.linkSystemLibrary("c++");
 
-    if (dep_opts.target.result.isMinGW()) {
+    if (target.result.isMinGW()) {
         c.linkSystemLibrary("dbghelp");
         c.linkSystemLibrary("ws2_32");
     }

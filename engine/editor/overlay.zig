@@ -1,22 +1,23 @@
+const GameState = @import("../gamestate.zig");
 const Palette = @import("palette.zig");
 const PrefabOverlay = @import("prefab_overlay.zig").PrefabOverlay;
 const Scene = @import("../scene.zig");
 const constants = @import("../constants.zig");
 const rl = @import("raylib");
 
-fn spawnMob(scene: *Scene, item_idx: usize, pos: rl.Vector2) anyerror!void {
-    _ = try scene.spawnMob(item_idx, pos);
+fn spawnMob(scene: *Scene, item_idx: usize, pos: rl.Vector2, gamestate: *GameState) anyerror!void {
+    _ = try scene.spawnMob(item_idx, pos, gamestate);
 }
 
-fn spawnCollectable(scene: *Scene, item_idx: usize, pos: rl.Vector2) anyerror!void {
+fn spawnCollectable(scene: *Scene, item_idx: usize, pos: rl.Vector2, _: *GameState) anyerror!void {
     _ = try scene.spawnCollectable(item_idx, pos);
 }
 
-fn spawnPlatform(scene: *Scene, item_idx: usize, pos: rl.Vector2) anyerror!void {
+fn spawnPlatform(scene: *Scene, item_idx: usize, pos: rl.Vector2, _: *GameState) anyerror!void {
     _ = try scene.spawnPlatform(item_idx, pos);
 }
 
-fn spawnMysteryBox(scene: *Scene, item_idx: usize, pos: rl.Vector2) anyerror!void {
+fn spawnMysteryBox(scene: *Scene, item_idx: usize, pos: rl.Vector2, _: *GameState) anyerror!void {
     _ = try scene.spawnMysteryBox(item_idx, pos);
 }
 

@@ -4,7 +4,6 @@ const Platform = @import("platform.zig");
 const RigidBody = @import("rigid_body.zig");
 const Scene = @import("../scene.zig");
 const Solid = @import("solid.zig");
-const Sprite = @import("../sprite.zig");
 const an = @import("../animation.zig");
 const helpers = @import("../helpers.zig");
 const rl = @import("raylib");

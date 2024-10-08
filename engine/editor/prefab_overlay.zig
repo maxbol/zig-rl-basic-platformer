@@ -1,4 +1,5 @@
 const Actor = @import("../actor/actor.zig");
+const GameState = @import("../gamestate.zig");
 const Palette = @import("palette.zig");
 const Editor = @import("../editor.zig");
 const Scene = @import("../scene.zig");
@@ -16,6 +17,7 @@ pub fn PrefabOverlay(
         scene: *Scene,
         item_type: usize,
         pos: rl.Vector2,
+        gamestate: *GameState,
     ) anyerror!void,
     remove_fn: fn (
         scene: *Scene,
@@ -102,7 +104,7 @@ pub fn PrefabOverlay(
                     msp.x - (if (self.snap_to_grid) 0 else sprite_size_x / 2) + sprite_offset.x,
                     msp.y - (if (self.snap_to_grid) 0 else sprite_size_y / 2) + sprite_offset.y,
                 );
-                try spawn_fn(editor.scene, selected_item, spawn_pos);
+                try spawn_fn(editor.scene, selected_item, spawn_pos, editor.gamestate);
             }
         }
 

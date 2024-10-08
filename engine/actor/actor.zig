@@ -2,6 +2,7 @@ const Actor = @This();
 const RigidBody = @import("rigid_body.zig");
 const Scene = @import("../scene.zig");
 const Solid = @import("../solid/solid.zig");
+const an = @import("../animation.zig");
 const rl = @import("raylib");
 const shapes = @import("../shapes.zig");
 const types = @import("../types.zig");
@@ -13,6 +14,7 @@ pub const Interface = struct {
     getRigidBody: *const fn (ctx: *anyopaque) *RigidBody,
     getHitboxRect: *const fn (ctx: *const anyopaque) rl.Rectangle,
     getGridRect: *const fn (ctx: *const anyopaque) shapes.IRect,
+    getSprite: *const fn (ctx: *anyopaque) *an.Sprite,
     isHostile: *const fn () bool,
     setPos: *const fn (ctx: *anyopaque, pos: rl.Vector2) void,
     squish: ?*const fn (*anyopaque, *Scene, types.Axis, i8, u8) void = null,
@@ -69,6 +71,10 @@ pub fn getHitboxRect(self: Actor) rl.Rectangle {
 
 pub fn getGridRect(self: Actor) shapes.IRect {
     return self.impl.getGridRect(self.ptr);
+}
+
+pub fn getSprite(self: Actor) *an.Sprite {
+    return self.impl.getSprite(self.ptr);
 }
 
 pub fn isHostile(self: Actor) bool {

@@ -1,7 +1,9 @@
 const Mob = @import("../mob.zig");
-const Sprite = @import("../../sprite.zig");
 const an = @import("../../animation.zig");
 const rl = @import("raylib");
+const scriptFile = @embedFile("slime.luau");
+const std = @import("std");
+const ziglua = @import("ziglua");
 
 var texture: ?rl.Texture = null;
 
@@ -38,6 +40,10 @@ pub fn getSpriteReader() an.AnySpriteBuffer {
     return sprite_buffer.reader();
 }
 
+fn getScript(allocator: std.mem.Allocator) error{OutOfMemory}![]const u8 {
+    return ziglua.compile(allocator, scriptFile, .{}) catch error.OutOfMemory;
+}
+
 pub const green_slime_behavior = Mob.MobBehavior{
     .walk_speed = 1 * 60,
     .fall_speed = 3.6 * 60,
@@ -65,4 +71,5 @@ pub const GreenSlime = Mob.Prefab(
     // Behavior
     &green_slime_behavior,
     getSpriteReader,
+    getScript,
 );

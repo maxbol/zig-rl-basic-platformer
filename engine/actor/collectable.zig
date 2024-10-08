@@ -4,7 +4,6 @@ const GameState = @import("../gamestate.zig");
 const Player = @import("player.zig");
 const RigidBody = @import("rigid_body.zig");
 const Scene = @import("../scene.zig");
-const Sprite = @import("../sprite.zig");
 const Solid = @import("../solid/solid.zig");
 const helpers = @import("../helpers.zig");
 const an = @import("../animation.zig");
@@ -111,6 +110,7 @@ pub fn actor(self: *Collectable) Actor {
         .getRigidBody = getRigidBodyCast,
         .getHitboxRect = getHitboxRectCast,
         .getGridRect = getGridRectCast,
+        .getSprite = getSpriteCast,
         .isHostile = isHostile,
         .setPos = setPosCast,
     } };
@@ -140,6 +140,11 @@ fn getHitboxRectCast(ctx: *const anyopaque) rl.Rectangle {
     return self.getHitboxRect();
 }
 
+fn getSpriteCast(ctx: *anyopaque) *an.Sprite {
+    const self: *Collectable = @ptrCast(@alignCast(ctx));
+    return self.getSprite();
+}
+
 fn setPosCast(ctx: *anyopaque, pos: rl.Vector2) void {
     const self: *Collectable = @ptrCast(@alignCast(ctx));
     self.setPos(pos);
@@ -159,6 +164,10 @@ pub inline fn getGridRect(self: *const Collectable) shapes.IRect {
 
 pub inline fn getHitboxRect(self: *const Collectable) rl.Rectangle {
     return self.rigid_body.hitbox;
+}
+
+pub inline fn getSprite(self: *Collectable) *an.Sprite {
+    return &self.sprite;
 }
 
 pub inline fn getInitialPos(self: *const Collectable) rl.Vector2 {

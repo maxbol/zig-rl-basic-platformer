@@ -1,7 +1,7 @@
 const Actor = @import("actor/actor.zig");
 const GameState = @import("gamestate.zig");
 const Scene = @This();
-const Sprite = @import("sprite.zig");
+const ScriptManager = @import("script_manager.zig");
 const Solid = @import("solid/solid.zig");
 const Tileset = @import("tileset/tileset.zig");
 const Viewport = @import("viewport.zig");
@@ -22,6 +22,7 @@ bg_layers: std.ArrayList(TileLayer),
 fg_layers: std.ArrayList(TileLayer),
 player_starting_pos: rl.Vector2,
 mobs: std.ArrayList(Actor.Mob),
+mobs_sm: *ScriptManager,
 collectables: std.ArrayList(Actor.Collectable),
 platforms: std.ArrayList(Solid.Platform),
 mystery_boxes: std.ArrayList(Solid.MysteryBox),
@@ -117,9 +118,15 @@ pub fn create(
     platforms: std.ArrayList(Solid.Platform),
     mystery_boxes: std.ArrayList(Solid.MysteryBox),
 ) !*Scene {
-    const new = try allocator.create(Scene);
+    const scene = try allocator.create(Scene);
+    const mobs_sm = try ScriptManager.create(allocator, scene, gamestate);
 
-    new.* = .{
+    for (mobs.items, 0..) |*mob, entity_idx| {
+        const byte_code = try Actor.Mob.getScriptByIndex(@intCast(mob.mob_type), gamestate);
+        try mobs_sm.loadByteCode(entity_idx, byte_code);
+    }
+
+    scene.* = .{
         .allocator = allocator,
         .main_layer = main_layer,
         .bg_layers = bg_layers orelse std.ArrayList(TileLayer).init(allocator),
@@ -129,6 +136,7 @@ pub fn create(
         // Actors
         .player_starting_pos = player_starting_pos,
         .mobs = mobs,
+        .mobs_sm = mobs_sm,
         .collectables = collectables,
 
         // Solids
@@ -136,7 +144,7 @@ pub fn create(
         .mystery_boxes = mystery_boxes,
     };
 
-    return new;
+    return scene;
 }
 
 pub fn destroy(self: *const Scene) void {
@@ -150,6 +158,7 @@ pub fn destroy(self: *const Scene) void {
     }
     self.fg_layers.deinit();
     self.mobs.deinit();
+    self.mobs_sm.destroy();
     self.collectables.deinit();
     self.platforms.deinit();
     self.mystery_boxes.deinit();
@@ -235,6 +244,7 @@ pub fn readBytes(allocator: std.mem.Allocator, reader: anytype, gamestate: *Game
             try Actor.Mob.initMobByIndex(
                 mob_type,
                 mob_pos,
+                gamestate,
             ),
         );
     }
@@ -502,10 +512,13 @@ pub fn spawnCollectable(self: *Scene, collectable_type: usize, pos: rl.Vector2) 
     return &self.collectables.items[self.collectables.items.len - 1];
 }
 
-pub fn spawnMob(self: *Scene, mob_type: usize, pos: rl.Vector2) !*Actor.Mob {
-    const mob: Actor.Mob = try Actor.Mob.initMobByIndex(mob_type, pos);
+pub fn spawnMob(self: *Scene, mob_type: usize, pos: rl.Vector2, gamestate: *GameState) !*Actor.Mob {
+    const mob: Actor.Mob = try Actor.Mob.initMobByIndex(mob_type, pos, gamestate);
     try self.mobs.append(mob);
-    return &self.mobs.items[self.mobs.items.len - 1];
+    const mob_idx = self.mobs.items.len - 1;
+    const byte_code = try Actor.Mob.getScriptByIndex(mob_type, gamestate);
+    try self.mobs_sm.loadByteCode(mob_idx, byte_code);
+    return &self.mobs.items[mob_idx];
 }
 
 pub fn spawnPlatform(self: *Scene, platform_type: usize, pos: rl.Vector2) !*Solid.Platform {
@@ -595,6 +608,12 @@ pub fn update(self: *Scene, delta_time: f32, game_state: *GameState) !void {
     }
 
     if (!debug.isPaused()) {
+        std.debug.print("Running mob scripts\n", .{});
+        var mobs_sm_it = self.mobs_sm.iterator();
+        while (mobs_sm_it.next()) |script| {
+            try script.value_ptr.run(delta_time);
+        }
+        std.debug.print("Finished running mob scripts\n", .{});
         for (0..self.mobs.items.len) |i| {
             try self.mobs.items[i].update(self, delta_time);
         }

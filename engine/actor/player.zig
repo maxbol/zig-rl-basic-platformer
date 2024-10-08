@@ -5,8 +5,8 @@ const Player = @This();
 const RigidBody = @import("rigid_body.zig");
 const Scene = @import("../scene.zig");
 const Solid = @import("../solid/solid.zig");
-const Sprite = @import("../sprite.zig");
 const Tileset = @import("../tileset/tileset.zig");
+const Weapon = @import("weapon.zig");
 const an = @import("../animation.zig");
 const constants = @import("../constants.zig");
 const controls = @import("../controls.zig");
@@ -21,9 +21,10 @@ const types = @import("../types.zig");
 const approach = helpers.approach;
 
 current_effect: ?Effect = null,
+weapon: ?Weapon = null,
 initial_hitbox: rl.Rectangle,
 rigid_body: RigidBody,
-face_dir: u1 = 1,
+face_dir: i2 = 1,
 is_slipping: bool = false,
 is_stunlocked: bool = false,
 jump_counter: u2 = 0,
@@ -94,6 +95,8 @@ pub fn init(hitbox: rl.Rectangle, sprite: an.Sprite, sprite_offset: rl.Vector2) 
     const sfx_jump = rl.loadSound("assets/sounds/jump.wav");
     const sfx_land = rl.loadSound("assets/sounds/tap.wav");
 
+    const weapon = Weapon.WeaponExcalibur.init();
+
     return .{
         .initial_hitbox = hitbox,
         .sfx_hurt = sfx_hurt,
@@ -103,6 +106,7 @@ pub fn init(hitbox: rl.Rectangle, sprite: an.Sprite, sprite_offset: rl.Vector2) 
         .sprite = sprite,
         .sprite_offset = sprite_offset,
         .rigid_body = RigidBody.init(hitbox),
+        .weapon = weapon,
     };
 }
 
@@ -116,6 +120,7 @@ pub fn actor(self: *Player) Actor {
         .getRigidBody = getRigidBody,
         .getHitboxRect = getHitboxRect,
         .getGridRect = getGridRect,
+        .getSprite = getSprite,
         .isHostile = isHostile,
         .squish = handleSquish,
         .setPos = setPos,
@@ -135,6 +140,11 @@ fn getHitboxRect(ctx: *const anyopaque) rl.Rectangle {
 fn getGridRect(ctx: *const anyopaque) shapes.IRect {
     const self: *const Player = @ptrCast(@alignCast(ctx));
     return self.rigid_body.grid_rect;
+}
+
+fn getSprite(ctx: *anyopaque) *an.Sprite {
+    const self: *Player = @ptrCast(@alignCast(ctx));
+    return &self.sprite;
 }
 
 fn isHostile() bool {
@@ -172,10 +182,11 @@ pub fn handleCollision(self: *Player, scene: *Scene, axis: types.Axis, sign: i8,
                 rl.playSound(self.sfx_land);
 
                 self.current_effect = Effect.Dust.init(
-                    .{
-                        .x = self.rigid_body.hitbox.x + (if (self.face_dir == 1) 0 else self.rigid_body.hitbox.width) - (Effect.Dust.width / 2),
-                        .y = self.rigid_body.hitbox.y + self.rigid_body.hitbox.height - (Effect.Dust.height),
-                    },
+                    an.DrawPosition.init(
+                        self.rigid_body.hitbox,
+                        if (self.face_dir == 1) .BottomLeft else .BottomRight,
+                        .{ .x = if (self.face_dir == 1) -(Effect.Dust.width / 2) else Effect.Dust.width / 2, .y = 0 },
+                    ),
                     .{
                         .call_ptr = handleEffectOver,
                         .context = self,
@@ -266,6 +277,13 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
     }
     const is_rolling = self.isCurrentAnimation(.Roll);
 
+    // Attacking
+    if (controls.isKeyboardControlPressed(controls.KBD_ATTACK)) {
+        if (self.weapon) |*weapon| {
+            weapon.attack(self.actor());
+        }
+    }
+
     // Left/right movement
     if (self.is_stunlocked) {
         self.speed.x = approach(self.speed.x, 0, fly_reduce * delta_time);
@@ -277,7 +295,7 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
         const acceleration = if (is_slipping) slip_acceleration else run_acceleration;
         if (controls.isKeyboardControlDown(controls.KBD_MOVE_LEFT)) {
             self.speed.x = approach(self.speed.x, -speed, acceleration * turn_multiplier * delta_time);
-            self.face_dir = 0;
+            self.face_dir = -1;
         } else if (controls.isKeyboardControlDown(controls.KBD_MOVE_RIGHT)) {
             self.face_dir = 1;
             self.speed.x = approach(self.speed.x, speed, acceleration * turn_multiplier * delta_time);
@@ -313,7 +331,7 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
     if (self.is_stunlocked) {
         self.sprite.flip_mask.x = self.speed.x > 0;
     } else {
-        self.sprite.flip_mask.x = self.face_dir == 0;
+        self.sprite.flip_mask.x = self.face_dir == -1;
     }
 
     // Collision with hostile actors
@@ -369,6 +387,11 @@ pub fn update(self: *Player, scene: *Scene, delta_time: f32) !void {
 
     self.sprite.update(delta_time);
 
+    // Update weapon position
+    if (self.weapon) |*weapon| {
+        try weapon.update(scene, self.actor(), delta_time);
+    }
+
     if (self.current_effect != null) {
         try self.current_effect.?.update(scene, delta_time);
     }
@@ -381,6 +404,10 @@ pub fn draw(self: *const Player, scene: *const Scene) void {
     const sprite_pos = an.DrawPosition.init(self.rigid_body.hitbox, .BottomCenter, self.sprite_offset);
 
     self.sprite.draw(scene, sprite_pos, rl.Color.white);
+
+    if (self.weapon) |*weapon| {
+        weapon.draw(scene);
+    }
 
     if (self.current_effect != null) {
         self.current_effect.?.draw(scene);

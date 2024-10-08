@@ -3,7 +3,6 @@ const Editor = @import("editor.zig");
 const GameState = @import("gamestate.zig");
 const HUD = @import("hud.zig");
 const Scene = @import("scene.zig");
-const Sprite = @import("sprite.zig");
 const TileLayer = @import("tile_layer/tile_layer.zig");
 const Tileset = @import("tileset/tileset.zig");
 const Viewport = @import("viewport.zig");

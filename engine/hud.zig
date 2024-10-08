@@ -2,7 +2,6 @@ const Collectable = @import("actor/collectable.zig");
 const Player = @import("actor/player.zig");
 const HUD = @This();
 const Scene = @import("scene.zig");
-const Sprite = @import("sprite.zig");
 const an = @import("animation.zig");
 const rl = @import("raylib");
 const std = @import("std");

@@ -298,7 +298,6 @@ const tracy_full = struct {
     };
 
     inline fn initZone(comptime src: Src, name: ?[*:0]const u8, color: u32, depth: c_int) ZoneCtx {
-        std.debug.print("Initing zone, callstack enabled={any}\n", .{depth});
         // Tracy uses pointer identity to identify contexts.
         // The `src` parameter being comptime ensures that
         // each zone gets its own unique global location for this

@@ -4,7 +4,6 @@ const Mob = @This();
 const RigidBody = @import("rigid_body.zig");
 const Scene = @import("../scene.zig");
 const Solid = @import("../solid/solid.zig");
-const Sprite = @import("../sprite.zig");
 const Tileset = @import("../tileset/tileset.zig");
 const an = @import("../animation.zig");
 const helpers = @import("../helpers.zig");
@@ -13,6 +12,9 @@ const shapes = @import("../shapes.zig");
 const std = @import("std");
 const tracing = @import("../tracing.zig");
 const types = @import("../types.zig");
+const ziglua = @import("ziglua");
+
+const Lua = ziglua.Lua;
 
 const approach = helpers.approach;
 
@@ -22,7 +24,7 @@ pub const AnimationType = enum(u8) {
     Hit,
 };
 
-pub const RespawnFn = *const fn (pos: shapes.IPos) Mob;
+pub const RespawnFn = *const fn (pos: shapes.IPos, gamestate: *GameState) Mob;
 
 behavior: *const MobBehavior,
 did_huntjump: bool = false,
@@ -55,13 +57,24 @@ pub fn Prefab(
     sprite_offset: rl.Vector2,
     behavior: *const MobBehavior,
     getSpriteReader: *const fn () an.AnySpriteBuffer,
+    getScript: *const fn (std.mem.Allocator) error{OutOfMemory}![]const u8,
 ) type {
     return struct {
         pub const Hitbox = hitbox;
         pub const sprite_reader = getSpriteReader;
         pub const spr_offset = sprite_offset;
 
-        pub fn init(pos: shapes.IPos) Mob {
+        var script_bytecode: ?[]const u8 = null;
+
+        pub fn script(allocator: std.mem.Allocator) error{OutOfMemory}![]const u8 {
+            return script_bytecode orelse blk: {
+                script_bytecode = getScript(allocator) catch @panic("script error");
+                break :blk script_bytecode.?;
+            };
+        }
+
+        pub fn init(pos: shapes.IPos, gamestate: *GameState) Mob {
+            _ = gamestate; // autofix
             const sprite = sprite_reader().sprite() catch @panic("Failed to read sprite");
             var mob_hitbox = hitbox;
             mob_hitbox.x = @floatFromInt(pos.x);
@@ -108,6 +121,7 @@ pub fn actor(self: *Mob) Actor {
         .getRigidBody = getRigidBodyCast,
         .getHitboxRect = getHitboxRectCast,
         .getGridRect = getGridRectCast,
+        .getSprite = getSpriteCast,
         .isHostile = isHostile,
         .setPos = setPosCast,
     } };
@@ -128,6 +142,11 @@ fn getHitboxRectCast(ctx: *const anyopaque) rl.Rectangle {
     return self.getHitboxRect();
 }
 
+fn getSpriteCast(ctx: *anyopaque) *an.Sprite {
+    const self: *Mob = @ptrCast(@alignCast(ctx));
+    return self.getSprite();
+}
+
 fn isHostile() bool {
     return true;
 }
@@ -142,7 +161,14 @@ pub fn reset(self: *Mob) !void {
         return;
     }
 
-    self.* = Mob.init(self.mob_type, self.initial_hitbox, self.sprite, self.sprite_offset, self.behavior, self.respawn);
+    self.* = Mob.init(
+        self.mob_type,
+        self.initial_hitbox,
+        self.sprite,
+        self.sprite_offset,
+        self.behavior,
+        self.respawn,
+    );
     try self.sprite.reset();
 }
 
@@ -194,6 +220,10 @@ pub inline fn getGridRect(self: *const Mob) shapes.IRect {
 
 pub inline fn getHitboxRect(self: *const Mob) rl.Rectangle {
     return self.rigid_body.hitbox;
+}
+
+pub inline fn getSprite(self: *Mob) *an.Sprite {
+    return &self.sprite;
 }
 
 pub fn getInitialPos(self: *const Mob) rl.Vector2 {
@@ -273,10 +303,11 @@ pub fn update(self: *Mob, scene: *Scene, delta_time: f32) !void {
         return;
     }
 
+    // Moved to scripting
     // Start walking if standing still
-    if (self.speed.x == 0) {
-        self.speed.x = self.behavior.walk_speed;
-    }
+    // if (self.speed.x == 0) {
+    //     self.speed.x = self.behavior.walk_speed;
+    // }
 
     // Try to spot the player by raycasting
     self.detectNearbyPlayer(scene, delta_time);
@@ -361,10 +392,26 @@ pub const GreenSlime = @import("mob/slime.zig").GreenSlime;
 pub const prefabs: [1]type = .{
     GreenSlime,
 };
-pub fn initMobByIndex(index: usize, pos: rl.Vector2) Scene.SpawnError!Mob {
+pub fn initMobByIndex(
+    index: usize,
+    pos: rl.Vector2,
+    gamestate: *GameState,
+) Scene.SpawnError!Mob {
     inline for (prefabs, 0..) |MobPrefab, i| {
         if (i == index) {
-            return MobPrefab.init(shapes.IPos.fromVec2(pos));
+            return MobPrefab.init(shapes.IPos.fromVec2(pos), gamestate);
+        }
+    }
+    return Scene.SpawnError.NoSuchItem;
+}
+
+pub fn getScriptByIndex(
+    index: usize,
+    gamestate: *GameState,
+) (Scene.SpawnError || error{OutOfMemory})![]const u8 {
+    inline for (prefabs, 0..) |MobPrefab, i| {
+        if (i == index) {
+            return MobPrefab.script(gamestate.allocator);
         }
     }
     return Scene.SpawnError.NoSuchItem;

@@ -575,10 +575,52 @@ pub fn f(frame: PackedFrame) Frame {
 }
 
 pub const Transforms = struct {
-    pub fn rotate(frame: rl.RenderTexture, degrees: f32) rl.RenderTexture {
+    pub fn flip(frame: rl.RenderTexture, flip_x: bool, flip_y: bool) rl.RenderTexture {
+        const next_frame = rl.loadRenderTexture(frame.texture.width, frame.texture.height);
+        next_frame.begin();
+
+        var frect = shapes.rectFromTexture(frame.texture);
+
+        if (flip_x) {
+            frect.x += frect.width;
+            frect.width = -frect.width;
+        }
+        if (!flip_y) {
+            frect.y += frect.height;
+            frect.height = -frect.height;
+        }
+
+        frame.texture.drawRec(
+            frect,
+            .{ .x = 0, .y = 0 },
+            rl.Color.white,
+        );
+        next_frame.end();
+        return next_frame;
+    }
+    pub fn resizeCanvas(frame: rl.RenderTexture, new_canvas: rl.Rectangle) rl.RenderTexture {
+        const next_frame = rl.loadRenderTexture(new_canvas.width, new_canvas.height);
+        next_frame.begin();
+        frame.texture.draw(.{ .x = -new_canvas.x, .y = -new_canvas.y }, rl.Color.white);
+        next_frame.end();
+        return next_frame;
+    }
+    pub fn rotate(frame: rl.RenderTexture, degrees: f32, anchor: Anchor) rl.RenderTexture {
         const next_frame = rl.loadRenderTexture(frame.texture.width, frame.texture.height);
 
         const tex_size = shapes.vec2FromTexture(frame.texture);
+
+        const origin: rl.Vector2 = switch (anchor) {
+            .TopLeft => .{ .x = 0, .y = 0 },
+            .TopCenter => .{ .x = tex_size.x / 2, .y = 0 },
+            .TopRight => .{ .x = tex_size.x, .y = 0 },
+            .CenterLeft => .{ .x = 0, .y = tex_size.y / 2 },
+            .Center => .{ .x = tex_size.x / 2, .y = tex_size.y / 2 },
+            .CenterRight => .{ .x = tex_size.x, .y = tex_size.y / 2 },
+            .BottomLeft => .{ .x = 0, .y = tex_size.y },
+            .BottomCenter => .{ .x = tex_size.x / 2, .y = tex_size.y },
+            .BottomRight => .{ .x = tex_size.x, .y = tex_size.y },
+        };
 
         next_frame.begin();
         frame.texture.drawPro(
@@ -589,14 +631,14 @@ pub const Transforms = struct {
                 .height = -tex_size.y,
             },
             .{
-                .x = tex_size.x / 2,
-                .y = tex_size.y / 2,
+                .x = origin.x,
+                .y = origin.y,
                 .width = tex_size.x,
                 .height = tex_size.y,
             },
             .{
-                .x = tex_size.x / 2,
-                .y = tex_size.y / 2,
+                .x = origin.x,
+                .y = origin.y,
             },
             degrees,
             rl.Color.white,

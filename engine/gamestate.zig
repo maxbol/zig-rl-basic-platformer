@@ -12,12 +12,14 @@ const rl = @import("raylib");
 const std = @import("std");
 const Tileset = @import("tileset/tileset.zig");
 const tracing = @import("tracing.zig");
+const ziglua = @import("ziglua");
 
 allocator: std.mem.Allocator = undefined,
 current_music: *rl.Music = undefined,
 debug_mode: i16 = undefined,
 debug_flags: []const debug.DebugFlag = undefined,
 debug_sprite_previewer: ?debug.SpriteDebugPreviewer = null,
+delta_time: f32 = 0,
 editor: *Editor = undefined,
 editor_mode: bool = false,
 font: rl.Font = undefined,
@@ -25,6 +27,7 @@ game_over_counter: u32 = 0,
 game_over_texts: [][*:0]const u8 = undefined,
 hr_recompiling: bool = false,
 hud: HUD = undefined,
+lua: *ziglua.Lua = undefined,
 music_gameover: rl.Music = undefined,
 music_level: rl.Music = undefined,
 on_save_sfx: rl.Sound = undefined,
@@ -41,6 +44,10 @@ pub fn create(allocator: std.mem.Allocator) !*GameState {
     var gamestate = try allocator.create(GameState);
 
     gamestate.allocator = allocator;
+
+    // Initialize scripting engine
+    gamestate.lua = try ziglua.Lua.init(&gamestate.allocator);
+    gamestate.lua.openLibs();
 
     // Init randomizer
     gamestate.rand = helpers.createRandomizer() catch {
@@ -162,9 +169,9 @@ pub fn update(self: *GameState) !void {
     //----------------------------------------------------------------------------------
     // TODO: Update your variables here
     //----------------------------------------------------------------------------------
-    const delta_time = rl.getFrameTime();
+    self.delta_time = rl.getFrameTime();
 
-    if (delta_time > DT_TRESHOLD) {
+    if (self.delta_time > DT_TRESHOLD) {
         std.debug.print("Stutter detected, throwing away frame\n", .{});
         return;
     }
@@ -198,13 +205,13 @@ pub fn update(self: *GameState) !void {
             self.viewport.setTargetRect(if (!self.editor_mode) constants.VIEWPORT_BIG_RECT else constants.VIEWPORT_SMALL_RECT);
         }
 
-        self.viewport.update(delta_time);
+        self.viewport.update(self.delta_time);
         self.scene.layer_visibility_treshold = null;
-        try self.scene.update(delta_time, self);
-        self.hud.update(delta_time);
+        try self.scene.update(self.delta_time, self);
+        self.hud.update(self.delta_time);
 
         if (self.editor_mode) {
-            try self.editor.update(delta_time);
+            try self.editor.update(self.delta_time);
         }
     }
 }

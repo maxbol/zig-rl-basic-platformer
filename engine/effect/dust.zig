@@ -1,12 +1,11 @@
 const Effect = @import("../effect.zig");
-const Sprite = @import("../sprite.zig");
 const an = @import("../animation.zig");
 const rl = @import("raylib");
 
 pub const SpriteBuffer = an.SpriteBuffer(
     Effect.AnimationType,
     &.{
-        .Invisible,
+        .Stopped,
         .Playing,
     },
     .{},
@@ -26,7 +25,7 @@ fn loadTexture() rl.Texture2D {
 
 var sprite_buffer = blk: {
     var buffer = SpriteBuffer{};
-    buffer.writeAnimation(.Invisible, 1, &.{});
+    buffer.writeAnimation(.Stopped, 1, &.{});
     buffer.writeAnimation(.Playing, 0.3, &.{ 2, 3, 4, 5, 6 });
     break :blk buffer;
 };
@@ -36,4 +35,4 @@ fn getSpriteReader() an.AnySpriteBuffer {
     return sprite_buffer.reader();
 }
 
-pub const Dust = Effect.Prefab(getSpriteReader, SpriteBuffer.size);
+pub const Dust = Effect.Prefab(getSpriteReader, SpriteBuffer.size, true);

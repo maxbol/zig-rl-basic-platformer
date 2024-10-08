@@ -1,6 +1,16 @@
 const std = @import("std");
 pub const TracerBuild = @import("tracer-build.zig");
 
+fn addZigLua(b: *std.Build, m: *std.Build.Module, dep_opts: anytype) void {
+    const ziglua = b.dependency("ziglua", .{
+        .target = dep_opts.target,
+        .optimize = dep_opts.optimize,
+        .shared = false,
+        .lang = .luau,
+    });
+    m.addImport("ziglua", ziglua.module("ziglua"));
+}
+
 fn addRaylib(b: *std.Build, m: *std.Build.Module, dep_opts: anytype) void {
     const raylib_dep = b.dependency("raylib-zig", dep_opts);
 
@@ -14,7 +24,7 @@ fn addRaylib(b: *std.Build, m: *std.Build.Module, dep_opts: anytype) void {
 }
 
 fn addDeps(b: *std.Build, tb: TracerBuild, c: *std.Build.Step.Compile, dep_opts: anytype) void {
-    tb.addTracing(b, c, dep_opts);
+    tb.addTracing(b, c, dep_opts.target);
     addRaylib(b, &c.root_module, dep_opts);
 }
 
@@ -64,6 +74,7 @@ pub fn build(b: *std.Build) !void {
         });
 
         addDeps(b, tb, engine_lib, dep_opts);
+        addZigLua(b, &engine_lib.root_module, dep_opts);
 
         b.installArtifact(engine_lib);
         check_step.dependOn(&engine_lib.step);
@@ -82,6 +93,7 @@ pub fn build(b: *std.Build) !void {
             .optimize = optimize,
         });
         addDeps(b, tb, exe, dep_opts);
+        if (!hotreload) addZigLua(b, &exe.root_module, dep_opts);
         b.installArtifact(exe);
 
         const run_cmd = b.addRunArtifact(exe);
@@ -101,6 +113,7 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
     addDeps(b, tb, engine_unit_tests, dep_opts);
+    addZigLua(b, &engine_unit_tests.root_module, dep_opts);
 
     const run_engine_unit_tests = b.addRunArtifact(engine_unit_tests);
 
